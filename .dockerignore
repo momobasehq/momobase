@@ -1,0 +1,8 @@
+.git
+bin
+data
+*.db
+node_modules
+packages/sdk/node_modules
+coverage
+.env

@@ -1,0 +1,16 @@
+{
+  "name": "@momobase/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the Momobase payment service API.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
