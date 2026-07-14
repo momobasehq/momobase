@@ -1,10 +1,10 @@
 import { MomobaseAdminClient, MomobaseClient } from './sdk.js'
 
-const countries = ['GLOBAL', 'UG', 'KE', 'TZ', 'RW', 'ET', 'GH', 'NG']
+const countries = ['UG', 'KE', 'TZ', 'RW', 'ET', 'GH', 'NG']
 
 const defaults = {
   mtnConfig: '{\n  "base_url": "https://sandbox.momodeveloper.mtn.com",\n  "target_environment": "sandbox",\n  "currency": "UGX",\n  "callback_url": "https://example.com/webhooks/mtn",\n  "webhook_secret": "replace-with-provider-webhook-secret",\n  "collection_subscription_key": "",\n  "collection_api_user": "",\n  "collection_api_key": "",\n  "disbursement_subscription_key": "",\n  "disbursement_api_user": "",\n  "disbursement_api_key": ""\n}',
-  airtelConfig: '{\n  "base_url": "https://openapiuat.airtel.africa",\n  "client_id": "",\n  "client_secret": "",\n  "country": "UG",\n  "currency": "UGX",\n  "webhook_secret": "replace-with-provider-webhook-secret",\n  "collection_enabled": true,\n  "disbursement_enabled": true\n}'
+  airtelConfig: '{\n  "base_url": "https://openapiuat.airtel.africa",\n  "client_id": "",\n  "client_secret": "",\n  "currency": "UGX",\n  "webhook_secret": "replace-with-provider-webhook-secret",\n  "collection_enabled": true,\n  "disbursement_enabled": true\n}'
 }
 
 function pretty(v) { return JSON.stringify(v ?? null, null, 2) }
@@ -44,7 +44,7 @@ window.adminApp = function () {
       admin: { name: '', email: '', password: '', role: 'operations' },
       app: { name: '', description: '', environment: 'sandbox', status: 'active' },
       credential: { name: 'SDK Client', scopes: 'collections:create disbursements:create transactions:read', expires_at: '' },
-      provider: { provider_code: 'airtel_money', name: 'Airtel Main', environment: 'sandbox', country: 'UG', config: defaults.airtelConfig },
+      provider: { provider_code: 'airtel_money', name: 'Airtel Main', environment: 'sandbox', countryList: 'UG', config: defaults.airtelConfig },
       route: { service_type: 'collection', payment_method: 'momo', provider_account_id: '', priority: 1, active: true },
       collection: { amount: 5000, reference: nowRef('COLL'), country: 'UG', phone: '256771111111', network: 'airtel' },
       disbursement: { amount: 2500, reference: nowRef('DISB'), country: 'UG', phone: '256772222222', network: 'airtel' },
@@ -89,14 +89,16 @@ window.adminApp = function () {
     },
     providerConfigForSubmit() {
       const cfg = JSON.parse(this.forms.provider.config || '{}')
-      const country = String(this.forms.provider.country || '').toUpperCase()
       cfg.webhook_secret = cfg.webhook_secret || 'replace-with-provider-webhook-secret'
-      cfg.supports_global = country === 'GLOBAL' ? true : Boolean(cfg.supports_global)
-      if (country && country !== 'GLOBAL') cfg.country = country
+      delete cfg.country
+      delete cfg.supports_global
       return cfg
     },
-    syncProviderConfig() {
-      try { this.forms.provider.config = pretty(this.providerConfigForSubmit()) } catch (e) { this.fail(e) }
+    syncProviderConfig() { try { this.forms.provider.config = pretty(this.providerConfigForSubmit()) } catch (e) { this.fail(e) } },
+    providerCountries() { return [...new Set(this.forms.provider.countryList.split(',').map(v => v.trim().toUpperCase()).filter(Boolean))] },
+    loadProviderCountries() {
+      const provider = items(this.data.providers).find(p => p.id === this.selectedProviderId)
+      if (provider) this.forms.provider.countryList = (provider.countries || []).join(', ')
     },
     async copy(text) { await navigator.clipboard.writeText(String(text || '')); this.notice = 'Copied to clipboard' },
     ask(title, message, action, confirmText = 'Confirm') { this.confirmState = { open: true, title, message, confirmText, action } },
@@ -123,7 +125,7 @@ window.adminApp = function () {
     async refreshUsers() { this.data.users = await this.client.users.list() },
     async refreshApps() { this.data.apps = await this.client.apps.list(); if (!this.selectedAppId && items(this.data.apps)[0]) this.selectedAppId = items(this.data.apps)[0].id },
     async refreshCredentials() { await this.refreshApps(); if (this.selectedAppId) this.data.credentials = await this.client.apps.credentials(this.selectedAppId) },
-    async refreshProviders() { const [providers, runtimeProviders] = await Promise.all([this.client.providers.list(), this.client.system.runtimeProviders().catch(() => this.data.runtimeProviders)]); this.data.providers = providers; if (runtimeProviders) this.data.runtimeProviders = runtimeProviders; if (!this.selectedProviderId && items(this.data.providers)[0]) this.selectedProviderId = items(this.data.providers)[0].id; if (!this.forms.route.provider_account_id && this.selectedProviderId) this.forms.route.provider_account_id = this.selectedProviderId },
+    async refreshProviders() { const [providers, runtimeProviders] = await Promise.all([this.client.providers.list(), this.client.system.runtimeProviders().catch(() => this.data.runtimeProviders)]); this.data.providers = providers; if (runtimeProviders) this.data.runtimeProviders = runtimeProviders; if (!this.selectedProviderId && items(this.data.providers)[0]) this.selectedProviderId = items(this.data.providers)[0].id; this.loadProviderCountries(); if (!this.forms.route.provider_account_id && this.selectedProviderId) this.forms.route.provider_account_id = this.selectedProviderId },
     async refreshRoutes() { this.data.routes = await this.client.routes.list() },
     async refreshTransactions() { this.data.transactions = await this.client.transactions.list() },
     async refreshAudit() { this.data.auditLogs = await this.client.transactions.auditLogs() },
@@ -138,12 +140,13 @@ window.adminApp = function () {
     async revokeCredential(id) { this.ask('Revoke credential', 'This credential will stop working immediately. Continue?', () => this.run('Credential revoked', async()=>{ await this.client.apps.revokeCredential(this.selectedAppId, id); await this.refreshCredentials() }, 'revokeCredential'), 'Revoke') },
     async rotateCredential(id) { this.ask('Rotate credential', 'The old secret will stop working. Continue?', async()=>{ const created = await this.run('Credential rotated', () => this.client.apps.rotateCredential(this.selectedAppId, id), 'rotateCredential'); this.secretNotice='New secret shown once. Copy it now.'; this.appCred.clientId=created.credential.client_id; this.appCred.clientSecret=created.client_secret; await this.refreshCredentials() }, 'Rotate') },
     providerConfigTemplate() { this.forms.provider.config = this.forms.provider.provider_code === 'mtn_momo' ? defaults.mtnConfig : defaults.airtelConfig; this.forms.provider.name = this.forms.provider.provider_code === 'mtn_momo' ? 'MTN Main' : 'Airtel Main'; this.syncProviderConfig() },
-    async createProvider() { await this.run('Provider created', async()=>{ const payload = { ...this.forms.provider, config: this.providerConfigForSubmit() }; const p = await this.client.providers.createAccount(payload); this.selectedProviderId = p.id; this.forms.route.provider_account_id = p.id; await this.refreshProviders() }, 'createProvider') },
+    async createProvider() { await this.run('Provider created', async()=>{ const payload = { provider_code: this.forms.provider.provider_code, name: this.forms.provider.name, environment: this.forms.provider.environment, countries: this.providerCountries(), config: this.providerConfigForSubmit() }; const p = await this.client.providers.createAccount(payload); this.selectedProviderId = p.id; this.forms.route.provider_account_id = p.id; await this.refreshProviders() }, 'createProvider') },
+    async updateProviderCountries(id=this.selectedProviderId) { if (!id) return; await this.run('Provider countries updated', async()=>{ await this.client.providers.updateCountries(id, this.providerCountries()); await this.refreshProviders() }, 'providerCountries') },
     async updateProviderConfig(id=this.selectedProviderId) { if (!id) return; await this.run('Provider config updated', () => this.client.providers.updateConfig(id, this.providerConfigForSubmit()), 'providerConfig') },
     async activateProvider(id) { this.ask('Activate provider', 'Provider will be loaded into runtime and may become routable if healthy. Continue?', () => this.run('Provider activated', async()=>{ await this.client.providers.activate(id); await this.refreshProviders(); await this.refreshOps() }, 'activateProvider'), 'Activate') },
     async deactivateProvider(id) { this.ask('Deactivate provider', 'New transactions will stop using this provider immediately. Continue?', () => this.run('Provider deactivated', async()=>{ await this.client.providers.deactivate(id); await this.refreshProviders(); await this.refreshOps() }, 'deactivateProvider'), 'Deactivate') },
     async testProvider(id) { await this.run('Provider tested', () => this.client.providers.test(id), 'testProvider') },
-    async providerBalance(id) { this.data.providerBalance = await this.run('Provider balance queried', () => this.client.providers.balance(id), 'providerBalance') },
+    async providerBalance(id) { const provider = items(this.data.providers).find(p => p.id === id); this.data.providerBalance = await this.run('Provider balance queried', () => this.client.providers.balance(id, provider?.countries?.[0]), 'providerBalance') },
     async createRoute() { await this.run('Route created', async()=>{ await this.client.routes.create(this.forms.route); await this.refreshRoutes() }, 'createRoute') },
     async updateRoute(route) { this.ask('Update route', 'Save route priority/active changes?', () => this.run('Route updated', async()=>{ await this.client.routes.update(route.id, { priority: Number(route.priority), active: Boolean(route.active) }); await this.refreshRoutes() }, 'updateRoute'), 'Save') },
     makeAppClient() { this.appClient = new MomobaseClient({ baseUrl: this.baseUrl, clientId: this.appCred.clientId, clientSecret: this.appCred.clientSecret }); return this.appClient },

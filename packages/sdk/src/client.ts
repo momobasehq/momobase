@@ -127,10 +127,11 @@ export class MomobaseAdminClient extends SessionClient {
   }
   readonly providers = {
     list: (o?: ListOptions) => this.get<PaginatedData<ProviderAccount>>(`/api/admin/providers${query(o)}`),
-    createAccount: (p: { provider_code: string; name: string; environment: "sandbox" | "production"; country: string; config: Record<string, unknown> }) => this.post<ProviderAccount>("/api/admin/providers/accounts", p),
+    createAccount: (p: { provider_code: string; name: string; environment: "sandbox" | "production"; countries: string[]; config: Record<string, unknown> }) => this.post<ProviderAccount>("/api/admin/providers/accounts", p),
+    updateCountries: (id: string, countries: string[]) => this.patch<unknown>(endpoint("/api/admin/providers/accounts", id) + "/countries", { countries }),
     updateConfig: (id: string, config: Record<string, unknown>) => this.patch<unknown>(endpoint("/api/admin/providers/accounts", id) + "/config", { config }),
     activate: (id: string) => this.patch<unknown>(endpoint("/api/admin/providers/accounts", id) + "/activate"), deactivate: (id: string) => this.patch<unknown>(endpoint("/api/admin/providers/accounts", id) + "/deactivate"),
-    test: (id: string) => this.post<unknown>(endpoint("/api/admin/providers/accounts", id) + "/test"), balance: (id: string) => this.get<ProviderBalance>(endpoint("/api/admin/providers/accounts", id) + "/balance"),
+    test: (id: string) => this.post<unknown>(endpoint("/api/admin/providers/accounts", id) + "/test"), balance: (id: string, country?: string) => this.get<ProviderBalance>(endpoint("/api/admin/providers/accounts", id) + "/balance" + (country ? `?country=${encodeURIComponent(country)}` : "")),
     activeBalances: (o?: ListOptions) => this.get<PaginatedData<ProviderBalanceResult>>(`/api/admin/balances/providers${query(o)}`), health: (o?: ListOptions) => this.get<PaginatedData<ProviderHealthSnapshot>>(`/api/admin/health/providers${query(o)}`)
   }
   readonly routes = {

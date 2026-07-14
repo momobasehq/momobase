@@ -13,10 +13,10 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"momobase/internal/domain"
-	"momobase/internal/platform"
-	"momobase/internal/providers"
-	"momobase/internal/store"
+	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/providers"
+	"github.com/momobasehq/momobase/internal/store"
 )
 
 type VerifiedWebhook struct {
@@ -147,17 +147,13 @@ func CanonicalWebhookHash(event *VerifiedWebhook) string {
 	return platform.SHA256Hex(strings.Join([]string{event.ProviderAccountID, event.ProviderReference, event.EventType, event.Status, event.ExternalReference, amount, strings.ToUpper(event.Currency)}, "|"))
 }
 func validateWebhook(event *VerifiedWebhook, tx *domain.Transaction) error {
-	if event.Amount != nil && *event.Amount != tx.Amount || event.Currency != "" && !strings.EqualFold(event.Currency, tx.Currency) || event.Country != "" && !strings.EqualFold(event.Country, tx.Country) || event.ExternalReference != "" && event.ExternalReference != tx.Reference || event.Phone != "" && normalizeDigits(event.Phone) != normalizeDigits(tx.CustomerPhone) {
+	phoneMatches := true
+	if event.Phone != "" {
+		phone, err := NormalizeMSISDN(event.Phone, tx.Country)
+		phoneMatches = err == nil && phone == tx.CustomerPhone
+	}
+	if event.Amount != nil && *event.Amount != tx.Amount || event.Currency != "" && !strings.EqualFold(event.Currency, tx.Currency) || event.Country != "" && !strings.EqualFold(event.Country, tx.Country) || event.ExternalReference != "" && event.ExternalReference != tx.Reference || !phoneMatches {
 		return fmt.Errorf("webhook payload does not match transaction")
 	}
 	return nil
-}
-
-func normalizeDigits(v string) string {
-	return strings.Map(func(r rune) rune {
-		if r >= '0' && r <= '9' {
-			return r
-		}
-		return -1
-	}, v)
 }

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"momobase/internal/domain"
-	"momobase/internal/providers"
+	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/providers"
 )
 
 const baseURL = "https://sandbox.momodeveloper.mtn.com"
@@ -83,7 +83,7 @@ func (p *Provider) payment(ctx context.Context, item product, path, party string
 	}
 	return &providers.ProviderPaymentResponse{ProviderReference: ref, Status: domain.TxProcessing, Message: "MTN request accepted", Raw: map[string]any{"mtn_reference_id": ref, "external_id": req.Reference}}, nil
 }
-func (p *Provider) QueryTransaction(ctx context.Context, ref string) (*providers.ProviderTransactionStatus, error) {
+func (p *Provider) QueryTransaction(ctx context.Context, ref, _ string) (*providers.ProviderTransactionStatus, error) {
 	if ref == "" {
 		return nil, errors.New("provider reference is required")
 	}
@@ -105,7 +105,7 @@ func (p *Provider) QueryTransaction(ctx context.Context, ref string) (*providers
 	}
 	return nil, providers.FirstError(last, errors.New("mtn credentials are incomplete"))
 }
-func (p *Provider) QueryBalance(ctx context.Context) (*providers.ProviderBalance, error) {
+func (p *Provider) QueryBalance(ctx context.Context, _ string) (*providers.ProviderBalance, error) {
 	var last error
 	for _, entry := range []struct {
 		product

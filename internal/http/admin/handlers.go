@@ -8,10 +8,10 @@ import (
 
 	"gorm.io/gorm"
 
-	"momobase/internal/domain"
-	authmw "momobase/internal/http/middleware"
-	"momobase/internal/platform"
-	"momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/domain"
+	authmw "github.com/momobasehq/momobase/internal/http/middleware"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/services"
 )
 
 type SystemInfo struct {
@@ -46,7 +46,7 @@ type Request struct {
 	Scopes            string         `json:"scopes"`
 	ExpiresAt         string         `json:"expires_at"`
 	ProviderCode      string         `json:"provider_code"`
-	Country           string         `json:"country"`
+	Countries         []string       `json:"countries"`
 	ServiceType       string         `json:"service_type"`
 	PaymentMethod     string         `json:"payment_method"`
 	ProviderAccountID string         `json:"provider_account_id"`
@@ -110,7 +110,9 @@ func (h *Handler) dispatch(r *http.Request, v *Request, action string) (any, err
 	case "credential.rotate":
 		return h.apps.RotateCredential(a, target, r.PathValue("credentialID"))
 	case "provider.create":
-		return h.providers.CreateAccount(a, v.ProviderCode, v.Name, v.Environment, v.Country, v.Config)
+		return h.providers.CreateAccount(a, v.ProviderCode, v.Name, v.Environment, v.Countries, v.Config)
+	case "provider.countries":
+		return nil, h.providers.UpdateCountries(r.Context(), a, target, v.Countries)
 	case "provider.config":
 		return nil, h.providers.UpdateConfig(r.Context(), a, target, v.Config)
 	case "provider.activate":
@@ -196,7 +198,7 @@ func (h *Handler) ActiveProviderBalances(w http.ResponseWriter, r *http.Request)
 	platform.JSON(w, 200, platform.PaginateSlice(items, page, size))
 }
 func (h *Handler) ProviderBalance(w http.ResponseWriter, r *http.Request) {
-	out, err := h.runtime.QueryBalance(r.Context(), id(r))
+	out, err := h.runtime.QueryBalance(r.Context(), id(r), r.URL.Query().Get("country"))
 	if err != nil {
 		platform.Error(w, 400, "BALANCE_QUERY_FAILED", err.Error())
 		return
@@ -236,7 +238,7 @@ func (h *Handler) Workers(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RuntimeProviders(w http.ResponseWriter, r *http.Request) {
 	items := make([]map[string]any, 0)
 	for _, runtime := range h.runtime.List() {
-		item := map[string]any{"provider_account_id": runtime.AccountID, "provider_code": runtime.ProviderCode, "config_version": runtime.ConfigVersion, "active": true, "initialized": true, "capabilities": runtime.Capabilities}
+		item := map[string]any{"provider_account_id": runtime.AccountID, "provider_code": runtime.ProviderCode, "config_version": runtime.ConfigVersion, "active": true, "initialized": true, "capabilities": runtime.Capabilities, "countries": runtime.Countries}
 		var health domain.ProviderHealthSnapshot
 		if err := h.db.First(&health, "provider_account_id = ?", runtime.AccountID).Error; err == nil {
 			item["health"] = &health

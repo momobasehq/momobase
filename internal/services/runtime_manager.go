@@ -6,14 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
 	"gorm.io/gorm"
 
-	"momobase/internal/domain"
-	"momobase/internal/platform"
-	"momobase/internal/providers"
+	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/providers"
 )
 
 type circuit struct {
@@ -62,6 +63,7 @@ func (c *circuit) after(now time.Time, err error) {
 
 type RuntimeProvider struct {
 	AccountID, ProviderCode string
+	Countries               []string
 	ConfigVersion           int
 	Adapter                 providers.PaymentProvider
 	Capabilities            []providers.Capability
@@ -137,7 +139,7 @@ func (m *ProviderRuntimeManager) Reload(ctx context.Context, id string) error {
 		return err
 	}
 	caps := adapter.Capabilities()
-	fresh := &RuntimeProvider{AccountID: id, ProviderCode: account.ProviderCode, ConfigVersion: account.ConfigVersion, Adapter: adapter, Capabilities: caps, WebhookSecret: providers.String(plain, "webhook_secret"), breaker: &circuit{}}
+	fresh := &RuntimeProvider{AccountID: id, ProviderCode: account.ProviderCode, Countries: slices.Clone(account.Countries), ConfigVersion: account.ConfigVersion, Adapter: adapter, Capabilities: caps, WebhookSecret: providers.String(plain, "webhook_secret"), breaker: &circuit{}}
 	m.mu.Lock()
 	m.items[id] = fresh
 	m.mu.Unlock()
@@ -180,30 +182,32 @@ func (m *ProviderRuntimeManager) plain(account *domain.ProviderAccount) (provide
 	err = json.Unmarshal(data, &plain)
 	return plain, err
 }
-func (m *ProviderRuntimeManager) QueryBalance(ctx context.Context, id string) (*providers.ProviderBalance, error) {
-	return NewProviderExecutor(m).QueryBalance(ctx, id)
+func (m *ProviderRuntimeManager) QueryBalance(ctx context.Context, id, country string) (*providers.ProviderBalance, error) {
+	return NewProviderExecutor(m).QueryBalance(ctx, id, country)
 }
 
 type ProviderBalanceResult struct {
 	ProviderAccountID string                     `json:"provider_account_id"`
 	ProviderCode      string                     `json:"provider_code,omitempty"`
+	Country           string                     `json:"country"`
 	Status            string                     `json:"status"`
 	Balance           *providers.ProviderBalance `json:"balance,omitempty"`
 	Error             string                     `json:"error,omitempty"`
 }
 
 func (m *ProviderRuntimeManager) QueryActiveBalances(ctx context.Context) ([]ProviderBalanceResult, error) {
-	runtimes := m.List()
-	out := make([]ProviderBalanceResult, 0, len(runtimes))
-	for _, runtime := range runtimes {
-		item := ProviderBalanceResult{ProviderAccountID: runtime.AccountID, ProviderCode: runtime.ProviderCode, Status: "failed"}
-		balance, err := m.QueryBalance(ctx, runtime.AccountID)
-		if err != nil {
-			item.Error = providers.Redact(err.Error())
-		} else {
-			item.Status, item.Balance = "success", balance
+	var out []ProviderBalanceResult
+	for _, runtime := range m.List() {
+		for _, country := range runtime.Countries {
+			item := ProviderBalanceResult{ProviderAccountID: runtime.AccountID, ProviderCode: runtime.ProviderCode, Country: country, Status: "failed"}
+			balance, err := m.QueryBalance(ctx, runtime.AccountID, country)
+			if err != nil {
+				item.Error = providers.Redact(err.Error())
+			} else {
+				item.Status, item.Balance = "success", balance
+			}
+			out = append(out, item)
 		}
-		out = append(out, item)
 	}
 	return out, nil
 }

@@ -7,9 +7,9 @@ import (
 
 	"gorm.io/gorm"
 
-	"momobase/internal/domain"
-	"momobase/internal/platform"
-	"momobase/internal/store"
+	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/store"
 )
 
 type TokenResponse struct {

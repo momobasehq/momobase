@@ -4,8 +4,8 @@ import (
 	"io"
 	"net/http"
 
-	"momobase/internal/platform"
-	"momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/services"
 )
 
 type Handler struct{ service *services.WebhookService }

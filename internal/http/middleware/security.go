@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/platform"
 )
 
 func MaxBodyBytes(limit int64) func(http.Handler) http.Handler {

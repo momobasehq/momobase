@@ -27,9 +27,6 @@ quality: fmt-check vet test
 seed-admin:
 	go run ./cmd/$(APP) seed-admin --email admin@example.com --password password123 --name "Super Admin"
 
-seed-demo:
-	go run ./cmd/$(APP) seed-demo
-
 smoke:
 	scripts/smoke_backend.sh
 

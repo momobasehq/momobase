@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"momobase/internal/domain"
-	"momobase/internal/platform"
-	"momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/services"
 )
 
 type key uint8

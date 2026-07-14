@@ -3,13 +3,14 @@ package services
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"gorm.io/gorm"
 
-	"momobase/internal/domain"
-	"momobase/internal/platform"
-	"momobase/internal/providers"
-	"momobase/internal/store"
+	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/providers"
+	"github.com/momobasehq/momobase/internal/store"
 )
 
 var ErrNoRouteAvailable = errors.New("no active provider route available")
@@ -76,29 +77,16 @@ func (e *RouteEngine) SelectProvider(ctx context.Context, service, method, count
 	if err := e.db.WithContext(ctx).Where("active = ? AND service_type = ? AND payment_method = ?", true, service, method).Order("priority asc, created_at asc").Find(&routes).Error; err != nil {
 		return nil, err
 	}
-	exact, global := make([]*SelectedProvider, 0), make([]*SelectedProvider, 0)
 	for _, route := range routes {
-		candidate, ok := e.candidate(ctx, route, service, method, country)
-		if !ok {
-			continue
+		if candidate, ok := e.candidate(ctx, route, service, method, country); ok {
+			return candidate, nil
 		}
-		if candidate.Account.Country == country {
-			exact = append(exact, candidate)
-		} else {
-			global = append(global, candidate)
-		}
-	}
-	if len(exact) > 0 {
-		return exact[0], nil
-	}
-	if len(global) > 0 {
-		return global[0], nil
 	}
 	return nil, ErrNoRouteAvailable
 }
 func (e *RouteEngine) candidate(ctx context.Context, route domain.PaymentRoute, service, method, country string) (*SelectedProvider, bool) {
 	var account domain.ProviderAccount
-	if e.db.WithContext(ctx).Where("id = ? AND active = ?", route.ProviderAccountID, true).First(&account).Error != nil || account.Country != country && account.Country != domain.CountryGlobal {
+	if e.db.WithContext(ctx).Where("id = ? AND active = ?", route.ProviderAccountID, true).First(&account).Error != nil || !slices.Contains(account.Countries, country) {
 		return nil, false
 	}
 	rp, ok := e.runtime.Get(account.ID)

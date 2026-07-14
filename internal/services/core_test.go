@@ -11,9 +11,9 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"momobase/internal/domain"
-	"momobase/internal/platform"
-	"momobase/internal/providers"
+	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/providers"
 )
 
 type testStack struct {
@@ -59,8 +59,8 @@ func (s *testStack) app(t *testing.T) (*domain.App, *domain.AppCredential, strin
 	created := must(s.apps.CreateCredential(s.actor, app.ID, "Default", defaultScopes, nil))
 	return app, &created.Credential, created.ClientSecret
 }
-func (s *testStack) provider(t *testing.T, country, mode string) *domain.ProviderAccount {
-	account := must(s.providerAdmin.CreateAccount(s.actor, "test_provider", "Test", "sandbox", country, map[string]any{"mode": mode, "webhook_secret": "secret", "supports_global": country == domain.CountryGlobal}))
+func (s *testStack) provider(t *testing.T, mode string, countries ...string) *domain.ProviderAccount {
+	account := must(s.providerAdmin.CreateAccount(s.actor, "test_provider", "Test", "sandbox", countries, map[string]any{"mode": mode, "webhook_secret": "secret"}))
 	noError(s.providerAdmin.Activate(context.Background(), s.actor, account.ID))
 	return account
 }
@@ -84,7 +84,7 @@ func TestCoreFlows(t *testing.T) {
 	})
 	t.Run("idempotency", func(t *testing.T) {
 		s := stack(t)
-		account := s.provider(t, "UG", "success")
+		account := s.provider(t, "success", "UG")
 		s.route(t, account.ID, 1)
 		app, _, _ := s.app(t)
 		req := &CreatePaymentRequest{PaymentMethod: domain.PaymentMethodMomo, Amount: 50000, Currency: "UGX", Country: "UG", Reference: "ORDER-1", Customer: &PartyPayload{Phone: "256770000000"}, Momo: &PartyPayload{Phone: "256770000000"}}
@@ -101,22 +101,26 @@ func TestCoreFlows(t *testing.T) {
 	})
 	t.Run("country routing and health fallback", func(t *testing.T) {
 		s := stack(t)
-		global, local := s.provider(t, domain.CountryGlobal, "success"), s.provider(t, "UG", "success")
-		s.route(t, global.ID, 1)
-		s.route(t, local.ID, 10)
+		primary, backup, kenya := s.provider(t, "success", "UG", "RW"), s.provider(t, "success", "UG"), s.provider(t, "success", "KE")
+		s.route(t, primary.ID, 1)
+		s.route(t, backup.ID, 2)
+		s.route(t, kenya.ID, 0)
 		selected := must(s.routing.SelectProvider(context.Background(), domain.ServiceCollection, domain.PaymentMethodMomo, "UG"))
-		if selected.Account.ID != local.ID {
-			t.Fatal("country-specific provider was not preferred")
+		if selected.Account.ID != primary.ID {
+			t.Fatal("highest-priority provider supporting UG was not selected")
 		}
-		noError(s.db.Save(&domain.ProviderHealthSnapshot{ProviderAccountID: local.ID, Status: domain.ProviderDown, CircuitState: domain.CircuitOpen}).Error)
+		noError(s.db.Save(&domain.ProviderHealthSnapshot{ProviderAccountID: primary.ID, Status: domain.ProviderDown, CircuitState: domain.CircuitOpen}).Error)
 		selected = must(s.routing.SelectProvider(context.Background(), domain.ServiceCollection, domain.PaymentMethodMomo, "UG"))
-		if selected.Account.ID != global.ID {
-			t.Fatal("healthy global provider was not selected")
+		if selected.Account.ID != backup.ID {
+			t.Fatal("healthy UG backup was not selected")
+		}
+		if _, err := s.routing.SelectProvider(context.Background(), domain.ServiceCollection, domain.PaymentMethodMomo, "TZ"); !errors.Is(err, ErrNoRouteAvailable) {
+			t.Fatalf("unexpected fallback for unsupported country: %v", err)
 		}
 	})
 	t.Run("failed reload keeps runtime", func(t *testing.T) {
 		s := stack(t)
-		account := s.provider(t, "UG", "success")
+		account := s.provider(t, "success", "UG")
 		before, _ := s.runtime.Get(account.ID)
 		if err := s.providerAdmin.UpdateConfig(context.Background(), s.actor, account.ID, map[string]any{"mode": "init_error", "webhook_secret": "secret"}); err == nil {
 			t.Fatal("bad config accepted")
@@ -126,6 +130,22 @@ func TestCoreFlows(t *testing.T) {
 			t.Fatal("failed reload replaced the healthy runtime")
 		}
 	})
+}
+
+func TestCountryAndPhoneNormalization(t *testing.T) {
+	countries, err := NormalizeProviderCountries([]string{" ug ", "RW", "UG"})
+	if err != nil || len(countries) != 2 || countries[0] != "UG" || countries[1] != "RW" {
+		t.Fatalf("countries=%v err=%v", countries, err)
+	}
+	for _, phone := range []string{"0770000000", "+256770000000", "256770000000"} {
+		got, err := NormalizeMSISDN(phone, "UG")
+		if err != nil || got != "256770000000" {
+			t.Fatalf("NormalizeMSISDN(%q)=%q, %v", phone, got, err)
+		}
+	}
+	if _, err := NormalizeMSISDN("+254712123456", "UG"); err == nil {
+		t.Fatal("accepted a phone number from a different country")
+	}
 }
 
 type fakeProvider struct{ mode string }
@@ -152,10 +172,10 @@ func (p *fakeProvider) Collect(_ context.Context, request providers.PaymentReque
 func (p *fakeProvider) Disburse(_ context.Context, request providers.PaymentRequest) (*providers.ProviderPaymentResponse, error) {
 	return p.pay(request.Reference)
 }
-func (*fakeProvider) QueryTransaction(_ context.Context, ref string) (*providers.ProviderTransactionStatus, error) {
+func (*fakeProvider) QueryTransaction(_ context.Context, ref, _ string) (*providers.ProviderTransactionStatus, error) {
 	return &providers.ProviderTransactionStatus{ProviderReference: ref, Status: domain.TxSucceeded}, nil
 }
-func (*fakeProvider) QueryBalance(context.Context) (*providers.ProviderBalance, error) {
+func (*fakeProvider) QueryBalance(context.Context, string) (*providers.ProviderBalance, error) {
 	return &providers.ProviderBalance{Currency: "UGX", Available: 100000, Ledger: 100000}, nil
 }
 func (*fakeProvider) VerifyWebhook(context.Context, []byte, map[string]string) (*providers.ProviderWebhookEvent, error) {

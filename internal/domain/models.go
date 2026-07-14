@@ -84,14 +84,14 @@ type AppSession struct {
 
 type ProviderAccount struct {
 	BaseModel
-	ProviderCode        string `gorm:"size:80;index" json:"provider_code"`
-	Name                string `gorm:"size:255;not null" json:"name"`
-	Environment         string `gorm:"size:32;not null;default:sandbox" json:"environment"`
-	Country             string `gorm:"size:16;index;not null;default:GLOBAL" json:"country"`
-	Active              bool   `gorm:"index;not null;default:false" json:"active"`
-	ConfigVersion       int    `gorm:"not null;default:1" json:"config_version"`
-	EncryptedConfigJSON string `gorm:"type:text;not null" json:"-"`
-	ConfigHash          string `gorm:"size:128" json:"config_hash"`
+	ProviderCode        string   `gorm:"size:80;index" json:"provider_code"`
+	Name                string   `gorm:"size:255;not null" json:"name"`
+	Environment         string   `gorm:"size:32;not null;default:sandbox" json:"environment"`
+	Countries           []string `gorm:"serializer:json;type:text" json:"countries"`
+	Active              bool     `gorm:"index;not null;default:false" json:"active"`
+	ConfigVersion       int      `gorm:"not null;default:1" json:"config_version"`
+	EncryptedConfigJSON string   `gorm:"type:text;not null" json:"-"`
+	ConfigHash          string   `gorm:"size:128" json:"config_hash"`
 }
 
 type ProviderHealthSnapshot struct {

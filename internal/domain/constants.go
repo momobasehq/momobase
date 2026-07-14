@@ -1,8 +1,6 @@
 package domain
 
 const (
-	CountryGlobal = "GLOBAL"
-
 	ServiceCollection   = "collection"
 	ServiceDisbursement = "disbursement"
 

@@ -6,8 +6,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"momobase/internal/domain"
-	"momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/platform"
 )
 
 type AuditService struct {

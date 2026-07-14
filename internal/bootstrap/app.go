@@ -9,17 +9,17 @@ import (
 
 	"gorm.io/gorm"
 
-	"momobase/internal/domain"
-	httpx "momobase/internal/http"
-	adminh "momobase/internal/http/admin"
-	publich "momobase/internal/http/public"
-	webhookh "momobase/internal/http/webhooks"
-	"momobase/internal/platform"
-	"momobase/internal/providers"
-	"momobase/internal/providers/airtel"
-	"momobase/internal/providers/mtn"
-	"momobase/internal/services"
-	"momobase/internal/workers"
+	"github.com/momobasehq/momobase/internal/domain"
+	httpx "github.com/momobasehq/momobase/internal/http"
+	adminh "github.com/momobasehq/momobase/internal/http/admin"
+	publich "github.com/momobasehq/momobase/internal/http/public"
+	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/providers"
+	"github.com/momobasehq/momobase/internal/providers/airtel"
+	"github.com/momobasehq/momobase/internal/providers/mtn"
+	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/workers"
 )
 
 type App struct {

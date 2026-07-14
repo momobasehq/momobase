@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"momobase/internal/domain"
-	"momobase/internal/providers"
+	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/providers"
 )
 
 type Config struct {
-	BaseURL, ClientID, ClientSecret, Country, Currency        string
+	BaseURL, ClientID, ClientSecret, Currency                 string
 	CollectionPath, DisbursementPath, StatusPath, BalancePath string
 	CollectionEnabled, DisbursementEnabled                    bool
 	Timeout                                                   time.Duration
@@ -61,28 +61,28 @@ func (p *Provider) payment(ctx context.Context, enabled bool, path, party string
 	if !p.credentials() || !enabled {
 		return nil, errors.New("airtel payment operation is not configured")
 	}
-	country, currency, ref := upper(req.Country, p.cfg.Country), upper(req.Currency, p.cfg.Currency), providers.RandomRef("airtel-")
+	country, currency, ref := strings.ToUpper(req.Country), upper(req.Currency, p.cfg.Currency), providers.RandomRef("airtel-")
 	person := map[string]string{"country": country, "currency": currency, "msisdn": req.Phone}
 	tx := map[string]string{"amount": providers.FormatAmountMinor(req.Amount, currency), "country": country, "currency": currency, "id": ref, "message": req.Description}
-	raw, err := p.call(ctx, http.MethodPost, path, map[string]any{"reference": req.Reference, party: person, "transaction": tx})
+	raw, err := p.call(ctx, http.MethodPost, path, country, map[string]any{"reference": req.Reference, party: person, "transaction": tx})
 	if err != nil {
 		return nil, err
 	}
 	return &providers.ProviderPaymentResponse{ProviderReference: providers.First(providers.Path(raw, "transaction.id"), providers.Path(raw, "data.transaction.id"), ref), Status: domain.TxProcessing, Message: "Airtel request accepted", Raw: raw}, nil
 }
-func (p *Provider) QueryTransaction(ctx context.Context, ref string) (*providers.ProviderTransactionStatus, error) {
+func (p *Provider) QueryTransaction(ctx context.Context, ref, country string) (*providers.ProviderTransactionStatus, error) {
 	if ref == "" {
 		return nil, errors.New("provider reference is required")
 	}
-	raw, err := p.call(ctx, http.MethodGet, strings.ReplaceAll(p.cfg.StatusPath, "{id}", ref), nil)
+	raw, err := p.call(ctx, http.MethodGet, strings.ReplaceAll(p.cfg.StatusPath, "{id}", ref), country, nil)
 	if err != nil {
 		return nil, err
 	}
 	status := providers.First(providers.Path(raw, "transaction.status"), providers.Path(raw, "data.transaction.status"), providers.Path(raw, "status.code"), providers.Path(raw, "status"))
 	return &providers.ProviderTransactionStatus{ProviderReference: ref, Status: providers.PaymentStatus(status), Message: providers.First(status, "Airtel transaction status")}, nil
 }
-func (p *Provider) QueryBalance(ctx context.Context) (*providers.ProviderBalance, error) {
-	raw, err := p.call(ctx, http.MethodGet, p.cfg.BalancePath, nil)
+func (p *Provider) QueryBalance(ctx context.Context, country string) (*providers.ProviderBalance, error) {
+	raw, err := p.call(ctx, http.MethodGet, p.cfg.BalancePath, country, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -126,21 +126,21 @@ func (p *Provider) accessToken(ctx context.Context) (string, error) {
 		return out.AccessToken, time.Duration(out.ExpiresIn) * time.Second, nil
 	})
 }
-func (p *Provider) call(ctx context.Context, method, path string, in any) (map[string]any, error) {
+func (p *Provider) call(ctx context.Context, method, path, country string, in any) (map[string]any, error) {
 	access, err := p.accessToken(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var out map[string]any
-	headers := map[string]string{"Authorization": "Bearer " + access, "X-Country": p.cfg.Country, "X-Currency": p.cfg.Currency}
+	headers := map[string]string{"Authorization": "Bearer " + access, "X-Country": strings.ToUpper(country), "X-Currency": p.cfg.Currency}
 	err = providers.DoJSON(ctx, p.client, method, p.cfg.BaseURL+path, headers, in, &out)
 	return out, err
 }
 func parseConfig(raw providers.ProviderConfig) (Config, error) {
-	cfg := Config{BaseURL: "https://openapiuat.airtel.africa", Country: "UG", Currency: "UGX", Timeout: 30 * time.Second, CollectionEnabled: true, DisbursementEnabled: true, CollectionPath: "/merchant/v1/payments/", DisbursementPath: "/standard/v1/disbursements/", StatusPath: "/standard/v1/payments/{id}", BalancePath: "/standard/v1/users/balance"}
+	cfg := Config{BaseURL: "https://openapiuat.airtel.africa", Currency: "UGX", Timeout: 30 * time.Second, CollectionEnabled: true, DisbursementEnabled: true, CollectionPath: "/merchant/v1/payments/", DisbursementPath: "/standard/v1/disbursements/", StatusPath: "/standard/v1/payments/{id}", BalancePath: "/standard/v1/users/balance"}
 	cfg.BaseURL = strings.TrimRight(providers.First(providers.String(raw, "base_url"), cfg.BaseURL), "/")
 	cfg.ClientID, cfg.ClientSecret = providers.String(raw, "client_id"), providers.String(raw, "client_secret")
-	cfg.Country, cfg.Currency = upper(providers.String(raw, "country"), cfg.Country), upper(providers.String(raw, "currency"), cfg.Currency)
+	cfg.Currency = upper(providers.String(raw, "currency"), cfg.Currency)
 	cfg.CollectionPath = providers.Slash(providers.First(providers.String(raw, "collection_path"), cfg.CollectionPath))
 	cfg.DisbursementPath = providers.Slash(providers.First(providers.String(raw, "disbursement_path"), cfg.DisbursementPath))
 	cfg.StatusPath = providers.Slash(providers.First(providers.String(raw, "status_path_template"), cfg.StatusPath))

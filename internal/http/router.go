@@ -6,12 +6,12 @@ import (
 	"os"
 	"time"
 
-	adminh "momobase/internal/http/admin"
-	authmw "momobase/internal/http/middleware"
-	publich "momobase/internal/http/public"
-	webhookh "momobase/internal/http/webhooks"
-	"momobase/internal/platform"
-	"momobase/internal/services"
+	adminh "github.com/momobasehq/momobase/internal/http/admin"
+	authmw "github.com/momobasehq/momobase/internal/http/middleware"
+	publich "github.com/momobasehq/momobase/internal/http/public"
+	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/services"
 )
 
 type RouterDeps struct {
@@ -103,6 +103,7 @@ func adminRoutes(mux *http.ServeMux, h *adminh.Handler, base ...middleware) {
 	add("POST /api/admin/apps/{id}/credentials/{credentialID}/rotate", h.Action(200, "APP_CREDENTIAL_ROTATE_FAILED", "credential.rotate", false), super)
 	add("GET /api/admin/providers", h.List("providers"))
 	add("POST /api/admin/providers/accounts", h.Action(201, "PROVIDER_CREATE_FAILED", "provider.create", true), super, authmw.JSONOnly)
+	add("PATCH /api/admin/providers/accounts/{id}/countries", h.Action(200, "COUNTRIES_UPDATE_FAILED", "provider.countries", true), super, authmw.JSONOnly)
 	add("PATCH /api/admin/providers/accounts/{id}/config", h.Action(200, "CONFIG_UPDATE_FAILED", "provider.config", true), super, authmw.JSONOnly)
 	add("PATCH /api/admin/providers/accounts/{id}/activate", h.Action(200, "PROVIDER_ACTIVATE_FAILED", "provider.activate", false), super)
 	add("PATCH /api/admin/providers/accounts/{id}/deactivate", h.Action(200, "PROVIDER_DEACTIVATE_FAILED", "provider.deactivate", false), super)

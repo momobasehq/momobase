@@ -9,9 +9,9 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"momobase/internal/domain"
-	"momobase/internal/providers"
-	"momobase/internal/store"
+	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/providers"
+	"github.com/momobasehq/momobase/internal/store"
 )
 
 type ReconciliationService struct {
@@ -50,7 +50,7 @@ func (s *ReconciliationService) RunOnce(ctx context.Context, limit int) error {
 	return errors.Join(errs...)
 }
 func (s *ReconciliationService) reconcile(ctx context.Context, row *domain.Transaction) error {
-	result, err := s.executor.QueryTransaction(ctx, row.SelectedProviderAccountID, row.ProviderReference)
+	result, err := s.executor.QueryTransaction(ctx, row.SelectedProviderAccountID, row.ProviderReference, row.Country)
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()

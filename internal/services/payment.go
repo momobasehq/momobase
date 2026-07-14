@@ -5,15 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
+	"github.com/nyaruka/phonenumbers"
 	"gorm.io/gorm"
 
-	"momobase/internal/domain"
-	"momobase/internal/platform"
-	"momobase/internal/providers"
-	"momobase/internal/store"
+	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/providers"
+	"github.com/momobasehq/momobase/internal/store"
 )
 
 type PartyPayload struct {
@@ -194,19 +197,28 @@ func PaymentRequestHash(service string, req *CreatePaymentRequest) string {
 	return platform.SHA256Hex(string(data))
 }
 func NormalizeMSISDN(phone, country string) (string, error) {
-	digits := normalizeDigits(phone)
-	code := map[string]string{"UG": "256", "KE": "254", "TZ": "255", "RW": "250", "ET": "251", "GH": "233", "NG": "234"}[strings.ToUpper(country)]
-	if code == "" {
-		return "", errors.New("unsupported phone country")
+	country, err := NormalizeTransactionCountry(country)
+	if err != nil {
+		return "", err
 	}
-	digits = strings.TrimPrefix(digits, "00")
-	if strings.HasPrefix(digits, code) && len(digits) >= len(code)+7 {
-		return digits, nil
+	raw := strings.TrimSpace(phone)
+	if raw == "" || strings.IndexFunc(raw, unicode.IsLetter) >= 0 {
+		return "", errors.New("momo phone must contain only digits and phone punctuation")
 	}
-	if strings.HasPrefix(digits, "0") && len(digits) >= 9 {
-		return code + strings.TrimLeft(digits, "0"), nil
+	digits := phonenumbers.NormalizeDigitsOnly(raw)
+	callingCode := strconv.Itoa(phonenumbers.GetCountryCodeForRegion(country))
+	if !strings.HasPrefix(raw, "+") && strings.HasPrefix(digits, callingCode) {
+		raw = "+" + digits
 	}
-	return "", errors.New("momo phone must match the transaction country")
+	number, err := phonenumbers.Parse(raw, country)
+	if err != nil || !phonenumbers.IsValidNumberForRegion(number, country) {
+		return "", errors.New("momo phone must be valid for the transaction country")
+	}
+	typeOfNumber := phonenumbers.GetNumberType(number)
+	if typeOfNumber != phonenumbers.MOBILE && typeOfNumber != phonenumbers.FIXED_LINE_OR_MOBILE {
+		return "", errors.New("momo phone must be a mobile number")
+	}
+	return strings.TrimPrefix(phonenumbers.Format(number, phonenumbers.E164), "+"), nil
 }
 
 func redactRawMap(raw map[string]any) map[string]any {

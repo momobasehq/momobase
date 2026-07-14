@@ -3,7 +3,7 @@ package services
 import (
 	"fmt"
 
-	"momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/domain"
 )
 
 func transition(tx *domain.Transaction, next string) error {

@@ -59,8 +59,8 @@ type PaymentProvider interface {
 	HealthCheck(context.Context) error
 	Collect(context.Context, PaymentRequest) (*ProviderPaymentResponse, error)
 	Disburse(context.Context, PaymentRequest) (*ProviderPaymentResponse, error)
-	QueryTransaction(context.Context, string) (*ProviderTransactionStatus, error)
-	QueryBalance(context.Context) (*ProviderBalance, error)
+	QueryTransaction(context.Context, string, string) (*ProviderTransactionStatus, error)
+	QueryBalance(context.Context, string) (*ProviderBalance, error)
 	VerifyWebhook(context.Context, []byte, map[string]string) (*ProviderWebhookEvent, error)
 }
 

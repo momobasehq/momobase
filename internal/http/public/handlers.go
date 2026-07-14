@@ -6,10 +6,10 @@ import (
 
 	"gorm.io/gorm"
 
-	"momobase/internal/domain"
-	authmw "momobase/internal/http/middleware"
-	"momobase/internal/platform"
-	"momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/domain"
+	authmw "github.com/momobasehq/momobase/internal/http/middleware"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/services"
 )
 
 type Handler struct {

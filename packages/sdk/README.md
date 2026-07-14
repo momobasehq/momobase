@@ -40,9 +40,11 @@ The SDK uses the global `fetch()` directly. There is no `fetchImpl` option.
 
 Both clients cache access tokens and call the refresh endpoint when a `refresh_token` is available. If no refresh token exists, the app client requests a new `client_credentials` token and the admin client falls back to password grant when email/password are configured.
 
-## Country-first routing
+## Explicit country routing
 
-Collection and disbursement payloads must include `country` as a 2-letter ISO code, for example `UG`. Provider accounts also have a `country` field. Use `GLOBAL` for fallback provider accounts. Momobase routes exact country matches first, then GLOBAL providers, then lowest priority. Phone/MSISDN prefixes are only used for validation.
+Collection and disbursement payloads include `country` as a two-letter ISO code, for example `UG`. Provider accounts expose `countries: string[]`, and Momobase routes only to active accounts whose list contains the transaction country. Route priority decides among eligible providers; no global fallback exists.
+
+Phone/MSISDN values may be local or international. The backend validates them against the transaction country using libphonenumber metadata and normalizes them to E.164 digits.
 
 ## Current MVP limits
 
@@ -52,6 +54,8 @@ This SDK now matches the latest backend contract:
 - Collection requests require `customer` and `momo`.
 - Disbursement requests require `recipient` and `momo`.
 - Card, bank, and wallet payloads are intentionally not exposed yet.
-- Provider account creation requires a `country` value: `GLOBAL` or an ISO-2 country code such as `UG`.
-- Provider configs should include `webhook_secret`; `GLOBAL` provider accounts also require `supports_global: true`.
-- Provider balances use `{ currency, available, ledger }`; active balance queries return `{ provider_account_id, provider_code, status, balance?, error? }`.
+- Provider account creation requires a non-empty `countries` array such as `["UG", "RW"]`.
+- Supported countries can be changed with `admin.providers.updateCountries(id, countries)`.
+- `admin.providers.balance(id, country)` requires `country` for a multi-country provider; it may be omitted for a single-country provider.
+- Provider configs should include `webhook_secret`; country eligibility is not stored in provider credential config.
+- Provider balances use `{ currency, available, ledger }`; active balance queries return one `{ provider_account_id, provider_code, country, status, balance?, error? }` item per supported country.

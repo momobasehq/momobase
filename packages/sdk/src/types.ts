@@ -44,7 +44,7 @@ export interface AppCredential {
 export interface CreatedCredential { credential: AppCredential; client_secret: string }
 export interface ProviderAccount {
   id: string; provider_code: string; name: string; environment: string
-  country: string; active: boolean; config_version: number; created_at: string; updated_at: string
+  countries: string[]; active: boolean; config_version: number; created_at: string; updated_at: string
 }
 export interface PaymentRoute {
   id: string; service_type: ServiceType; payment_method: "momo"; provider_account_id: string
@@ -62,11 +62,11 @@ export interface AuditLog {
 }
 export interface RuntimeProvider {
   provider_account_id: string; provider_code: string; config_version: number; active: boolean
-  initialized: boolean; capabilities: unknown[]; health?: ProviderHealthSnapshot
+  initialized: boolean; capabilities: unknown[]; countries: string[]; health?: ProviderHealthSnapshot
 }
 export interface ProviderBalance { currency: string; available: number; ledger: number }
 export interface ProviderBalanceResult {
-  provider_account_id: string; provider_code?: string; status: string; balance?: ProviderBalance; error?: string
+  provider_account_id: string; provider_code?: string; country: string; status: string; balance?: ProviderBalance; error?: string
 }
 export interface SystemInfo {
   app_name: string; app_env: string; db_type: string; addr: string; workers_enabled: boolean
