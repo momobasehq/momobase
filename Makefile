@@ -35,7 +35,8 @@ lint-format:
 quality: fmt-check vet test lint
 
 seed-admin:
-	go run ./cmd/$(APP) seed-admin --email admin@example.com --password password123 --name "Super Admin"
+	@test -n "$$ADMIN_PASSWORD" || (echo "Set ADMIN_PASSWORD before running seed-admin" >&2; exit 1)
+	go run ./cmd/$(APP) seed-admin --email admin@momobase.local --password "$$ADMIN_PASSWORD" --name "Super Admin"
 
 smoke:
 	scripts/smoke_backend.sh

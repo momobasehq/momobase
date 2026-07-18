@@ -109,7 +109,10 @@ func newSeedAdminCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&email, "email", "admin@example.com", "admin email")
-	cmd.Flags().StringVar(&password, "password", "password123", "admin password")
+	cmd.Flags().StringVar(&password, "password", "", "admin password")
 	cmd.Flags().StringVar(&name, "name", "Super Admin", "admin name")
+	if err := cmd.MarkFlagRequired("password"); err != nil {
+		panic(fmt.Errorf("mark password flag as required: %w", err))
+	}
 	return cmd
 }

@@ -2,7 +2,7 @@
 set -euo pipefail
 BASE_URL="${BASE_URL:-http://localhost:9090}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-password123}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:?Set ADMIN_PASSWORD to the seeded administrator password}"
 CLIENT_ID="${CLIENT_ID:?Set CLIENT_ID from an app credential}"
 CLIENT_SECRET="${CLIENT_SECRET:?Set CLIENT_SECRET from an app credential}"
 NONCE="${NONCE:-$(date +%s)}"
