@@ -75,7 +75,9 @@ type Config struct {
 	Features FeaturesConfig
 }
 
-func LoadConfig() Config {
+// LoadConfig reads configuration from the environment and rejects invalid
+// explicitly configured boolean and duration values.
+func LoadConfig() (Config, error) {
 	var c Config
 	// app
 	c.App.Name = env("APP_NAME", "momobase")
@@ -98,24 +100,64 @@ func LoadConfig() Config {
 	c.Security.EncryptionMasterKeyBase64 = env("ENCRYPTION_MASTER_KEY_BASE64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	c.Security.AdminOAuthSecret = env("ADMIN_OAUTH_SECRET", "change-me-admin-oauth-secret")
 	c.Security.AppOAuthSecret = env("APP_OAUTH_SECRET", "change-me-app-oauth-secret")
-	c.Security.AdminAccessTTL = duration("ADMIN_ACCESS_TTL_MINUTES", 15, time.Minute)
-	c.Security.AdminRefreshTTL = duration("ADMIN_REFRESH_TTL_HOURS", 24, time.Hour)
-	c.Security.AppAccessTTL = duration("APP_ACCESS_TTL_MINUTES", 30, time.Minute)
-	c.Security.AppRefreshTTL = duration("APP_REFRESH_TTL_HOURS", 24, time.Hour)
+	var err error
+	c.Security.AdminAccessTTL, err = duration("ADMIN_ACCESS_TTL_MINUTES", 15, time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Security.AdminRefreshTTL, err = duration("ADMIN_REFRESH_TTL_HOURS", 24, time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Security.AppAccessTTL, err = duration("APP_ACCESS_TTL_MINUTES", 30, time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Security.AppRefreshTTL, err = duration("APP_REFRESH_TTL_HOURS", 24, time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
 	c.Security.AppClientIDPrefix = env("APP_CLIENT_ID_PREFIX", "app_client")
 	c.Security.AppClientSecretPrefix = env("APP_CLIENT_SECRET_PREFIX", "mb_test")
 	// workers
-	c.Workers.Enabled = boolean("WORKERS_ENABLED", true)
-	c.Workers.HealthEnabled = boolean("HEALTH_WORKER_ENABLED", true)
-	c.Workers.ReconciliationEnabled = boolean("RECONCILIATION_WORKER_ENABLED", true)
-	c.Workers.CleanupEnabled = boolean("CLEANUP_WORKER_ENABLED", true)
-	c.Workers.HealthInterval = duration("HEALTH_CHECK_INTERVAL_SECONDS", 30, time.Second)
-	c.Workers.ReconciliationInterval = duration("RECONCILIATION_INTERVAL_SECONDS", 60, time.Second)
-	c.Workers.CleanupInterval = duration("CLEANUP_INTERVAL_SECONDS", 300, time.Second)
+	c.Workers.Enabled, err = boolean("WORKERS_ENABLED", true)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Workers.HealthEnabled, err = boolean("HEALTH_WORKER_ENABLED", true)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Workers.ReconciliationEnabled, err = boolean("RECONCILIATION_WORKER_ENABLED", true)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Workers.CleanupEnabled, err = boolean("CLEANUP_WORKER_ENABLED", true)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Workers.HealthInterval, err = duration("HEALTH_CHECK_INTERVAL_SECONDS", 30, time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Workers.ReconciliationInterval, err = duration("RECONCILIATION_INTERVAL_SECONDS", 60, time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Workers.CleanupInterval, err = duration("CLEANUP_INTERVAL_SECONDS", 300, time.Second)
+	if err != nil {
+		return Config{}, err
+	}
 	// features
-	c.Features.AdminFrontendEnabled = boolean("ADMIN_FRONTEND_ENABLED", false)
-	c.Features.AutoMigrate = boolean("AUTO_MIGRATE", true)
-	return c
+	c.Features.AdminFrontendEnabled, err = boolean("ADMIN_FRONTEND_ENABLED", false)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Features.AutoMigrate, err = boolean("AUTO_MIGRATE", true)
+	if err != nil {
+		return Config{}, err
+	}
+	return c, nil
 }
 
 func (c Config) Validate() error {
@@ -150,24 +192,31 @@ func env(key, fallback string) string {
 	return fallback
 }
 
-func boolean(key string, fallback bool) bool {
+func boolean(key string, fallback bool) (bool, error) {
 	v := os.Getenv(key)
 	if v == "" {
-		return fallback
+		return fallback, nil
 	}
 	b, err := strconv.ParseBool(v)
 	if err != nil {
-		return fallback
+		return false, fmt.Errorf("%s must be a boolean, got %q: %w", key, v, err)
 	}
-	return b
+	return b, nil
 }
 
-func duration(key string, fallback int, unit time.Duration) time.Duration {
-	value, err := strconv.Atoi(os.Getenv(key))
-	if err != nil || value <= 0 {
-		value = fallback
+func duration(key string, fallback int, unit time.Duration) (time.Duration, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return time.Duration(fallback) * unit, nil
 	}
-	return time.Duration(value) * unit
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a positive integer, got %q: %w", key, raw, err)
+	}
+	if value <= 0 {
+		return 0, fmt.Errorf("%s must be greater than zero, got %d", key, value)
+	}
+	return time.Duration(value) * unit, nil
 }
 
 func list(key, fallback string) []string {

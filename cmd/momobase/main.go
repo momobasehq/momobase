@@ -44,8 +44,16 @@ func newServeCommand() *cobra.Command {
 	}
 }
 
+func loadApp() (*bootstrap.App, error) {
+	cfg, err := bootstrap.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	return bootstrap.NewApp(cfg)
+}
+
 func runServe(cmd *cobra.Command, _ []string) error {
-	app, err := bootstrap.NewApp(bootstrap.LoadConfig())
+	app, err := loadApp()
 	if err != nil {
 		return err
 	}
@@ -62,7 +70,7 @@ func newMigrateCommand() *cobra.Command {
 		Short: "Apply database schema migrations",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			app, err := bootstrap.NewApp(bootstrap.LoadConfig())
+			app, err := loadApp()
 			if err != nil {
 				return err
 			}
@@ -81,7 +89,7 @@ func newSeedAdminCommand() *cobra.Command {
 		Short: "Create a super administrator",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			app, err := bootstrap.NewApp(bootstrap.LoadConfig())
+			app, err := loadApp()
 			if err != nil {
 				return err
 			}
