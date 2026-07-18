@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+// OpenDatabase opens the SQLite, PostgreSQL, or MySQL database selected by cfg.
 func OpenDatabase(cfg Config) (*gorm.DB, error) {
 	gormLogger := logger.Default.LogMode(logger.Silent)
 	conf := &gorm.Config{Logger: gormLogger, NowFunc: func() time.Time { return time.Now().UTC() }}

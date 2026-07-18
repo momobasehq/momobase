@@ -61,15 +61,26 @@ func (c *circuit) after(now time.Time, err error) {
 	}
 }
 
+// RuntimeProvider contains an initialized provider adapter and its loaded account configuration.
 type RuntimeProvider struct {
-	AccountID, ProviderCode string
-	Countries               []string
-	ConfigVersion           int
-	Adapter                 providers.PaymentProvider
-	Capabilities            []providers.Capability
-	WebhookSecret           string
-	breaker                 *circuit
+	// AccountID is the persisted provider account identifier.
+	AccountID string
+	// ProviderCode identifies the registered provider adapter implementation.
+	ProviderCode string
+	// Countries lists the transaction countries supported by the account.
+	Countries []string
+	// ConfigVersion is the provider configuration version loaded into the adapter.
+	ConfigVersion int
+	// Adapter is the initialized payment provider implementation.
+	Adapter providers.PaymentProvider
+	// Capabilities lists the payment operations exposed by the adapter.
+	Capabilities []providers.Capability
+	// WebhookSecret is the decrypted secret used to authenticate incoming provider webhooks.
+	WebhookSecret string
+	breaker       *circuit
 }
+
+// ProviderRuntimeManager loads provider accounts and exposes their initialized adapters safely across goroutines.
 type ProviderRuntimeManager struct {
 	mu        sync.RWMutex
 	db        *gorm.DB
@@ -79,6 +90,7 @@ type ProviderRuntimeManager struct {
 	items     map[string]*RuntimeProvider
 }
 
+// NewProviderRuntimeManager creates an empty provider runtime manager.
 func NewProviderRuntimeManager(
 	db *gorm.DB,
 	registry providers.Registry,
@@ -87,12 +99,16 @@ func NewProviderRuntimeManager(
 ) *ProviderRuntimeManager {
 	return &ProviderRuntimeManager{db: db, registry: registry, encryptor: enc, logger: log, items: map[string]*RuntimeProvider{}}
 }
+
+// Get returns the loaded runtime for a provider account ID.
 func (m *ProviderRuntimeManager) Get(id string) (*RuntimeProvider, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	p, ok := m.items[id]
 	return p, ok
 }
+
+// List returns a snapshot slice containing all loaded provider runtimes.
 func (m *ProviderRuntimeManager) List() []*RuntimeProvider {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -102,12 +118,16 @@ func (m *ProviderRuntimeManager) List() []*RuntimeProvider {
 	}
 	return out
 }
+
+// CircuitState returns a provider's current circuit-breaker state, treating unknown providers as open.
 func (m *ProviderRuntimeManager) CircuitState(id string) string {
 	if p, ok := m.Get(id); ok {
 		return p.breaker.state(time.Now())
 	}
 	return domain.CircuitOpen
 }
+
+// LoadActive initializes every active provider account and joins any account-specific failures.
 func (m *ProviderRuntimeManager) LoadActive(ctx context.Context) error {
 	var rows []domain.ProviderAccount
 	if err := m.db.WithContext(ctx).Where("active = ?", true).Find(&rows).Error; err != nil {
@@ -121,11 +141,15 @@ func (m *ProviderRuntimeManager) LoadActive(ctx context.Context) error {
 	}
 	return errors.Join(errs...)
 }
+
+// Disable removes a provider account from the in-memory runtime set.
 func (m *ProviderRuntimeManager) Disable(id string) {
 	m.mu.Lock()
 	delete(m.items, id)
 	m.mu.Unlock()
 }
+
+// Reload rebuilds an active provider runtime from persisted configuration or removes it when inactive.
 func (m *ProviderRuntimeManager) Reload(ctx context.Context, id string) error {
 	var account domain.ProviderAccount
 	if err := m.db.WithContext(ctx).First(&account, "id = ?", id).Error; err != nil {
@@ -159,6 +183,8 @@ func (m *ProviderRuntimeManager) Reload(ctx context.Context, id string) error {
 	m.mu.Unlock()
 	return nil
 }
+
+// TestProviderConfig decrypts an account's configuration, initializes its adapter, and runs a health check.
 func (m *ProviderRuntimeManager) TestProviderConfig(ctx context.Context, id string) error {
 	var account domain.ProviderAccount
 	if err := m.db.WithContext(ctx).First(&account, "id = ?", id).Error; err != nil {
@@ -200,19 +226,29 @@ func (m *ProviderRuntimeManager) plain(account *domain.ProviderAccount) (provide
 	err = json.Unmarshal(data, &plain)
 	return plain, err
 }
+
+// QueryBalance retrieves a balance through the specified loaded provider account.
 func (m *ProviderRuntimeManager) QueryBalance(ctx context.Context, id, country string) (*providers.ProviderBalance, error) {
 	return NewProviderExecutor(m).QueryBalance(ctx, id, country)
 }
 
+// ProviderBalanceResult reports the outcome of querying one provider account and country.
 type ProviderBalanceResult struct {
-	ProviderAccountID string                     `json:"provider_account_id"`
-	ProviderCode      string                     `json:"provider_code,omitempty"`
-	Country           string                     `json:"country"`
-	Status            string                     `json:"status"`
-	Balance           *providers.ProviderBalance `json:"balance,omitempty"`
-	Error             string                     `json:"error,omitempty"`
+	// ProviderAccountID identifies the queried provider account.
+	ProviderAccountID string `json:"provider_account_id"`
+	// ProviderCode identifies the provider adapter implementation.
+	ProviderCode string `json:"provider_code,omitempty"`
+	// Country identifies the balance's transaction country.
+	Country string `json:"country"`
+	// Status is "success" when Balance is populated and "failed" when Error is populated.
+	Status string `json:"status"`
+	// Balance contains the successful provider response.
+	Balance *providers.ProviderBalance `json:"balance,omitempty"`
+	// Error contains a redacted provider error for a failed query.
+	Error string `json:"error,omitempty"`
 }
 
+// QueryActiveBalances queries every loaded provider for each of its configured countries.
 func (m *ProviderRuntimeManager) QueryActiveBalances(ctx context.Context) ([]ProviderBalanceResult, error) {
 	var out []ProviderBalanceResult
 	for _, runtime := range m.List() {

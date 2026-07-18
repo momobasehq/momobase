@@ -5,12 +5,14 @@ import (
 	"time"
 )
 
+// TokenCache serializes token loading and reuses tokens until shortly before expiry.
 type TokenCache struct {
 	mu      sync.Mutex
 	value   string
 	expires time.Time
 }
 
+// Get returns a cached token or calls load to obtain and cache a replacement.
 func (c *TokenCache) Get(load func() (string, time.Duration, error)) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

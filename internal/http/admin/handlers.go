@@ -14,6 +14,8 @@ import (
 	"github.com/momobasehq/momobase/internal/services"
 )
 
+// SystemInfo describes application and worker metadata exposed by the
+// administrative system endpoints.
 type SystemInfo struct {
 	AppName        string
 	AppEnv         string
@@ -22,6 +24,8 @@ type SystemInfo struct {
 	WorkersEnabled bool
 	WorkerNames    []string
 }
+
+// Handler serves authenticated administrative HTTP endpoints.
 type Handler struct {
 	db        *gorm.DB
 	auth      *services.AdminAuthService
@@ -34,6 +38,8 @@ type Handler struct {
 	system    SystemInfo
 }
 
+// NewHandler constructs an administrative HTTP handler from its services and
+// system metadata.
 func NewHandler(
 	db *gorm.DB,
 	auth *services.AdminAuthService,
@@ -48,6 +54,8 @@ func NewHandler(
 	return &Handler{db, auth, users, providers, routes, apps, runtime, audit, system}
 }
 
+// Request contains the fields accepted by administrative mutation endpoints.
+// Individual actions use only the fields relevant to that action.
 type Request struct {
 	Name              string         `json:"name"`
 	Email             string         `json:"email"`
@@ -81,6 +89,10 @@ func reply(w http.ResponseWriter, status int, code string, run func() (any, erro
 	}
 	platform.JSON(w, status, out)
 }
+
+// Action returns an HTTP handler that optionally decodes a Request, dispatches
+// the named administrative action, and writes the configured success or error
+// response.
 func (h *Handler) Action(status int, code, action string, decode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request *Request
@@ -155,6 +167,9 @@ func parseExpiry(raw string) (*time.Time, error) {
 	}
 	return &value, nil
 }
+
+// List returns an HTTP handler that writes a paginated list for the requested
+// administrative resource kind.
 func (h *Handler) List(kind string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch kind {
@@ -191,7 +206,12 @@ func page[T any](w http.ResponseWriter, r *http.Request, query *gorm.DB, order s
 	}
 	platform.JSON(w, 200, platform.PageData[T]{Page: page, Total: int(total), Items: items, Count: len(items)})
 }
+
+// Me writes the authenticated administrator stored in the request context.
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) { platform.JSON(w, 200, actor(r)) }
+
+// GetApp writes the application identified by the request path or a not-found
+// response when no matching application exists.
 func (h *Handler) GetApp(w http.ResponseWriter, r *http.Request) {
 	app, err := h.apps.GetApp(id(r))
 	if err != nil {
@@ -200,6 +220,9 @@ func (h *Handler) GetApp(w http.ResponseWriter, r *http.Request) {
 	}
 	platform.JSON(w, 200, app)
 }
+
+// ActiveProviderBalances queries balances for active provider runtimes and
+// writes them as a paginated response.
 func (h *Handler) ActiveProviderBalances(w http.ResponseWriter, r *http.Request) {
 	items, err := h.runtime.QueryActiveBalances(r.Context())
 	if err != nil {
@@ -219,6 +242,9 @@ func (h *Handler) ActiveProviderBalances(w http.ResponseWriter, r *http.Request)
 	page, size := platform.Pagination(r)
 	platform.JSON(w, 200, platform.PaginateSlice(items, page, size))
 }
+
+// ProviderBalance queries and writes the balance for the provider account and
+// optional country identified by the request.
 func (h *Handler) ProviderBalance(w http.ResponseWriter, r *http.Request) {
 	out, err := h.runtime.QueryBalance(r.Context(), id(r), r.URL.Query().Get("country"))
 	if err != nil {
@@ -228,6 +254,8 @@ func (h *Handler) ProviderBalance(w http.ResponseWriter, r *http.Request) {
 	h.audit.RecordBestEffort(actor(r).ID, "admin", "balance.queried", "provider_account", id(r), nil, r.RemoteAddr, r.UserAgent())
 	platform.JSON(w, 200, out)
 }
+
+// SystemInfo writes application, runtime, and worker metadata.
 func (h *Handler) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 	platform.JSON(w, 200, map[string]any{
 		"app_name":        h.system.AppName,
@@ -240,6 +268,9 @@ func (h *Handler) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 		"server_time":     time.Now().UTC(),
 	})
 }
+
+// SystemHealth checks database connectivity and writes system and provider
+// runtime health information.
 func (h *Handler) SystemHealth(w http.ResponseWriter, r *http.Request) {
 	sqlDB, err := h.db.DB()
 	if err != nil {
@@ -265,6 +296,8 @@ func (h *Handler) SystemHealth(w http.ResponseWriter, r *http.Request) {
 		"server_time":                   time.Now().UTC(),
 	})
 }
+
+// Workers writes a paginated view of the configured background workers.
 func (h *Handler) Workers(w http.ResponseWriter, r *http.Request) {
 	items := make([]map[string]any, 0, len(h.system.WorkerNames))
 	for _, name := range h.system.WorkerNames {
@@ -277,6 +310,9 @@ func (h *Handler) Workers(w http.ResponseWriter, r *http.Request) {
 	page, size := platform.Pagination(r)
 	platform.JSON(w, 200, platform.PaginateSlice(items, page, size))
 }
+
+// RuntimeProviders writes a paginated view of initialized provider runtimes
+// together with their latest health snapshots when available.
 func (h *Handler) RuntimeProviders(w http.ResponseWriter, r *http.Request) {
 	items := make([]map[string]any, 0)
 	for _, runtime := range h.runtime.List() {

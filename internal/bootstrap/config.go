@@ -160,6 +160,7 @@ func LoadConfig() (Config, error) {
 	return c, nil
 }
 
+// Validate rejects configuration that is unsafe for staging or production.
 func (c Config) Validate() error {
 	if c.App.Env != "production" && c.App.Env != "staging" {
 		return nil

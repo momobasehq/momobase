@@ -12,17 +12,26 @@ import (
 	"github.com/momobasehq/momobase/internal/services"
 )
 
+// Handler serves authenticated client-facing payment endpoints.
 type Handler struct {
 	payments *services.PaymentOrchestrator
 	db       *gorm.DB
 }
 
+// NewHandler constructs a public API handler from a payment orchestrator and
+// database connection.
 func NewHandler(p *services.PaymentOrchestrator, db *gorm.DB) *Handler {
 	return &Handler{payments: p, db: db}
 }
+
+// CreateCollection validates and creates a collection transaction for the
+// authenticated application.
 func (h *Handler) CreateCollection(w http.ResponseWriter, r *http.Request) {
 	h.create(w, r, domain.ServiceCollection)
 }
+
+// CreateDisbursement validates and creates a disbursement transaction for the
+// authenticated application.
 func (h *Handler) CreateDisbursement(w http.ResponseWriter, r *http.Request) {
 	h.create(w, r, domain.ServiceDisbursement)
 }
@@ -48,9 +57,15 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request, service string)
 	}
 	platform.JSON(w, 201, out)
 }
+
+// GetTransaction writes the transaction identified by the request path when it
+// belongs to the authenticated application.
 func (h *Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 	h.get(w, r, "id", r.PathValue("id"))
 }
+
+// GetTransactionByReference writes the transaction identified by the request
+// reference when it belongs to the authenticated application.
 func (h *Handler) GetTransactionByReference(w http.ResponseWriter, r *http.Request) {
 	h.get(w, r, "reference", r.PathValue("reference"))
 }

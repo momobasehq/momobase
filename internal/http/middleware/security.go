@@ -11,6 +11,8 @@ import (
 	"github.com/momobasehq/momobase/internal/platform"
 )
 
+// MaxBodyBytes limits the number of bytes that downstream handlers can read
+// from a request body.
 func MaxBodyBytes(limit int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -21,6 +23,8 @@ func MaxBodyBytes(limit int64) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+// JSONOnly rejects requests whose Content-Type is not application/json.
 func JSONOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
@@ -30,12 +34,17 @@ func JSONOnly(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// NoCache adds a Cache-Control no-store header to responses.
 func NoCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})
 }
+
+// Recover converts panics from downstream handlers into internal-server-error
+// responses and logs the recovered value when a logger is supplied.
 func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +66,8 @@ type bucket struct {
 	reset time.Time
 }
 
+// RateLimitByIP permits at most limit requests from each remote IP during each
+// window and responds with too many requests after the limit is exceeded.
 func RateLimitByIP(limit int, window time.Duration) func(http.Handler) http.Handler {
 	var mu sync.Mutex
 	buckets := map[string]bucket{}

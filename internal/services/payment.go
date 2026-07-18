@@ -19,39 +19,68 @@ import (
 	"github.com/momobasehq/momobase/internal/store"
 )
 
+// PartyPayload contains identifying and mobile-money details for a payment party.
 type PartyPayload struct {
-	Name    string `json:"name"`
-	Email   string `json:"email"`
-	Phone   string `json:"phone"`
+	// Name is the party's display name.
+	Name string `json:"name"`
+	// Email is the party's email address.
+	Email string `json:"email"`
+	// Phone is the party's mobile telephone number.
+	Phone string `json:"phone"`
+	// Network optionally identifies the party's mobile-money network.
 	Network string `json:"network,omitempty"`
 }
+
+// CreatePaymentRequest contains the common fields used to initiate a collection or disbursement.
 type CreatePaymentRequest struct {
-	PaymentMethod string        `json:"payment_method"`
-	Amount        int64         `json:"amount"`
-	Currency      string        `json:"currency"`
-	Country       string        `json:"country"`
-	Reference     string        `json:"reference"`
-	Description   string        `json:"description"`
-	Customer      *PartyPayload `json:"customer,omitempty"`
-	Recipient     *PartyPayload `json:"recipient,omitempty"`
-	Momo          *PartyPayload `json:"momo,omitempty"`
+	// PaymentMethod identifies the requested payment rail.
+	PaymentMethod string `json:"payment_method"`
+	// Amount is the payment amount in the currency's minor unit.
+	Amount int64 `json:"amount"`
+	// Currency is the three-letter currency code.
+	Currency string `json:"currency"`
+	// Country is the ISO 3166-1 alpha-2 transaction country.
+	Country string `json:"country"`
+	// Reference is the application's unique business reference.
+	Reference string `json:"reference"`
+	// Description is optional payment context shown to downstream systems.
+	Description string `json:"description"`
+	// Customer identifies the collection customer.
+	Customer *PartyPayload `json:"customer,omitempty"`
+	// Recipient identifies the disbursement recipient.
+	Recipient *PartyPayload `json:"recipient,omitempty"`
+	// Momo contains the mobile-money account details used for the provider request.
+	Momo *PartyPayload `json:"momo,omitempty"`
 }
+
+// CreatePaymentResponse describes the transaction created for a payment request.
 type CreatePaymentResponse struct {
-	TransactionID     string `json:"transaction_id"`
-	Reference         string `json:"reference"`
-	ServiceType       string `json:"service_type"`
-	PaymentMethod     string `json:"payment_method"`
-	Status            string `json:"status"`
-	SelectedProvider  string `json:"selected_provider"`
+	// TransactionID is Momobase's unique transaction identifier.
+	TransactionID string `json:"transaction_id"`
+	// Reference is the application's business reference.
+	Reference string `json:"reference"`
+	// ServiceType identifies whether the transaction is a collection or disbursement.
+	ServiceType string `json:"service_type"`
+	// PaymentMethod identifies the payment rail used for the transaction.
+	PaymentMethod string `json:"payment_method"`
+	// Status is the current normalized transaction status.
+	Status string `json:"status"`
+	// SelectedProvider is the provider code selected by the route engine.
+	SelectedProvider string `json:"selected_provider"`
+	// ProviderReference is the provider-assigned transaction reference, when available.
 	ProviderReference string `json:"provider_reference"`
-	Message           string `json:"message"`
+	// Message contains a human-readable result or replay description.
+	Message string `json:"message"`
 }
+
+// PaymentOrchestrator validates, routes, executes, and persists payment requests.
 type PaymentOrchestrator struct {
 	db       *gorm.DB
 	router   *RouteEngine
 	executor *RuntimeProviderExecutor
 }
 
+// NewPaymentOrchestrator creates a payment orchestrator.
 func NewPaymentOrchestrator(db *gorm.DB, router *RouteEngine, executor *RuntimeProviderExecutor) *PaymentOrchestrator {
 	return &PaymentOrchestrator{db, router, executor}
 }
@@ -61,6 +90,8 @@ func paymentParty(service string, req *CreatePaymentRequest) *PartyPayload {
 	}
 	return req.Customer
 }
+
+// ValidatePaymentPayload validates a payment request and normalizes its country, currency, method, network, and phone fields.
 func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 	if req == nil {
 		return errors.New("payment request is required")
@@ -102,6 +133,8 @@ func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 	}
 	return err
 }
+
+// Create idempotently creates, routes, executes, and records a collection or disbursement.
 func (o *PaymentOrchestrator) Create(
 	ctx context.Context,
 	appID string,
@@ -260,6 +293,8 @@ func replay(tx *domain.Transaction, hash, _ string, _ *CreatePaymentRequest) (*C
 		Message:           "idempotent replay",
 	}, nil
 }
+
+// PaymentRequestHash returns the canonical SHA-256 request hash used for idempotency checks.
 func PaymentRequestHash(service string, req *CreatePaymentRequest) string {
 	data, _ := json.Marshal(struct {
 		Service string
@@ -267,6 +302,8 @@ func PaymentRequestHash(service string, req *CreatePaymentRequest) string {
 	}{service, req})
 	return platform.SHA256Hex(string(data))
 }
+
+// NormalizeMSISDN validates a mobile number for a country and returns E.164 digits without the leading plus sign.
 func NormalizeMSISDN(phone, country string) (string, error) {
 	country, err := NormalizeTransactionCountry(country)
 	if err != nil {

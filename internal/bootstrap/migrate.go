@@ -6,6 +6,7 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 )
 
+// AutoMigrate updates the database schema for every persistent domain model.
 func AutoMigrate(db *gorm.DB) error {
 	err := db.AutoMigrate(
 		&domain.AdminUser{},

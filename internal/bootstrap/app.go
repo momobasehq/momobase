@@ -41,6 +41,8 @@ type App struct {
 	closeErr    error
 }
 
+// NewApp validates cfg and constructs the application and all owned runtime
+// dependencies.
 func NewApp(cfg Config) (*App, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -194,6 +196,8 @@ func workerTasks(c Config, db *gorm.DB, health *services.HealthService, recon *s
 	return tasks
 }
 
+// Serve starts the configured provider runtimes, background workers, and HTTP
+// server, and shuts them down when ctx is cancelled.
 func (a *App) Serve(ctx context.Context) error {
 	a.lifecycleMu.Lock()
 	if a.closed {
@@ -283,6 +287,8 @@ func closeDatabase(db *gorm.DB) error {
 	return nil
 }
 
+// SeedAdmin creates a super administrator using the application's admin user
+// service.
 func (a *App) SeedAdmin(email, password, name string) error {
 	if email == "" || password == "" {
 		return errors.New("email and password are required")

@@ -12,15 +12,18 @@ import (
 	"github.com/momobasehq/momobase/internal/providers"
 )
 
+// RuntimeProviderExecutor invokes loaded provider adapters with readiness checks, timeouts, logging, and circuit breaking.
 type RuntimeProviderExecutor struct {
 	runtime *ProviderRuntimeManager
 	timeout time.Duration
 }
 
+// NewProviderExecutor creates a runtime provider executor with the default operation timeout.
 func NewProviderExecutor(runtime *ProviderRuntimeManager) *RuntimeProviderExecutor {
 	return &RuntimeProviderExecutor{runtime, 45 * time.Second}
 }
 
+// Collect executes a collection through a ready provider that supports the request country.
 func (e *RuntimeProviderExecutor) Collect(
 	ctx context.Context,
 	id string,
@@ -35,6 +38,7 @@ func (e *RuntimeProviderExecutor) Collect(
 	})
 }
 
+// Disburse executes a disbursement through a ready provider that supports the request country.
 func (e *RuntimeProviderExecutor) Disburse(
 	ctx context.Context,
 	id string,
@@ -49,6 +53,7 @@ func (e *RuntimeProviderExecutor) Disburse(
 	})
 }
 
+// QueryTransaction retrieves a provider transaction's current status.
 func (e *RuntimeProviderExecutor) QueryTransaction(
 	ctx context.Context,
 	id string,
@@ -64,6 +69,7 @@ func (e *RuntimeProviderExecutor) QueryTransaction(
 	})
 }
 
+// QueryBalance retrieves a provider balance for a country, inferring the country for single-country providers.
 func (e *RuntimeProviderExecutor) QueryBalance(ctx context.Context, id, country string) (*providers.ProviderBalance, error) {
 	p, err := e.ready(id, "", country)
 	if err != nil {
@@ -80,6 +86,7 @@ func (e *RuntimeProviderExecutor) QueryBalance(ctx context.Context, id, country 
 	})
 }
 
+// Health runs the health check for a loaded provider.
 func (e *RuntimeProviderExecutor) Health(ctx context.Context, id string) error {
 	p, err := e.ready(id, "", "")
 	if err != nil {
@@ -91,6 +98,7 @@ func (e *RuntimeProviderExecutor) Health(ctx context.Context, id string) error {
 	return err
 }
 
+// VerifyWebhook delegates webhook payload verification to a loaded provider within the operation timeout.
 func (e *RuntimeProviderExecutor) VerifyWebhook(
 	ctx context.Context,
 	id string,

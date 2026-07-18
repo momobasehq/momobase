@@ -13,28 +13,45 @@ import (
 	"github.com/momobasehq/momobase/internal/providers"
 )
 
+// Config contains the settings required by an Airtel Money provider.
 type Config struct {
-	BaseURL             string
-	ClientID            string
-	ClientSecret        string
-	Currency            string
-	CollectionPath      string
-	DisbursementPath    string
-	StatusPath          string
-	BalancePath         string
-	CollectionEnabled   bool
+	// BaseURL is the root URL of the Airtel Money API.
+	BaseURL string
+	// ClientID identifies the application used for Airtel OAuth authentication.
+	ClientID string
+	// ClientSecret authenticates the application used for Airtel OAuth.
+	ClientSecret string
+	// Currency is the default ISO currency code used for provider requests.
+	Currency string
+	// CollectionPath is the API path for collection requests.
+	CollectionPath string
+	// DisbursementPath is the API path for disbursement requests.
+	DisbursementPath string
+	// StatusPath is the transaction-status path containing an optional {id} placeholder.
+	StatusPath string
+	// BalancePath is the API path for balance requests.
+	BalancePath string
+	// CollectionEnabled controls whether the provider advertises collection support.
+	CollectionEnabled bool
+	// DisbursementEnabled controls whether the provider advertises disbursement support.
 	DisbursementEnabled bool
-	Timeout             time.Duration
+	// Timeout limits the duration of Airtel API requests.
+	Timeout time.Duration
 }
+
+// Provider implements the payment-provider contract for Airtel Money.
 type Provider struct {
 	client *http.Client
 	cfg    Config
 	token  providers.TokenCache
 }
 
+// New returns an Airtel Money provider ready to be initialized with configuration.
 func New(*slog.Logger) providers.PaymentProvider {
 	return &Provider{client: &http.Client{Timeout: 30 * time.Second}}
 }
+
+// Capabilities returns the configured Airtel Money payment operations.
 func (p *Provider) Capabilities() []providers.Capability {
 	all := []providers.Capability{
 		{ServiceType: domain.ServiceCollection, PaymentMethod: domain.PaymentMethodMomo},
@@ -52,6 +69,8 @@ func (p *Provider) Capabilities() []providers.Capability {
 	}
 	return out
 }
+
+// Init validates and applies the provider configuration and resets the cached access token.
 func (p *Provider) Init(_ context.Context, raw providers.ProviderConfig) error {
 	cfg, err := parseConfig(raw)
 	if err != nil {
@@ -63,13 +82,19 @@ func (p *Provider) Init(_ context.Context, raw providers.ProviderConfig) error {
 		providers.TokenCache{}
 	return nil
 }
+
+// HealthCheck verifies the configured Airtel credentials by obtaining an access token.
 func (p *Provider) HealthCheck(ctx context.Context) error {
 	_, err := p.accessToken(ctx)
 	return err
 }
+
+// Collect submits an Airtel Money collection request.
 func (p *Provider) Collect(ctx context.Context, req providers.PaymentRequest) (*providers.ProviderPaymentResponse, error) {
 	return p.payment(ctx, p.cfg.CollectionEnabled, p.cfg.CollectionPath, "subscriber", req)
 }
+
+// Disburse submits an Airtel Money disbursement request.
 func (p *Provider) Disburse(ctx context.Context, req providers.PaymentRequest) (*providers.ProviderPaymentResponse, error) {
 	return p.payment(ctx, p.cfg.DisbursementEnabled, p.cfg.DisbursementPath, "payee", req)
 }
@@ -116,6 +141,8 @@ func (p *Provider) payment(
 		Raw:     raw,
 	}, nil
 }
+
+// QueryTransaction retrieves and normalizes the status of an Airtel transaction.
 func (p *Provider) QueryTransaction(ctx context.Context, ref, country string) (*providers.ProviderTransactionStatus, error) {
 	if ref == "" {
 		return nil, errors.New("provider reference is required")
@@ -142,6 +169,8 @@ func (p *Provider) QueryTransaction(ctx context.Context, ref, country string) (*
 		Message:           providers.First(status, "Airtel transaction status"),
 	}, nil
 }
+
+// QueryBalance retrieves the Airtel account balance for country.
 func (p *Provider) QueryBalance(ctx context.Context, country string) (*providers.ProviderBalance, error) {
 	raw, err := p.call(ctx, http.MethodGet, p.cfg.BalancePath, country, nil)
 	if err != nil {
@@ -165,6 +194,8 @@ func (p *Provider) QueryBalance(ctx context.Context, country string) (*providers
 	}
 	return &providers.ProviderBalance{Currency: currency, Available: value, Ledger: value}, nil
 }
+
+// VerifyWebhook parses an Airtel webhook payload into a normalized payment event.
 func (*Provider) VerifyWebhook(_ context.Context, payload []byte, headers map[string]string) (*providers.ProviderWebhookEvent, error) {
 	var body map[string]any
 	if err := json.Unmarshal(payload, &body); err != nil {

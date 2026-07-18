@@ -6,16 +6,21 @@ import (
 	"strconv"
 )
 
+// APIResponse is the common envelope returned by JSON API endpoints.
 type APIResponse struct {
 	Success bool      `json:"success"`
 	Data    any       `json:"data,omitempty"`
 	Error   *APIError `json:"error,omitempty"`
 	Message string    `json:"message,omitempty"`
 }
+
+// APIError describes a machine-readable API failure.
 type APIError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
+
+// PageData contains one page of items and its pagination metadata.
 type PageData[T any] struct {
 	Page  int `json:"page"`
 	Total int `json:"total"`
@@ -23,10 +28,15 @@ type PageData[T any] struct {
 	Count int `json:"count"`
 }
 
+// JSON writes payload in a successful API response envelope.
 func JSON(w http.ResponseWriter, status int, payload any) {
 	writeJSON(w, status, APIResponse{Success: status < 400, Data: payload})
 }
+
+// RawJSON writes payload directly without an API response envelope.
 func RawJSON(w http.ResponseWriter, status int, payload any) { writeJSON(w, status, payload) }
+
+// Error writes a failed API response containing code and message.
 func Error(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, APIResponse{Error: &APIError{Code: code, Message: message}, Message: message})
 }
@@ -35,6 +45,8 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
 }
+
+// Pagination reads and bounds the page and per_page query parameters.
 func Pagination(r *http.Request) (int, int) {
 	page, size := positive(r.URL.Query().Get("page"), 1), positive(r.URL.Query().Get("per_page"), 20)
 	if size > 100 {
@@ -42,6 +54,8 @@ func Pagination(r *http.Request) (int, int) {
 	}
 	return page, size
 }
+
+// PaginateSlice returns the requested bounded page from an in-memory slice.
 func PaginateSlice[T any](items []T, page, size int) PageData[T] {
 	if page < 1 {
 		page = 1

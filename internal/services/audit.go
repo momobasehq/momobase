@@ -10,11 +10,13 @@ import (
 	"github.com/momobasehq/momobase/internal/platform"
 )
 
+// AuditService records security- and administration-relevant actions in the audit log.
 type AuditService struct {
 	db     *gorm.DB
 	logger *slog.Logger
 }
 
+// NewAuditService creates an audit service and optionally configures a logger for write failures.
 func NewAuditService(db *gorm.DB, logger ...*slog.Logger) *AuditService {
 	var log *slog.Logger
 	if len(logger) > 0 {
@@ -22,6 +24,8 @@ func NewAuditService(db *gorm.DB, logger ...*slog.Logger) *AuditService {
 	}
 	return &AuditService{db, log}
 }
+
+// RecordBestEffort attempts to persist an audit entry without returning failures to the caller.
 func (s *AuditService) RecordBestEffort(actorID, actorType, action, entityType, entityID string, meta any, ip, ua string) {
 	if s == nil {
 		return

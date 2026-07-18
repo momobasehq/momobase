@@ -15,6 +15,7 @@ import (
 	"github.com/momobasehq/momobase/internal/store"
 )
 
+// ProviderAdminService manages provider accounts, encrypted configuration, and runtime activation.
 type ProviderAdminService struct {
 	db        *gorm.DB
 	audit     *AuditService
@@ -23,6 +24,7 @@ type ProviderAdminService struct {
 	runtime   *ProviderRuntimeManager
 }
 
+// NewProviderAdminService creates a provider administration service.
 func NewProviderAdminService(
 	db *gorm.DB,
 	audit *AuditService,
@@ -33,6 +35,7 @@ func NewProviderAdminService(
 	return &ProviderAdminService{db: db, audit: audit, encryptor: enc, registry: registry, runtime: runtime}
 }
 
+// CreateAccount validates and persists an inactive provider account with encrypted configuration.
 func (s *ProviderAdminService) CreateAccount(
 	actor *domain.AdminUser,
 	code string,
@@ -84,6 +87,7 @@ func (s *ProviderAdminService) CreateAccount(
 	return account, nil
 }
 
+// UpdateCountries replaces a provider account's supported countries and reloads an active runtime.
 func (s *ProviderAdminService) UpdateCountries(ctx context.Context, actor *domain.AdminUser, id string, countries []string) error {
 	countries, err := NormalizeProviderCountries(countries)
 	if err != nil {
@@ -132,6 +136,7 @@ func updateProviderCountries(db *gorm.DB, id string, countries []string) error {
 	return store.Affected(db.Model(&domain.ProviderAccount{}).Where("id = ?", id).Update("countries", string(raw)))
 }
 
+// UpdateConfig validates and encrypts replacement provider configuration and reloads an active runtime.
 func (s *ProviderAdminService) UpdateConfig(ctx context.Context, actor *domain.AdminUser, id string, config map[string]any) error {
 	var account domain.ProviderAccount
 	if err := s.db.First(&account, "id = ?", id).Error; err != nil {
@@ -170,6 +175,7 @@ func (s *ProviderAdminService) UpdateConfig(ctx context.Context, actor *domain.A
 	return nil
 }
 
+// Activate marks a configured provider account active and loads its runtime adapter.
 func (s *ProviderAdminService) Activate(ctx context.Context, actor *domain.AdminUser, id string) error {
 	var account domain.ProviderAccount
 	if err := s.db.First(&account, "id = ?", id).Error; err != nil {
@@ -189,6 +195,7 @@ func (s *ProviderAdminService) Activate(ctx context.Context, actor *domain.Admin
 	return nil
 }
 
+// Deactivate marks a provider account inactive and removes its runtime adapter.
 func (s *ProviderAdminService) Deactivate(_ context.Context, actor *domain.AdminUser, id string) error {
 	if err := store.Affected(s.db.Model(&domain.ProviderAccount{}).Where("id = ?", id).Update("active", false)); err != nil {
 		return err
@@ -222,6 +229,7 @@ func validateProviderConfig(config map[string]any) error {
 	return nil
 }
 
+// NormalizeProviderCountries validates, uppercases, and de-duplicates provider country codes while preserving their order.
 func NormalizeProviderCountries(values []string) ([]string, error) {
 	if len(values) == 0 {
 		return nil, errors.New("at least one supported country is required")
@@ -241,6 +249,7 @@ func NormalizeProviderCountries(values []string) ([]string, error) {
 	return out, nil
 }
 
+// NormalizeTransactionCountry returns a validated uppercase ISO 3166-1 alpha-2 country code.
 func NormalizeTransactionCountry(country string) (string, error) {
 	country = strings.ToUpper(strings.TrimSpace(country))
 	if len(country) != 2 || phonenumbers.GetCountryCodeForRegion(country) == 0 {

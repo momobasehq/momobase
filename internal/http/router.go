@@ -14,6 +14,8 @@ import (
 	"github.com/momobasehq/momobase/internal/services"
 )
 
+// RouterDeps contains the services, handlers, and settings required to build
+// the application HTTP router.
 type RouterDeps struct {
 	Logger               *slog.Logger
 	AdminAuth            *services.AdminAuthService
@@ -35,6 +37,9 @@ func chain(h http.Handler, middlewares ...middleware) http.Handler {
 func route(mux *http.ServeMux, pattern string, h http.HandlerFunc, middlewares ...middleware) {
 	mux.Handle(pattern, chain(h, middlewares...))
 }
+
+// NewRouter constructs the complete application HTTP handler, including
+// public, administrative, webhook, health, and optional admin frontend routes.
 func NewRouter(d RouterDeps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ping", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })

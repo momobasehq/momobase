@@ -19,17 +19,24 @@ import (
 	"github.com/momobasehq/momobase/internal/store"
 )
 
+// VerifiedWebhook contains a provider-verified event and its Momobase routing metadata.
 type VerifiedWebhook struct {
+	// ProviderWebhookEvent is the normalized event returned by the provider adapter.
 	providers.ProviderWebhookEvent
+	// ProviderAccountID identifies the provider account that received the webhook.
 	ProviderAccountID string `json:"provider_account_id"`
-	PayloadHash       string `json:"payload_hash"`
+	// PayloadHash is the canonical event hash used to suppress duplicate processing.
+	PayloadHash string `json:"payload_hash"`
 }
+
+// WebhookService authenticates, verifies, stores, and applies provider webhook events.
 type WebhookService struct {
 	db       *gorm.DB
 	runtime  *ProviderRuntimeManager
 	executor *RuntimeProviderExecutor
 }
 
+// NewWebhookService creates a provider webhook processing service.
 func NewWebhookService(db *gorm.DB, runtime *ProviderRuntimeManager) *WebhookService {
 	return &WebhookService{db, runtime, NewProviderExecutor(runtime)}
 }
@@ -65,6 +72,8 @@ func (s *WebhookService) verify(
 	out.PayloadHash = CanonicalWebhookHash(out)
 	return out, nil
 }
+
+// Handle verifies and idempotently stores a webhook, then applies it to a matching transaction when available.
 func (s *WebhookService) Handle(ctx context.Context, accountID string, payload []byte, headers map[string]string) error {
 	event, err := s.verify(ctx, accountID, payload, headers)
 	if err != nil {
@@ -129,6 +138,8 @@ func (s *WebhookService) apply(db *gorm.DB, row *domain.WebhookEvent, event *Ver
 	}
 	return store.Affected(db.Model(row).Updates(map[string]any{"transaction_id": tx.ID, "processed": true}))
 }
+
+// ReprocessPending retries applying up to limit stored webhook events that have not been processed.
 func (s *WebhookService) ReprocessPending(ctx context.Context, limit int) error {
 	if limit < 1 {
 		limit = 100
@@ -163,6 +174,7 @@ func findWebhookTarget(db *gorm.DB, accountID, ref string) (*domain.Transaction,
 	return &tx, &attempt, db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&tx, "id = ?", attempt.TransactionID).Error
 }
 
+// CanonicalWebhookHash returns a stable SHA-256 hash of a verified webhook's identifying fields.
 func CanonicalWebhookHash(event *VerifiedWebhook) string {
 	if event == nil {
 		return ""

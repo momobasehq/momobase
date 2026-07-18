@@ -5,6 +5,7 @@ import (
 	"os"
 )
 
+// NewLogger returns a JSON slog logger configured for level.
 func NewLogger(level string) *slog.Logger {
 	var lvl slog.Level
 	switch level {

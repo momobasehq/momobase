@@ -2,6 +2,8 @@ package providers
 
 import "strings"
 
+// Redact removes provider error text that appears to contain sensitive values and
+// truncates other text to a safe maximum length.
 func Redact(value string) string {
 	lower := strings.ToLower(value)
 	for _, secret := range []string{

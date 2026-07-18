@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// RandomRef returns prefix followed by a cryptographically random hexadecimal ID.
+// It falls back to a timestamp-based ID when the system random source fails.
 func RandomRef(prefix string) string {
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
@@ -15,6 +17,7 @@ func RandomRef(prefix string) string {
 	return prefix + hex.EncodeToString(raw[:])
 }
 
+// UUID returns a UUID-shaped random reference, or RandomRef's fallback unchanged.
 func UUID() string {
 	raw := RandomRef("")
 	if len(raw) != 32 {

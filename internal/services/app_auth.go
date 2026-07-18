@@ -14,10 +14,15 @@ import (
 
 const defaultScopes = "collections:create disbursements:create transactions:read"
 
+// AppIdentity identifies an authenticated application and the credential used to authenticate it.
 type AppIdentity struct {
-	App        domain.App
+	// App is the active application associated with the identity.
+	App domain.App
+	// Credential is the active credential used to establish the identity.
 	Credential domain.AppCredential
 }
+
+// AppAuthService authenticates application credentials and manages app token sessions.
 type AppAuthService struct {
 	db                         *gorm.DB
 	clientPrefix, secretPrefix string
@@ -25,6 +30,7 @@ type AppAuthService struct {
 	tokens                     *platform.TokenManager
 }
 
+// NewAppAuthService creates an application authentication service with the supplied credential prefixes and token lifetimes.
 func NewAppAuthService(
 	db *gorm.DB,
 	clientPrefix string,
@@ -83,6 +89,8 @@ func (s *AppAuthService) issue(id *AppIdentity, session *domain.AppSession) (*To
 	})
 	return response, err
 }
+
+// IssueClientToken validates client credentials and issues a new application token pair and session.
 func (s *AppAuthService) IssueClientToken(clientID, secret string) (*TokenResponse, error) {
 	id, err := s.ValidateClientCredentials(clientID, secret)
 	if err != nil {
@@ -90,6 +98,8 @@ func (s *AppAuthService) IssueClientToken(clientID, secret string) (*TokenRespon
 	}
 	return s.issue(id, nil)
 }
+
+// RefreshToken validates an application refresh token and rotates its session token pair.
 func (s *AppAuthService) RefreshToken(raw string) (*TokenResponse, error) {
 	claims, err := s.tokens.Verify(raw)
 	if err != nil || claims.SubjectType != "app" || claims.TokenType != "refresh" {
@@ -111,6 +121,8 @@ func (s *AppAuthService) RefreshToken(raw string) (*TokenResponse, error) {
 	}
 	return s.issue(id, &session)
 }
+
+// ValidateClientCredentials verifies an active client ID and secret and returns the associated identity.
 func (s *AppAuthService) ValidateClientCredentials(clientID, secret string) (*AppIdentity, error) {
 	if clientID == "" || secret == "" {
 		return nil, errors.New("missing client credentials")
@@ -122,6 +134,8 @@ func (s *AppAuthService) ValidateClientCredentials(clientID, secret string) (*Ap
 	}
 	return s.fromCredential(&cred)
 }
+
+// AuthenticateBearer validates an application access token and returns its active identity.
 func (s *AppAuthService) AuthenticateBearer(raw string) (*AppIdentity, error) {
 	claims, err := s.tokens.Verify(raw)
 	if err != nil || claims.SubjectType != "app" || claims.TokenType != "access" {
@@ -159,16 +173,22 @@ func (s *AppAuthService) fromCredential(cred *domain.AppCredential) (*AppIdentit
 	return &AppIdentity{app, *cred}, nil
 }
 
+// CreatedCredential contains a persisted application credential and its one-time plaintext secret.
 type CreatedCredential struct {
-	Credential   domain.AppCredential `json:"credential"`
-	ClientSecret string               `json:"client_secret"`
+	// Credential is the persisted credential metadata.
+	Credential domain.AppCredential `json:"credential"`
+	// ClientSecret is the newly generated plaintext secret returned only at creation or rotation.
+	ClientSecret string `json:"client_secret"`
 }
+
+// AppService manages applications and their client credentials.
 type AppService struct {
 	db    *gorm.DB
 	auth  *AppAuthService
 	audit *AuditService
 }
 
+// NewAppService creates an application management service.
 func NewAppService(db *gorm.DB, auth *AppAuthService, audit *AuditService) *AppService {
 	return &AppService{db, auth, audit}
 }
@@ -177,10 +197,14 @@ func (s *AppService) auditChange(actor *domain.AdminUser, action, resource, id s
 		s.audit.RecordBestEffort(actor.ID, "admin", action, resource, id, meta, "", "")
 	}
 }
+
+// GetApp retrieves an application by ID.
 func (s *AppService) GetApp(id string) (*domain.App, error) {
 	var app domain.App
 	return &app, s.db.First(&app, "id = ?", id).Error
 }
+
+// CreateApp validates and persists an active application.
 func (s *AppService) CreateApp(actor *domain.AdminUser, name, description, env string) (*domain.App, error) {
 	name, env = strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(env))
 	if env == "" {
@@ -205,6 +229,8 @@ func (s *AppService) CreateApp(actor *domain.AdminUser, name, description, env s
 	}
 	return app, err
 }
+
+// UpdateApp validates and applies mutable application attributes, then returns the updated application.
 func (s *AppService) UpdateApp(actor *domain.AdminUser, id, name, description, env string) (*domain.App, error) {
 	name, env = strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(env))
 	if len(name) > 255 || len(description) > 1000 || env != "" && env != "sandbox" && env != "production" {
@@ -223,6 +249,8 @@ func (s *AppService) UpdateApp(actor *domain.AdminUser, id, name, description, e
 	s.auditChange(actor, "app.updated", "app", id, updates)
 	return s.GetApp(id)
 }
+
+// ChangeAppStatus updates an application's status and revokes its sessions when it is no longer active.
 func (s *AppService) ChangeAppStatus(actor *domain.AdminUser, id, status string) error {
 	if status != "active" && status != "disabled" && status != "suspended" {
 		return errors.New("invalid app status")
@@ -250,6 +278,8 @@ func (s *AppService) newSecret() (string, string, error) {
 	hash, err := platform.HashPassword(secret)
 	return secret, hash, err
 }
+
+// CreateCredential generates and persists a credential for an existing application.
 func (s *AppService) CreateCredential(actor *domain.AdminUser, appID, name, scopes string, expires *time.Time) (*CreatedCredential, error) {
 	if _, err := s.GetApp(appID); err != nil {
 		return nil, err
@@ -290,6 +320,8 @@ func (s *AppService) revokeSessions(tx *gorm.DB, credentialID string) error {
 	now := time.Now().UTC()
 	return tx.Model(&domain.AppSession{}).Where("credential_id = ? AND revoked_at IS NULL", credentialID).Update("revoked_at", &now).Error
 }
+
+// RevokeCredential revokes an application credential and all sessions issued through it.
 func (s *AppService) RevokeCredential(actor *domain.AdminUser, appID, id string) error {
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := store.Affected(
@@ -306,6 +338,8 @@ func (s *AppService) RevokeCredential(actor *domain.AdminUser, appID, id string)
 	}
 	return err
 }
+
+// RotateCredential replaces an application credential's secret, reactivates it, and revokes its existing sessions.
 func (s *AppService) RotateCredential(actor *domain.AdminUser, appID, id string) (*CreatedCredential, error) {
 	var cred domain.AppCredential
 	if s.db.Where("id = ? AND app_id = ?", id, appID).First(&cred).Error != nil {

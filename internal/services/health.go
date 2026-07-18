@@ -11,15 +11,19 @@ import (
 	"github.com/momobasehq/momobase/internal/providers"
 )
 
+// HealthService checks active provider adapters and persists their latest health state.
 type HealthService struct {
 	db       *gorm.DB
 	runtime  *ProviderRuntimeManager
 	executor *RuntimeProviderExecutor
 }
 
+// NewHealthService creates a provider health-check service.
 func NewHealthService(db *gorm.DB, runtime *ProviderRuntimeManager) *HealthService {
 	return &HealthService{db, runtime, NewProviderExecutor(runtime)}
 }
+
+// CheckAll checks every loaded provider, records each result, and joins any failures.
 func (s *HealthService) CheckAll(ctx context.Context) error {
 	var errs []error
 	for _, runtime := range s.runtime.List() {

@@ -12,11 +12,16 @@ import (
 	"github.com/momobasehq/momobase/internal/store"
 )
 
+// TokenResponse contains an issued OAuth-style access and refresh token pair.
 type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
+	// AccessToken is the signed bearer token used to authorize API requests.
+	AccessToken string `json:"access_token"`
+	// RefreshToken is the signed token used to obtain a replacement token pair.
 	RefreshToken string `json:"refresh_token"`
-	TokenType    string `json:"token_type"`
-	ExpiresIn    int64  `json:"expires_in"`
+	// TokenType identifies how the access token is presented to the API.
+	TokenType string `json:"token_type"`
+	// ExpiresIn is the access token lifetime in seconds.
+	ExpiresIn int64 `json:"expires_in"`
 }
 
 func issueTokenPair(
@@ -38,6 +43,7 @@ func issueTokenPair(
 	return &TokenResponse{access, refresh, "Bearer", int64(accessTTL.Seconds())}, ac, rc, nil
 }
 
+// AdminAuthService authenticates administrators and manages their token-backed sessions.
 type AdminAuthService struct {
 	db                    *gorm.DB
 	accessTTL, refreshTTL time.Duration
@@ -45,6 +51,7 @@ type AdminAuthService struct {
 	tokens                *platform.TokenManager
 }
 
+// NewAdminAuthService creates an administrator authentication service with the supplied token lifetimes.
 func NewAdminAuthService(
 	db *gorm.DB,
 	accessTTL time.Duration,
@@ -91,6 +98,8 @@ func (s *AdminAuthService) issue(user *domain.AdminUser, session *domain.AdminSe
 	}
 	return response, err
 }
+
+// IssuePasswordToken validates administrator credentials and issues a new token pair and session.
 func (s *AdminAuthService) IssuePasswordToken(email, password, ip, ua string) (*TokenResponse, error) {
 	var user domain.AdminUser
 	if s.db.Where("email = ?", strings.ToLower(strings.TrimSpace(email))).First(&user).Error != nil || user.Status != "active" {
@@ -118,6 +127,8 @@ func (s *AdminAuthService) IssuePasswordToken(email, password, ip, ua string) (*
 	s.audit.RecordBestEffort(user.ID, "admin", "admin.login", "admin_user", user.ID, nil, ip, ua)
 	return s.issue(&user, nil, ip, ua)
 }
+
+// RefreshToken validates an administrator refresh token and rotates its session token pair.
 func (s *AdminAuthService) RefreshToken(raw, ip, ua string) (*TokenResponse, error) {
 	claims, err := s.tokens.Verify(raw)
 	if err != nil || claims.SubjectType != "admin" || claims.TokenType != "refresh" {
@@ -146,6 +157,8 @@ func (s *AdminAuthService) activeUser(id string) (*domain.AdminUser, error) {
 	}
 	return &user, nil
 }
+
+// AuthenticateBearer validates an administrator access token and returns its active user.
 func (s *AdminAuthService) AuthenticateBearer(raw string) (*domain.AdminUser, error) {
 	claims, err := s.tokens.Verify(raw)
 	if err != nil || claims.SubjectType != "admin" || claims.TokenType != "access" {
@@ -162,6 +175,8 @@ func (s *AdminAuthService) AuthenticateBearer(raw string) (*domain.AdminUser, er
 	}
 	return s.activeUser(claims.SubjectID)
 }
+
+// LogoutBearer revokes the active administrator session represented by a bearer token.
 func (s *AdminAuthService) LogoutBearer(raw, ip, ua string) error {
 	claims, err := s.tokens.Verify(raw)
 	if err != nil {
@@ -181,14 +196,18 @@ func (s *AdminAuthService) LogoutBearer(raw, ip, ua string) error {
 	return err
 }
 
+// AdminUserService manages administrator accounts, passwords, and account status.
 type AdminUserService struct {
 	db    *gorm.DB
 	audit *AuditService
 }
 
+// NewAdminUserService creates an administrator account service.
 func NewAdminUserService(db *gorm.DB, audit *AuditService) *AdminUserService {
 	return &AdminUserService{db, audit}
 }
+
+// Create validates and persists an administrator account, subject to the actor's role.
 func (s *AdminUserService) Create(actor *domain.AdminUser, name, email, password, role string) (*domain.AdminUser, error) {
 	if actor != nil && actor.Role != "super_admin" {
 		return nil, errors.New("only super_admin can create admins")
@@ -232,6 +251,8 @@ func (s *AdminUserService) Create(actor *domain.AdminUser, name, email, password
 	}
 	return user, err
 }
+
+// ChangePassword replaces an administrator's password and revokes all of that user's active sessions.
 func (s *AdminUserService) ChangePassword(actor *domain.AdminUser, id, password string) error {
 	if actor == nil || actor.Role != "super_admin" && actor.ID != id {
 		return errors.New("not allowed")
@@ -262,6 +283,8 @@ func (s *AdminUserService) ChangePassword(actor *domain.AdminUser, id, password 
 	}
 	return err
 }
+
+// ChangeStatus activates or deactivates an administrator and revokes sessions when deactivating.
 func (s *AdminUserService) ChangeStatus(actor *domain.AdminUser, id, status string) error {
 	if actor == nil || actor.Role != "super_admin" {
 		return errors.New("only super_admin can change status")

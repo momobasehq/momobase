@@ -13,16 +13,21 @@ import (
 	"github.com/momobasehq/momobase/internal/store"
 )
 
+// ErrNoRouteAvailable indicates that no active, healthy provider satisfies a payment route request.
 var ErrNoRouteAvailable = errors.New("no active provider route available")
 
+// RouteAdminService manages payment routing rules.
 type RouteAdminService struct {
 	db    *gorm.DB
 	audit *AuditService
 }
 
+// NewRouteAdminService creates a payment route administration service.
 func NewRouteAdminService(db *gorm.DB, audit *AuditService) *RouteAdminService {
 	return &RouteAdminService{db, audit}
 }
+
+// Create validates and persists a payment route for an existing provider account.
 func (s *RouteAdminService) Create(
 	actor *domain.AdminUser,
 	service string,
@@ -58,6 +63,8 @@ func (s *RouteAdminService) Create(
 	s.audit.RecordBestEffort(actorID(actor), "admin", "route.created", "payment_route", route.ID, nil, "", "")
 	return route, nil
 }
+
+// Update replaces a payment route's priority and active state.
 func (s *RouteAdminService) Update(actor *domain.AdminUser, id string, priority int, active bool) error {
 	if priority < 1 {
 		return errors.New("priority must be at least 1")
@@ -82,19 +89,28 @@ func (s *RouteAdminService) Update(actor *domain.AdminUser, id string, priority 
 	return nil
 }
 
+// SelectedProvider contains the route, account, and loaded runtime chosen for a payment.
 type SelectedProvider struct {
-	Route   domain.PaymentRoute
+	// Route is the payment route that selected the provider account.
+	Route domain.PaymentRoute
+	// Account is the active persisted provider account.
 	Account domain.ProviderAccount
+	// Runtime is the account's loaded provider runtime.
 	Runtime *RuntimeProvider
 }
+
+// RouteEngine selects an eligible provider for a payment request.
 type RouteEngine struct {
 	db      *gorm.DB
 	runtime *ProviderRuntimeManager
 }
 
+// NewRouteEngine creates a provider route-selection engine.
 func NewRouteEngine(db *gorm.DB, runtime *ProviderRuntimeManager) *RouteEngine {
 	return &RouteEngine{db, runtime}
 }
+
+// SelectProvider returns the highest-priority active provider that supports the requested service, method, and country.
 func (e *RouteEngine) SelectProvider(ctx context.Context, service, method, country string) (*SelectedProvider, error) {
 	country, err := NormalizeTransactionCountry(country)
 	if err != nil {

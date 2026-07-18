@@ -11,11 +11,14 @@ type statusRecorder struct {
 	status int
 }
 
+// WriteHeader records code before forwarding it to the wrapped response writer.
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
 }
 
+// StructuredLogger records the method, path, response status, duration, and
+// remote address of each request using the supplied structured logger.
 func StructuredLogger(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

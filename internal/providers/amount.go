@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// PaymentStatus normalizes a provider status value to a Momobase transaction status.
 func PaymentStatus(value string) string {
 	switch strings.ToUpper(strings.TrimSpace(value)) {
 	case "TS", "SUCCESS", "SUCCESSFUL", "COMPLETED", "200":
@@ -19,6 +20,7 @@ func PaymentStatus(value string) string {
 	}
 }
 
+// OptionalAmount parses an amount when raw is nonblank and returns nil otherwise.
 func OptionalAmount(raw, currency string) (*int64, error) {
 	if strings.TrimSpace(raw) == "" {
 		return nil, nil
@@ -37,6 +39,7 @@ func exponent(currency string) int {
 	return 2
 }
 
+// FormatAmountMinor formats an amount in minor units for the currency's precision.
 func FormatAmountMinor(amount int64, currency string) string {
 	if exponent(currency) == 0 {
 		return strconv.FormatInt(amount, 10)
@@ -48,6 +51,7 @@ func FormatAmountMinor(amount int64, currency string) string {
 	return fmt.Sprintf("%d.%02d", amount/100, fraction)
 }
 
+// ParseAmountToMinor converts a provider amount string to minor currency units.
 func ParseAmountToMinor(raw, currency string) (int64, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {

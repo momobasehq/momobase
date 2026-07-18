@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+// DoJSON sends an HTTP request with an optional JSON body and decodes a successful
+// JSON response into out. Non-2xx responses are returned as redacted errors.
 func DoJSON(
 	ctx context.Context,
 	client *http.Client,

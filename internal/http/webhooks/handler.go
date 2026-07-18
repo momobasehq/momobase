@@ -8,9 +8,14 @@ import (
 	"github.com/momobasehq/momobase/internal/services"
 )
 
+// Handler serves incoming provider webhook requests.
 type Handler struct{ service *services.WebhookService }
 
+// NewHandler constructs a provider webhook handler from a webhook service.
 func NewHandler(s *services.WebhookService) *Handler { return &Handler{service: s} }
+
+// ProviderWebhook reads an incoming provider webhook and delegates validation
+// and processing to the webhook service.
 func (h *Handler) ProviderWebhook(w http.ResponseWriter, r *http.Request) {
 	payload, err := io.ReadAll(r.Body)
 	if err != nil {

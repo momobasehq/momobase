@@ -23,24 +23,38 @@ type product struct {
 	user   string
 	secret string
 }
+
+// Config contains the settings required by an MTN Mobile Money provider.
 type Config struct {
-	BaseURL           string
+	// BaseURL is the root URL of the MTN Mobile Money API.
+	BaseURL string
+	// TargetEnvironment selects the MTN API environment.
 	TargetEnvironment string
-	Currency          string
-	CallbackURL       string
-	Collection        product
-	Disbursement      product
-	Timeout           time.Duration
+	// Currency is the default ISO currency code used for provider requests.
+	Currency string
+	// CallbackURL receives asynchronous MTN transaction updates.
+	CallbackURL string
+	// Collection contains credentials for MTN collection operations.
+	Collection product
+	// Disbursement contains credentials for MTN disbursement operations.
+	Disbursement product
+	// Timeout limits the duration of MTN API requests.
+	Timeout time.Duration
 }
+
+// Provider implements the payment-provider contract for MTN Mobile Money.
 type Provider struct {
 	client *http.Client
 	cfg    Config
 	tokens map[string]*providers.TokenCache
 }
 
+// New returns an MTN Mobile Money provider ready to be initialized with configuration.
 func New(*slog.Logger) providers.PaymentProvider {
 	return &Provider{}
 }
+
+// Capabilities returns the MTN operations with complete credential sets.
 func (p *Provider) Capabilities() []providers.Capability {
 	out := make([]providers.Capability, 0, 2)
 	if p.cfg.Collection.valid() {
@@ -51,6 +65,8 @@ func (p *Provider) Capabilities() []providers.Capability {
 	}
 	return out
 }
+
+// Init validates and applies the provider configuration and resets cached tokens.
 func (p *Provider) Init(_ context.Context, raw providers.ProviderConfig) error {
 	cfg, err := parseConfig(raw)
 	if err != nil {
@@ -60,6 +76,8 @@ func (p *Provider) Init(_ context.Context, raw providers.ProviderConfig) error {
 	p.tokens = map[string]*providers.TokenCache{"collection": {}, "disbursement": {}}
 	return nil
 }
+
+// HealthCheck obtains tokens for each configured MTN product.
 func (p *Provider) HealthCheck(ctx context.Context) error {
 	if len(p.Capabilities()) == 0 {
 		return errors.New("mtn has no complete credential set")
@@ -73,9 +91,13 @@ func (p *Provider) HealthCheck(ctx context.Context) error {
 	}
 	return nil
 }
+
+// Collect submits an MTN request-to-pay operation.
 func (p *Provider) Collect(ctx context.Context, req providers.PaymentRequest) (*providers.ProviderPaymentResponse, error) {
 	return p.payment(ctx, p.cfg.Collection, "/collection/v1_0/requesttopay", "payer", req)
 }
+
+// Disburse submits an MTN transfer operation.
 func (p *Provider) Disburse(ctx context.Context, req providers.PaymentRequest) (*providers.ProviderPaymentResponse, error) {
 	return p.payment(ctx, p.cfg.Disbursement, "/disbursement/v1_0/transfer", "payee", req)
 }
@@ -118,6 +140,8 @@ func (p *Provider) payment(
 		},
 	}, nil
 }
+
+// QueryTransaction retrieves and normalizes an MTN collection or disbursement status.
 func (p *Provider) QueryTransaction(ctx context.Context, ref, _ string) (*providers.ProviderTransactionStatus, error) {
 	if ref == "" {
 		return nil, errors.New("provider reference is required")
@@ -147,6 +171,8 @@ func (p *Provider) QueryTransaction(ctx context.Context, ref, _ string) (*provid
 	}
 	return nil, providers.FirstError(last, errors.New("mtn credentials are incomplete"))
 }
+
+// QueryBalance returns the first successfully queried configured MTN product balance.
 func (p *Provider) QueryBalance(ctx context.Context, _ string) (*providers.ProviderBalance, error) {
 	var last error
 	for _, entry := range []struct {
@@ -170,6 +196,8 @@ func (p *Provider) QueryBalance(ctx context.Context, _ string) (*providers.Provi
 	}
 	return nil, providers.FirstError(last, errors.New("mtn credentials are incomplete"))
 }
+
+// VerifyWebhook parses an MTN webhook payload into a normalized payment event.
 func (*Provider) VerifyWebhook(_ context.Context, payload []byte, headers map[string]string) (*providers.ProviderWebhookEvent, error) {
 	var body map[string]any
 	if err := json.Unmarshal(payload, &body); err != nil {

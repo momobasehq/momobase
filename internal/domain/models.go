@@ -2,12 +2,14 @@ package domain
 
 import "time"
 
+// BaseModel contains the identifier and timestamps shared by persistent models.
 type BaseModel struct {
 	ID        string    `gorm:"primaryKey;size:40" json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// AdminUser represents an administrator who can access the management API.
 type AdminUser struct {
 	BaseModel
 	Name                string     `gorm:"size:255;not null" json:"name"`
@@ -22,6 +24,7 @@ type AdminUser struct {
 	CreatedBy           string     `gorm:"size:40" json:"created_by"`
 }
 
+// AdminSession records a revocable administrator access and refresh token pair.
 type AdminSession struct {
 	BaseModel
 	AdminUserID      string     `gorm:"size:40;index;not null" json:"admin_user_id"`
@@ -33,6 +36,7 @@ type AdminSession struct {
 	RevokedAt        *time.Time `json:"revoked_at"`
 }
 
+// AuditLog records an administrative or system action against an entity.
 type AuditLog struct {
 	BaseModel
 	ActorID      string `gorm:"size:40;index" json:"actor_id"`
@@ -71,7 +75,8 @@ type AppCredential struct {
 	CreatedBy        string     `gorm:"size:40;index" json:"created_by"`
 }
 
-// AppSession stores issued app access/refresh token identifiers so app tokens are individually revocable and refresh tokens rotate.
+// AppSession stores issued app token identifiers so tokens can be revoked and
+// refresh tokens can be rotated.
 type AppSession struct {
 	BaseModel
 	AppID            string     `gorm:"size:40;index;not null" json:"app_id"`
@@ -82,6 +87,8 @@ type AppSession struct {
 	RevokedAt        *time.Time `json:"revoked_at"`
 }
 
+// ProviderAccount stores an encrypted provider configuration and its runtime
+// activation state.
 type ProviderAccount struct {
 	BaseModel
 	ProviderCode        string   `gorm:"size:80;index" json:"provider_code"`
@@ -94,6 +101,7 @@ type ProviderAccount struct {
 	ConfigHash          string   `gorm:"size:128" json:"config_hash"`
 }
 
+// ProviderHealthSnapshot stores the latest observed provider and circuit state.
 type ProviderHealthSnapshot struct {
 	ProviderAccountID      string     `gorm:"primaryKey;size:40" json:"provider_account_id"`
 	Status                 string     `gorm:"size:32;index;not null;default:unknown" json:"status"`
@@ -112,6 +120,7 @@ type ProviderHealthSnapshot struct {
 	UpdatedAt              time.Time  `json:"updated_at"`
 }
 
+// PaymentRoute assigns a payment service and method to a provider by priority.
 type PaymentRoute struct {
 	BaseModel
 	ServiceType       string `gorm:"size:64;uniqueIndex:idx_route_service_method_provider;not null" json:"service_type"`
@@ -121,6 +130,7 @@ type PaymentRoute struct {
 	Active            bool   `gorm:"index;not null;default:true" json:"active"`
 }
 
+// Transaction records a collection or disbursement and its current outcome.
 type Transaction struct {
 	BaseModel
 	AppID                     string     `gorm:"size:40;uniqueIndex:idx_tx_app_idempotency;uniqueIndex:idx_tx_app_reference;index;not null" json:"app_id"`
@@ -145,6 +155,7 @@ type Transaction struct {
 	NextReconcileAt           *time.Time `gorm:"index" json:"next_reconcile_at"`
 }
 
+// TransactionAttempt records one provider call made for a transaction.
 type TransactionAttempt struct {
 	BaseModel
 	TransactionID     string     `gorm:"size:40;index;not null" json:"transaction_id"`
@@ -160,6 +171,7 @@ type TransactionAttempt struct {
 	CompletedAt       *time.Time `json:"completed_at"`
 }
 
+// WebhookEvent stores a deduplicated provider callback for later processing.
 type WebhookEvent struct {
 	BaseModel
 	ProviderAccountID string `gorm:"size:40;uniqueIndex:idx_webhook_provider_payload;not null" json:"provider_account_id"`
