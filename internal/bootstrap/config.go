@@ -30,24 +30,47 @@ type Config struct {
 
 func LoadConfig() Config {
 	var c Config
-	c.App.Name, c.App.Env, c.App.Addr = env("APP_NAME", "momobase"), env("APP_ENV", "development"), env("APP_ADDR", ":8080")
-	c.App.PublicURL, c.App.CORSAllowedOrigins = env("APP_PUBLIC_URL", "http://localhost:8080"), list("CORS_ALLOWED_ORIGINS", "http://localhost:8080")
+	// app
+	c.App.Name = env("APP_NAME", "momobase")
+	c.App.Env = env("APP_ENV", "development")
+	c.App.Addr = env("APP_ADDR", ":8080")
+	c.App.PublicURL = env("APP_PUBLIC_URL", "http://localhost:8080")
+	c.App.CORSAllowedOrigins = list("CORS_ALLOWED_ORIGINS", "http://localhost:8080")
+	// logs
 	c.Log.Level = env("LOG_LEVEL", "info")
-	c.DB.Type, c.DB.Path, c.DB.Host, c.DB.Port = env("DB_TYPE", "sqlite"), env("DB_PATH", "./data/momobase.db"), env("DB_HOST", "localhost"), env("DB_PORT", "5432")
-	c.DB.User, c.DB.Password, c.DB.Name, c.DB.SSLMode = env("DB_USER", "momobase"), env("DB_PASSWORD", ""), env("DB_NAME", "momobase"), env("DB_SSLMODE", "disable")
+	// database
+	c.DB.Type = env("DB_TYPE", "sqlite")
+	c.DB.Path = env("DB_PATH", "./data/momobase.db")
+	c.DB.Host = env("DB_HOST", "localhost")
+	c.DB.Port = env("DB_PORT", "5432")
+	c.DB.User = env("DB_USER", "momobase")
+	c.DB.Password = env("DB_PASSWORD", "")
+	c.DB.Name = env("DB_NAME", "momobase")
+	c.DB.SSLMode = env("DB_SSLMODE", "disable")
+	// security
 	c.Security.EncryptionMasterKeyBase64 = env("ENCRYPTION_MASTER_KEY_BASE64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
-	c.Security.AdminOAuthSecret, c.Security.AppOAuthSecret = env("ADMIN_OAUTH_SECRET", "change-me-admin-oauth-secret"), env("APP_OAUTH_SECRET", "change-me-app-oauth-secret")
-	c.Security.AdminAccessTTL, c.Security.AdminRefreshTTL = duration("ADMIN_ACCESS_TTL_MINUTES", 15, time.Minute), duration("ADMIN_REFRESH_TTL_HOURS", 24, time.Hour)
-	c.Security.AppAccessTTL, c.Security.AppRefreshTTL = duration("APP_ACCESS_TTL_MINUTES", 30, time.Minute), duration("APP_REFRESH_TTL_HOURS", 24, time.Hour)
-	c.Security.AppClientIDPrefix, c.Security.AppClientSecretPrefix = env("APP_CLIENT_ID_PREFIX", "app_client"), env("APP_CLIENT_SECRET_PREFIX", "mb_test")
-	c.Workers.Enabled, c.Workers.HealthEnabled = boolean("WORKERS_ENABLED", true), boolean("HEALTH_WORKER_ENABLED", true)
-	c.Workers.ReconciliationEnabled, c.Workers.CleanupEnabled = boolean("RECONCILIATION_WORKER_ENABLED", true), boolean("CLEANUP_WORKER_ENABLED", true)
+	c.Security.AdminOAuthSecret = env("ADMIN_OAUTH_SECRET", "change-me-admin-oauth-secret")
+	c.Security.AppOAuthSecret = env("APP_OAUTH_SECRET", "change-me-app-oauth-secret")
+	c.Security.AdminAccessTTL = duration("ADMIN_ACCESS_TTL_MINUTES", 15, time.Minute)
+	c.Security.AdminRefreshTTL = duration("ADMIN_REFRESH_TTL_HOURS", 24, time.Hour)
+	c.Security.AppAccessTTL = duration("APP_ACCESS_TTL_MINUTES", 30, time.Minute)
+	c.Security.AppRefreshTTL = duration("APP_REFRESH_TTL_HOURS", 24, time.Hour)
+	c.Security.AppClientIDPrefix = env("APP_CLIENT_ID_PREFIX", "app_client")
+	c.Security.AppClientSecretPrefix = env("APP_CLIENT_SECRET_PREFIX", "mb_test")
+	// workers
+	c.Workers.Enabled = boolean("WORKERS_ENABLED", true)
+	c.Workers.HealthEnabled = boolean("HEALTH_WORKER_ENABLED", true)
+	c.Workers.ReconciliationEnabled = boolean("RECONCILIATION_WORKER_ENABLED", true)
+	c.Workers.CleanupEnabled = boolean("CLEANUP_WORKER_ENABLED", true)
 	c.Workers.HealthInterval = duration("HEALTH_CHECK_INTERVAL_SECONDS", 30, time.Second)
 	c.Workers.ReconciliationInterval = duration("RECONCILIATION_INTERVAL_SECONDS", 60, time.Second)
 	c.Workers.CleanupInterval = duration("CLEANUP_INTERVAL_SECONDS", 300, time.Second)
-	c.Features.AdminFrontendEnabled, c.Features.AutoMigrate = boolean("ADMIN_FRONTEND_ENABLED", false), boolean("AUTO_MIGRATE", true)
+	// features
+	c.Features.AdminFrontendEnabled = boolean("ADMIN_FRONTEND_ENABLED", false)
+	c.Features.AutoMigrate = boolean("AUTO_MIGRATE", true)
 	return c
 }
+
 func (c Config) Validate() error {
 	if c.App.Env != "production" && c.App.Env != "staging" {
 		return nil
@@ -72,12 +95,16 @@ func (c Config) Validate() error {
 	}
 	return nil
 }
+
+
 func env(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}
 	return fallback
 }
+
+
 func boolean(key string, fallback bool) bool {
 	v := os.Getenv(key)
 	if v == "" {
@@ -89,6 +116,8 @@ func boolean(key string, fallback bool) bool {
 	}
 	return b
 }
+
+
 func duration(key string, fallback int, unit time.Duration) time.Duration {
 	value, err := strconv.Atoi(os.Getenv(key))
 	if err != nil || value <= 0 {
@@ -96,6 +125,8 @@ func duration(key string, fallback int, unit time.Duration) time.Duration {
 	}
 	return time.Duration(value) * unit
 }
+
+
 func list(key, fallback string) []string {
 	values := strings.Split(env(key, fallback), ",")
 	out := values[:0]

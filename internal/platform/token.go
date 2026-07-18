@@ -8,11 +8,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
-	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -75,15 +74,10 @@ func (m *TokenManager) sign(payload string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-var fallbackIDCounter uint64
-
 func NewID(prefix string) string {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err == nil {
-		return withPrefix(prefix, hex.EncodeToString(raw[:]))
-	}
-	return withPrefix(prefix, fmt.Sprintf("%x%x", time.Now().UnixNano(), atomic.AddUint64(&fallbackIDCounter, 1)))
+	return withPrefix(prefix, uuid.NewString())
 }
+
 func SecureRandomToken(prefix string, size int) (string, error) {
 	if size < 16 {
 		size = 32

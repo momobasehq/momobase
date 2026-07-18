@@ -57,11 +57,15 @@ func NewApp(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	registry := providers.NewRegistry()
 	registry.Register("mtn_momo", mtn.New)
 	registry.Register("airtel_money", airtel.New)
+
 	runtime := services.NewProviderRuntimeManager(db, registry, enc, log)
+
 	audit := services.NewAuditService(db, log)
+
 	adminAuth := services.NewAdminAuthService(db, cfg.Security.AdminAccessTTL, cfg.Security.AdminRefreshTTL, audit, adminTokens)
 	adminUsers := services.NewAdminUserService(db, audit)
 	appAuth := services.NewAppAuthService(db, cfg.Security.AppClientIDPrefix, cfg.Security.AppClientSecretPrefix, cfg.Security.AppAccessTTL, cfg.Security.AppRefreshTTL, appTokens)
@@ -74,12 +78,16 @@ func NewApp(cfg Config) (*App, error) {
 	health := services.NewHealthService(db, runtime)
 	recon := services.NewReconciliationService(db, runtime, webhooks, log)
 	manager := workers.NewManager(log, workerTasks(cfg, db, health, recon)...)
+
 	info := adminh.SystemInfo{AppName: cfg.App.Name, AppEnv: cfg.App.Env, DBType: cfg.DB.Type, Addr: cfg.App.Addr, WorkersEnabled: cfg.Workers.Enabled, WorkerNames: manager.Names()}
+
 	publicHandler := publich.NewHandler(payments, db)
 	adminHandler := adminh.NewHandler(db, adminAuth, adminUsers, providerAdmin, routeAdmin, apps, runtime, audit, info)
 	router := httpx.NewRouter(httpx.RouterDeps{Logger: log, AdminAuth: adminAuth, AppAuth: appAuth, AdminFrontendEnabled: cfg.Features.AdminFrontendEnabled, CORSAllowedOrigins: cfg.App.CORSAllowedOrigins, Public: publicHandler, Admin: adminHandler, Webhooks: webhookh.NewHandler(webhooks)})
+
 	return &App{Logger: log, DB: db, Runtime: runtime, Workers: manager, Server: &http.Server{Addr: cfg.App.Addr, Handler: router, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 65 * time.Second, WriteTimeout: 65 * time.Second, IdleTimeout: 120 * time.Second}, AdminUsers: adminUsers}, nil
 }
+
 func workerTasks(c Config, db *gorm.DB, health *services.HealthService, recon *services.ReconciliationService) []workers.Task {
 	if !c.Workers.Enabled {
 		return nil
@@ -104,6 +112,7 @@ func workerTasks(c Config, db *gorm.DB, health *services.HealthService, recon *s
 	}
 	return tasks
 }
+
 func (a *App) Serve(ctx context.Context) error {
 	if err := a.Runtime.LoadActive(ctx); err != nil {
 		a.Logger.Error("load active providers", slog.String("error", err.Error()))
@@ -132,6 +141,7 @@ func (a *App) Serve(ctx context.Context) error {
 		return err
 	}
 }
+
 func (a *App) SeedAdmin(email, password, name string) error {
 	if email == "" || password == "" {
 		return errors.New("email and password are required")
