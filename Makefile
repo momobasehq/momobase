@@ -1,5 +1,6 @@
 APP=momobase
 GOFILES=$$(find . -name '*.go' -not -path './vendor/*')
+GOLANGCI_LINT?=golangci-lint
 
 run:
 	go run ./cmd/$(APP) serve
@@ -22,7 +23,16 @@ fmt-check:
 vet:
 	go vet ./...
 
-quality: fmt-check vet test
+lint:
+	$(GOLANGCI_LINT) run ./...
+
+lint-fix:
+	$(GOLANGCI_LINT) run --fix ./...
+
+lint-format:
+	$(GOLANGCI_LINT) fmt ./...
+
+quality: fmt-check vet test lint
 
 seed-admin:
 	go run ./cmd/$(APP) seed-admin --email admin@example.com --password password123 --name "Super Admin"

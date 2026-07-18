@@ -289,7 +289,7 @@ func parseConfig(raw providers.ProviderConfig) (Config, error) {
 		cfg.DisbursementEnabled = providers.Bool(raw, "disbursement_enabled")
 	}
 	if !strings.HasPrefix(cfg.BaseURL, "https://") &&
-		!(strings.HasPrefix(cfg.BaseURL, "http://") && providers.Bool(raw, "allow_insecure_http")) {
+		(!strings.HasPrefix(cfg.BaseURL, "http://") || !providers.Bool(raw, "allow_insecure_http")) {
 		return cfg, errors.New("airtel base_url must use https unless allow_insecure_http=true")
 	}
 	return cfg, nil

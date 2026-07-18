@@ -1,0 +1,25 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  relative-path-mode: gomod
+
+linters:
+  default: standard
+  exclusions:
+    generated: strict
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - golines
+  settings:
+    golines:
+      max-len: 160
+      tab-len: 8
+      shorten-comments: false
+      reformat-tags: false
+  exclusions:
+    generated: strict

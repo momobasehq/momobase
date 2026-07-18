@@ -273,7 +273,7 @@ func parseConfig(raw providers.ProviderConfig) (Config, error) {
 		cfg.Timeout = time.Duration(seconds) * time.Second
 	}
 	if !strings.HasPrefix(cfg.BaseURL, "https://") &&
-		!(strings.HasPrefix(cfg.BaseURL, "http://") && providers.Bool(raw, "allow_insecure_http")) {
+		(!strings.HasPrefix(cfg.BaseURL, "http://") || !providers.Bool(raw, "allow_insecure_http")) {
 		return cfg, errors.New("mtn base_url must use https unless allow_insecure_http=true")
 	}
 	return cfg, nil

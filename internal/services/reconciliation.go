@@ -51,7 +51,11 @@ func (s *ReconciliationService) RunOnce(ctx context.Context, limit int) error {
 		if err := s.reconcile(ctx, &rows[i]); err != nil {
 			errs = append(errs, err)
 			if s.logger != nil {
-				s.logger.Warn("reconciliation failed", slog.String("transaction_id", rows[i].ID), slog.String("error", providers.Redact(err.Error())))
+				s.logger.Warn(
+					"reconciliation failed",
+					slog.String("transaction_id", rows[i].ID),
+					slog.String("error", providers.Redact(err.Error())),
+				)
 			}
 		}
 	}

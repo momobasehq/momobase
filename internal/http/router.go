@@ -164,7 +164,7 @@ func token(grant string, issue func(*http.Request) (any, error)) http.HandlerFun
 			return
 		}
 		actual := r.Form.Get("grant_type")
-		if actual != grant && !(grant == "password" && actual == "") {
+		if actual != grant && (grant != "password" || actual != "") {
 			platform.Error(w, 400, "UNSUPPORTED_GRANT", "grant_type must be "+grant)
 			return
 		}
@@ -190,7 +190,8 @@ func cors(origins []string) middleware {
 			if origin != "" && (allowed[origin] || allowed["*"]) {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Vary", "Origin")
-				w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, Idempotency-Key, X-CSRF-Token, X-Webhook-Secret")
+				w.Header().
+					Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, Idempotency-Key, X-CSRF-Token, X-Webhook-Secret")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, HEAD, OPTIONS")
 				if r.Method == http.MethodOptions {
 					w.WriteHeader(http.StatusNoContent)

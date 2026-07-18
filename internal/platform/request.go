@@ -10,7 +10,7 @@ import (
 
 // DecodeJSON reads one strict JSON object and rejects trailing content.
 func DecodeJSON[T any](r *http.Request) (*T, error) {
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	var v T
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
