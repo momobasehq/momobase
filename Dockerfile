@@ -12,7 +12,6 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /out/momobase /usr/local/bin/momobase
-COPY web ./web
 RUN mkdir -p /app/data && useradd -r -u 10001 -g nogroup momobase && chown -R momobase:nogroup /app
 USER momobase
 EXPOSE 9090

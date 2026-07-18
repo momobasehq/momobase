@@ -3,7 +3,6 @@ package httpx
 import (
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	adminh "github.com/momobasehq/momobase/internal/http/admin"
@@ -12,6 +11,7 @@ import (
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/services"
+	adminweb "github.com/momobasehq/momobase/web/admin"
 )
 
 // RouterDeps contains the services, handlers, and settings required to build
@@ -45,10 +45,8 @@ func NewRouter(d RouterDeps) http.Handler {
 	mux.HandleFunc("GET /ping", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { platform.JSON(w, 200, map[string]bool{"ok": true}) })
 	if d.AdminFrontendEnabled {
-		if _, err := os.Stat("web/admin/index.html"); err == nil {
-			mux.Handle("GET /admin/", http.StripPrefix("/admin", http.FileServer(http.Dir("web/admin"))))
-			mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/admin/", http.StatusFound) })
-		}
+		mux.Handle("GET /admin/", http.StripPrefix("/admin", http.FileServer(http.FS(adminweb.FS()))))
+		mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/admin/", http.StatusFound) })
 	}
 	tokens := authmw.RateLimitByIP(20, time.Minute)
 	publicLimit := authmw.RateLimitByIP(120, time.Minute)
