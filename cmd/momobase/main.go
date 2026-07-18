@@ -52,11 +52,18 @@ func loadApp() (*bootstrap.App, error) {
 	return bootstrap.NewApp(cfg)
 }
 
-func runServe(cmd *cobra.Command, _ []string) error {
+func closeApp(app *bootstrap.App, err *error) {
+	if closeErr := app.Close(); closeErr != nil {
+		*err = errors.Join(*err, closeErr)
+	}
+}
+
+func runServe(cmd *cobra.Command, _ []string) (err error) {
 	app, err := loadApp()
 	if err != nil {
 		return err
 	}
+	defer closeApp(app, &err)
 	err = app.Serve(cmd.Context())
 	if errors.Is(err, context.Canceled) {
 		return nil
@@ -69,11 +76,12 @@ func newMigrateCommand() *cobra.Command {
 		Use:   "migrate",
 		Short: "Apply database schema migrations",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) (err error) {
 			app, err := loadApp()
 			if err != nil {
 				return err
 			}
+			defer closeApp(app, &err)
 			if err = bootstrap.AutoMigrate(app.DB); err == nil {
 				fmt.Println("migrations applied")
 			}
@@ -88,11 +96,12 @@ func newSeedAdminCommand() *cobra.Command {
 		Use:   "seed-admin",
 		Short: "Create a super administrator",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) (err error) {
 			app, err := loadApp()
 			if err != nil {
 				return err
 			}
+			defer closeApp(app, &err)
 			if err = app.SeedAdmin(email, password, name); err == nil {
 				fmt.Printf("admin created: %s\n", email)
 			}

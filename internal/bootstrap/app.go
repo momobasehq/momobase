@@ -3,8 +3,10 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -22,6 +24,7 @@ import (
 	"github.com/momobasehq/momobase/internal/workers"
 )
 
+// App owns the service's runtime dependencies and their lifecycle.
 type App struct {
 	Logger     *slog.Logger
 	DB         *gorm.DB
@@ -29,6 +32,13 @@ type App struct {
 	Workers    *workers.Manager
 	Server     *http.Server
 	AdminUsers *services.AdminUserService
+
+	lifecycleMu sync.Mutex
+	serveCancel context.CancelFunc
+	serveDone   chan struct{}
+	closed      bool
+	closeOnce   sync.Once
+	closeErr    error
 }
 
 func NewApp(cfg Config) (*App, error) {
@@ -40,6 +50,12 @@ func NewApp(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	databaseOwned := true
+	defer func() {
+		if databaseOwned {
+			_ = closeDatabase(db)
+		}
+	}()
 	if cfg.Features.AutoMigrate {
 		if err = AutoMigrate(db); err != nil {
 			return nil, err
@@ -85,7 +101,9 @@ func NewApp(cfg Config) (*App, error) {
 	adminHandler := adminh.NewHandler(db, adminAuth, adminUsers, providerAdmin, routeAdmin, apps, runtime, audit, info)
 	router := httpx.NewRouter(httpx.RouterDeps{Logger: log, AdminAuth: adminAuth, AppAuth: appAuth, AdminFrontendEnabled: cfg.Features.AdminFrontendEnabled, CORSAllowedOrigins: cfg.App.CORSAllowedOrigins, Public: publicHandler, Admin: adminHandler, Webhooks: webhookh.NewHandler(webhooks)})
 
-	return &App{Logger: log, DB: db, Runtime: runtime, Workers: manager, Server: &http.Server{Addr: cfg.App.Addr, Handler: router, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 65 * time.Second, WriteTimeout: 65 * time.Second, IdleTimeout: 120 * time.Second}, AdminUsers: adminUsers}, nil
+	app := &App{Logger: log, DB: db, Runtime: runtime, Workers: manager, Server: &http.Server{Addr: cfg.App.Addr, Handler: router, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 65 * time.Second, WriteTimeout: 65 * time.Second, IdleTimeout: 120 * time.Second}, AdminUsers: adminUsers}
+	databaseOwned = false
+	return app, nil
 }
 
 func workerTasks(c Config, db *gorm.DB, health *services.HealthService, recon *services.ReconciliationService) []workers.Task {
@@ -114,32 +132,92 @@ func workerTasks(c Config, db *gorm.DB, health *services.HealthService, recon *s
 }
 
 func (a *App) Serve(ctx context.Context) error {
-	if err := a.Runtime.LoadActive(ctx); err != nil {
+	a.lifecycleMu.Lock()
+	if a.closed {
+		a.lifecycleMu.Unlock()
+		return errors.New("application is closed")
+	}
+	if a.serveDone != nil {
+		a.lifecycleMu.Unlock()
+		return errors.New("application has already been served")
+	}
+	serveCtx, cancelServe := context.WithCancel(ctx)
+	serveDone := make(chan struct{})
+	a.serveCancel = cancelServe
+	a.serveDone = serveDone
+	a.lifecycleMu.Unlock()
+
+	defer func() {
+		cancelServe()
+		a.Workers.Wait()
+		close(serveDone)
+	}()
+
+	if err := a.Runtime.LoadActive(serveCtx); err != nil {
+		if serveCtx.Err() != nil {
+			return serveCtx.Err()
+		}
 		a.Logger.Error("load active providers", slog.String("error", err.Error()))
 	}
-	workerCtx, cancelWorkers := context.WithCancel(ctx)
-	a.Workers.Start(workerCtx)
-	defer func() {
-		cancelWorkers()
-		a.Workers.Wait()
-	}()
+	if serveCtx.Err() != nil {
+		return serveCtx.Err()
+	}
+	a.Workers.Start(serveCtx)
 	errCh := make(chan error, 1)
 	go func() { errCh <- a.Server.ListenAndServe() }()
 	a.Logger.Info("server starting", slog.String("addr", a.Server.Addr))
 	select {
-	case <-ctx.Done():
+	case <-serveCtx.Done():
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := a.Server.Shutdown(shutdown); err != nil {
 			return err
 		}
-		return ctx.Err()
+		return serveCtx.Err()
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
 		return err
 	}
+}
+
+// Close stops an active server and its workers before closing the database
+// connection pool. It is safe to call Close more than once.
+func (a *App) Close() error {
+	if a == nil {
+		return nil
+	}
+	a.closeOnce.Do(func() {
+		a.lifecycleMu.Lock()
+		a.closed = true
+		cancelServe := a.serveCancel
+		serveDone := a.serveDone
+		a.lifecycleMu.Unlock()
+
+		if cancelServe != nil {
+			cancelServe()
+		}
+		if serveDone != nil {
+			<-serveDone
+		}
+		a.closeErr = closeDatabase(a.DB)
+	})
+	return a.closeErr
+}
+
+func closeDatabase(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("access database pool: %w", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		return fmt.Errorf("close database pool: %w", err)
+	}
+	return nil
 }
 
 func (a *App) SeedAdmin(email, password, name string) error {
