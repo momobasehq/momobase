@@ -9,23 +9,70 @@ import (
 	"time"
 )
 
+// AppConfig contains process-level application settings.
+type AppConfig struct {
+	Name               string
+	Env                string
+	Addr               string
+	PublicURL          string
+	CORSAllowedOrigins []string
+}
+
+// LogConfig contains structured logging settings.
+type LogConfig struct {
+	Level string
+}
+
+// DatabaseConfig contains settings shared by the supported database drivers.
+type DatabaseConfig struct {
+	Type     string
+	Path     string
+	Host     string
+	Port     string
+	User     string
+	Password string
+	Name     string
+	SSLMode  string
+}
+
+// SecurityConfig contains encryption, token, and application credential settings.
+type SecurityConfig struct {
+	EncryptionMasterKeyBase64 string
+	AdminOAuthSecret          string
+	AppOAuthSecret            string
+	AdminAccessTTL            time.Duration
+	AdminRefreshTTL           time.Duration
+	AppAccessTTL              time.Duration
+	AppRefreshTTL             time.Duration
+	AppClientIDPrefix         string
+	AppClientSecretPrefix     string
+}
+
+// WorkersConfig controls background task activation and scheduling.
+type WorkersConfig struct {
+	Enabled                bool
+	HealthEnabled          bool
+	ReconciliationEnabled  bool
+	CleanupEnabled         bool
+	HealthInterval         time.Duration
+	ReconciliationInterval time.Duration
+	CleanupInterval        time.Duration
+}
+
+// FeaturesConfig controls optional application behavior.
+type FeaturesConfig struct {
+	AdminFrontendEnabled bool
+	AutoMigrate          bool
+}
+
+// Config contains all application configuration groups.
 type Config struct {
-	App struct {
-		Name, Env, Addr, PublicURL string
-		CORSAllowedOrigins         []string
-	}
-	Log      struct{ Level string }
-	DB       struct{ Type, Path, Host, Port, User, Password, Name, SSLMode string }
-	Security struct {
-		EncryptionMasterKeyBase64, AdminOAuthSecret, AppOAuthSecret  string
-		AdminAccessTTL, AdminRefreshTTL, AppAccessTTL, AppRefreshTTL time.Duration
-		AppClientIDPrefix, AppClientSecretPrefix                     string
-	}
-	Workers struct {
-		Enabled, HealthEnabled, ReconciliationEnabled, CleanupEnabled bool
-		HealthInterval, ReconciliationInterval, CleanupInterval       time.Duration
-	}
-	Features struct{ AdminFrontendEnabled, AutoMigrate bool }
+	App      AppConfig
+	Log      LogConfig
+	DB       DatabaseConfig
+	Security SecurityConfig
+	Workers  WorkersConfig
+	Features FeaturesConfig
 }
 
 func LoadConfig() Config {
