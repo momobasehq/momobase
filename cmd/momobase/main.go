@@ -108,7 +108,7 @@ func newSeedAdminCommand() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&email, "email", "admin@example.com", "admin email")
+	cmd.Flags().StringVar(&email, "email", "admin@momobase.local", "admin email")
 	cmd.Flags().StringVar(&password, "password", "", "admin password")
 	cmd.Flags().StringVar(&name, "name", "Super Admin", "admin name")
 	if err := cmd.MarkFlagRequired("password"); err != nil {

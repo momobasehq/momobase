@@ -20,7 +20,7 @@ function maskSecrets(text) {
 window.adminApp = function () {
   return {
     baseUrl: localStorage.getItem('momobase.baseUrl') || window.location.origin,
-    email: localStorage.getItem('momobase.admin.email') || 'admin@example.com',
+    email: localStorage.getItem('momobase.admin.email') || 'admin@momobase.local',
     password: '',
     token: '',
     refreshToken: '',
