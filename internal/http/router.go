@@ -136,7 +136,7 @@ func token(grant string, issue func(*http.Request) (any, error)) http.HandlerFun
 func cors(origins []string) middleware {
 	allowed := map[string]bool{}
 	if len(origins) == 0 {
-		origins = []string{"http://localhost:8080"}
+		origins = []string{"http://localhost:9090"}
 	}
 	for _, origin := range origins {
 		allowed[origin] = true

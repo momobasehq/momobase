@@ -33,9 +33,9 @@ func LoadConfig() Config {
 	// app
 	c.App.Name = env("APP_NAME", "momobase")
 	c.App.Env = env("APP_ENV", "development")
-	c.App.Addr = env("APP_ADDR", ":8080")
-	c.App.PublicURL = env("APP_PUBLIC_URL", "http://localhost:8080")
-	c.App.CORSAllowedOrigins = list("CORS_ALLOWED_ORIGINS", "http://localhost:8080")
+	c.App.Addr = env("APP_ADDR", ":9090")
+	c.App.PublicURL = env("APP_PUBLIC_URL", "http://localhost:9090")
+	c.App.CORSAllowedOrigins = list("CORS_ALLOWED_ORIGINS", "http://localhost:9090")
 	// logs
 	c.Log.Level = env("LOG_LEVEL", "info")
 	// database
@@ -96,14 +96,12 @@ func (c Config) Validate() error {
 	return nil
 }
 
-
 func env(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}
 	return fallback
 }
-
 
 func boolean(key string, fallback bool) bool {
 	v := os.Getenv(key)
@@ -117,7 +115,6 @@ func boolean(key string, fallback bool) bool {
 	return b
 }
 
-
 func duration(key string, fallback int, unit time.Duration) time.Duration {
 	value, err := strconv.Atoi(os.Getenv(key))
 	if err != nil || value <= 0 {
@@ -125,7 +122,6 @@ func duration(key string, fallback int, unit time.Duration) time.Duration {
 	}
 	return time.Duration(value) * unit
 }
-
 
 func list(key, fallback string) []string {
 	values := strings.Split(env(key, fallback), ",")

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-BASE_URL="${BASE_URL:-http://localhost:8080}"
+BASE_URL="${BASE_URL:-http://localhost:9090}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-password123}"
 CLIENT_ID="${CLIENT_ID:?Set CLIENT_ID from an app credential}"

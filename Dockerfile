@@ -15,6 +15,6 @@ COPY --from=build /out/momobase /usr/local/bin/momobase
 COPY web ./web
 RUN mkdir -p /app/data && useradd -r -u 10001 -g nogroup momobase && chown -R momobase:nogroup /app
 USER momobase
-EXPOSE 8080
+EXPOSE 9090
 ENTRYPOINT ["momobase"]
 CMD ["serve"]

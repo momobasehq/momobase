@@ -153,7 +153,7 @@ ADMIN_FRONTEND_ENABLED=true
 Then open:
 
 ```text
-http://localhost:8080/admin/
+http://localhost:9090/admin/
 ```
 
 ## Docker Compose
@@ -189,7 +189,7 @@ GET /healthz
 Admin token:
 
 ```bash
-curl -X POST http://localhost:8080/api/admin/token \
+curl -X POST http://localhost:9090/api/admin/token \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   --data-urlencode 'grant_type=password' \
   --data-urlencode 'username=admin@example.com' \
@@ -199,7 +199,7 @@ curl -X POST http://localhost:8080/api/admin/token \
 Application token:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/token \
+curl -X POST http://localhost:9090/api/v1/token \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   --data-urlencode 'grant_type=client_credentials' \
   --data-urlencode 'client_id=<client_id>' \
@@ -209,7 +209,7 @@ curl -X POST http://localhost:8080/api/v1/token \
 Refresh token:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/token/refresh \
+curl -X POST http://localhost:9090/api/v1/token/refresh \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   --data-urlencode 'grant_type=refresh_token' \
   --data-urlencode 'refresh_token=<refresh_token>'
