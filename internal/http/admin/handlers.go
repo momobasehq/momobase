@@ -15,9 +15,12 @@ import (
 )
 
 type SystemInfo struct {
-	AppName, AppEnv, DBType, Addr string
-	WorkersEnabled                bool
-	WorkerNames                   []string
+	AppName        string
+	AppEnv         string
+	DBType         string
+	Addr           string
+	WorkersEnabled bool
+	WorkerNames    []string
 }
 type Handler struct {
 	db        *gorm.DB
@@ -31,7 +34,17 @@ type Handler struct {
 	system    SystemInfo
 }
 
-func NewHandler(db *gorm.DB, auth *services.AdminAuthService, users *services.AdminUserService, providers *services.ProviderAdminService, routes *services.RouteAdminService, apps *services.AppService, runtime *services.ProviderRuntimeManager, audit *services.AuditService, system SystemInfo) *Handler {
+func NewHandler(
+	db *gorm.DB,
+	auth *services.AdminAuthService,
+	users *services.AdminUserService,
+	providers *services.ProviderAdminService,
+	routes *services.RouteAdminService,
+	apps *services.AppService,
+	runtime *services.ProviderRuntimeManager,
+	audit *services.AuditService,
+	system SystemInfo,
+) *Handler {
 	return &Handler{db, auth, users, providers, routes, apps, runtime, audit, system}
 }
 
@@ -193,7 +206,16 @@ func (h *Handler) ActiveProviderBalances(w http.ResponseWriter, r *http.Request)
 		platform.Error(w, 400, "BALANCE_QUERY_FAILED", err.Error())
 		return
 	}
-	h.audit.RecordBestEffort(actor(r).ID, "admin", "balances.active_providers_queried", "provider_account", "all_active", nil, r.RemoteAddr, r.UserAgent())
+	h.audit.RecordBestEffort(
+		actor(r).ID,
+		"admin",
+		"balances.active_providers_queried",
+		"provider_account",
+		"all_active",
+		nil,
+		r.RemoteAddr,
+		r.UserAgent(),
+	)
 	page, size := platform.Pagination(r)
 	platform.JSON(w, 200, platform.PaginateSlice(items, page, size))
 }
@@ -207,7 +229,16 @@ func (h *Handler) ProviderBalance(w http.ResponseWriter, r *http.Request) {
 	platform.JSON(w, 200, out)
 }
 func (h *Handler) SystemInfo(w http.ResponseWriter, _ *http.Request) {
-	platform.JSON(w, 200, map[string]any{"app_name": h.system.AppName, "app_env": h.system.AppEnv, "db_type": h.system.DBType, "addr": h.system.Addr, "workers_enabled": h.system.WorkersEnabled, "worker_names": h.system.WorkerNames, "go_version": runtime.Version(), "server_time": time.Now().UTC()})
+	platform.JSON(w, 200, map[string]any{
+		"app_name":        h.system.AppName,
+		"app_env":         h.system.AppEnv,
+		"db_type":         h.system.DBType,
+		"addr":            h.system.Addr,
+		"workers_enabled": h.system.WorkersEnabled,
+		"worker_names":    h.system.WorkerNames,
+		"go_version":      runtime.Version(),
+		"server_time":     time.Now().UTC(),
+	})
 }
 func (h *Handler) SystemHealth(w http.ResponseWriter, r *http.Request) {
 	sqlDB, err := h.db.DB()
@@ -225,12 +256,23 @@ func (h *Handler) SystemHealth(w http.ResponseWriter, r *http.Request) {
 	if dbOK {
 		status = "ok"
 	}
-	platform.JSON(w, 200, map[string]any{"ok": dbOK, "database": status, "runtime_provider_count": len(h.runtime.List()), "active_provider_account_count": active, "workers_configured": h.system.WorkerNames, "server_time": time.Now().UTC()})
+	platform.JSON(w, 200, map[string]any{
+		"ok":                            dbOK,
+		"database":                      status,
+		"runtime_provider_count":        len(h.runtime.List()),
+		"active_provider_account_count": active,
+		"workers_configured":            h.system.WorkerNames,
+		"server_time":                   time.Now().UTC(),
+	})
 }
 func (h *Handler) Workers(w http.ResponseWriter, r *http.Request) {
 	items := make([]map[string]any, 0, len(h.system.WorkerNames))
 	for _, name := range h.system.WorkerNames {
-		items = append(items, map[string]any{"name": name, "configured": true, "state": "managed_by_single_binary"})
+		items = append(items, map[string]any{
+			"name":       name,
+			"configured": true,
+			"state":      "managed_by_single_binary",
+		})
 	}
 	page, size := platform.Pagination(r)
 	platform.JSON(w, 200, platform.PaginateSlice(items, page, size))
@@ -238,7 +280,15 @@ func (h *Handler) Workers(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RuntimeProviders(w http.ResponseWriter, r *http.Request) {
 	items := make([]map[string]any, 0)
 	for _, runtime := range h.runtime.List() {
-		item := map[string]any{"provider_account_id": runtime.AccountID, "provider_code": runtime.ProviderCode, "config_version": runtime.ConfigVersion, "active": true, "initialized": true, "capabilities": runtime.Capabilities, "countries": runtime.Countries}
+		item := map[string]any{
+			"provider_account_id": runtime.AccountID,
+			"provider_code":       runtime.ProviderCode,
+			"config_version":      runtime.ConfigVersion,
+			"active":              true,
+			"initialized":         true,
+			"capabilities":        runtime.Capabilities,
+			"countries":           runtime.Countries,
+		}
 		var health domain.ProviderHealthSnapshot
 		if err := h.db.First(&health, "provider_account_id = ?", runtime.AccountID).Error; err == nil {
 			item["health"] = &health

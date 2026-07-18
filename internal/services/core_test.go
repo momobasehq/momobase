@@ -42,7 +42,19 @@ func noError(err error) {
 func stack(t *testing.T) *testStack {
 	t.Helper()
 	db := must(gorm.Open(sqlite.Open("file:"+platform.NewID("test")+"?mode=memory&cache=shared"), &gorm.Config{}))
-	noError(db.AutoMigrate(&domain.AdminUser{}, &domain.AuditLog{}, &domain.App{}, &domain.AppCredential{}, &domain.AppSession{}, &domain.ProviderAccount{}, &domain.ProviderHealthSnapshot{}, &domain.PaymentRoute{}, &domain.Transaction{}, &domain.TransactionAttempt{}, &domain.WebhookEvent{}))
+	noError(db.AutoMigrate(
+		&domain.AdminUser{},
+		&domain.AuditLog{},
+		&domain.App{},
+		&domain.AppCredential{},
+		&domain.AppSession{},
+		&domain.ProviderAccount{},
+		&domain.ProviderHealthSnapshot{},
+		&domain.PaymentRoute{},
+		&domain.Transaction{},
+		&domain.TransactionAttempt{},
+		&domain.WebhookEvent{},
+	))
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	enc := must(platform.NewEncryptor("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="))
 	registry := providers.NewRegistry()
@@ -52,7 +64,21 @@ func stack(t *testing.T) *testStack {
 	auth := NewAppAuthService(db, "app_test", "secret_test", 30*time.Minute, 24*time.Hour, tokens)
 	apps, routes := NewAppService(db, auth, audit), NewRouteAdminService(db, audit)
 	routing := NewRouteEngine(db, runtime)
-	return &testStack{db, auth, apps, NewProviderAdminService(db, audit, enc, registry, runtime), runtime, routes, routing, NewPaymentOrchestrator(db, routing, NewProviderExecutor(runtime)), &domain.AdminUser{BaseModel: domain.BaseModel{ID: "admin"}, Role: "super_admin", Status: "active"}}
+	return &testStack{
+		db,
+		auth,
+		apps,
+		NewProviderAdminService(db, audit, enc, registry, runtime),
+		runtime,
+		routes,
+		routing,
+		NewPaymentOrchestrator(db, routing, NewProviderExecutor(runtime)),
+		&domain.AdminUser{
+			BaseModel: domain.BaseModel{ID: "admin"},
+			Role:      "super_admin",
+			Status:    "active",
+		},
+	}
 }
 func (s *testStack) app(t *testing.T) (*domain.App, *domain.AppCredential, string) {
 	app := must(s.apps.CreateApp(s.actor, "Test", "", "sandbox"))
@@ -60,7 +86,14 @@ func (s *testStack) app(t *testing.T) (*domain.App, *domain.AppCredential, strin
 	return app, &created.Credential, created.ClientSecret
 }
 func (s *testStack) provider(t *testing.T, mode string, countries ...string) *domain.ProviderAccount {
-	account := must(s.providerAdmin.CreateAccount(s.actor, "test_provider", "Test", "sandbox", countries, map[string]any{"mode": mode, "webhook_secret": "secret"}))
+	account := must(s.providerAdmin.CreateAccount(
+		s.actor,
+		"test_provider",
+		"Test",
+		"sandbox",
+		countries,
+		map[string]any{"mode": mode, "webhook_secret": "secret"},
+	))
 	noError(s.providerAdmin.Activate(context.Background(), s.actor, account.ID))
 	return account
 }
@@ -87,7 +120,15 @@ func TestCoreFlows(t *testing.T) {
 		account := s.provider(t, "success", "UG")
 		s.route(t, account.ID, 1)
 		app, _, _ := s.app(t)
-		req := &CreatePaymentRequest{PaymentMethod: domain.PaymentMethodMomo, Amount: 50000, Currency: "UGX", Country: "UG", Reference: "ORDER-1", Customer: &PartyPayload{Phone: "256770000000"}, Momo: &PartyPayload{Phone: "256770000000"}}
+		req := &CreatePaymentRequest{
+			PaymentMethod: domain.PaymentMethodMomo,
+			Amount:        50000,
+			Currency:      "UGX",
+			Country:       "UG",
+			Reference:     "ORDER-1",
+			Customer:      &PartyPayload{Phone: "256770000000"},
+			Momo:          &PartyPayload{Phone: "256770000000"},
+		}
 		first := must(s.payments.Create(context.Background(), app.ID, domain.ServiceCollection, "idem", req))
 		second := must(s.payments.Create(context.Background(), app.ID, domain.ServiceCollection, "idem", req))
 		if first.TransactionID != second.TransactionID {
@@ -101,7 +142,10 @@ func TestCoreFlows(t *testing.T) {
 	})
 	t.Run("country routing and health fallback", func(t *testing.T) {
 		s := stack(t)
-		primary, backup, kenya := s.provider(t, "success", "UG", "RW"), s.provider(t, "success", "UG"), s.provider(t, "success", "KE")
+		primary, backup, kenya :=
+			s.provider(t, "success", "UG", "RW"),
+			s.provider(t, "success", "UG"),
+			s.provider(t, "success", "KE")
 		s.route(t, primary.ID, 1)
 		s.route(t, backup.ID, 2)
 		s.route(t, kenya.ID, 0)
@@ -109,12 +153,21 @@ func TestCoreFlows(t *testing.T) {
 		if selected.Account.ID != primary.ID {
 			t.Fatal("highest-priority provider supporting UG was not selected")
 		}
-		noError(s.db.Save(&domain.ProviderHealthSnapshot{ProviderAccountID: primary.ID, Status: domain.ProviderDown, CircuitState: domain.CircuitOpen}).Error)
+		noError(s.db.Save(&domain.ProviderHealthSnapshot{
+			ProviderAccountID: primary.ID,
+			Status:            domain.ProviderDown,
+			CircuitState:      domain.CircuitOpen,
+		}).Error)
 		selected = must(s.routing.SelectProvider(context.Background(), domain.ServiceCollection, domain.PaymentMethodMomo, "UG"))
 		if selected.Account.ID != backup.ID {
 			t.Fatal("healthy UG backup was not selected")
 		}
-		if _, err := s.routing.SelectProvider(context.Background(), domain.ServiceCollection, domain.PaymentMethodMomo, "TZ"); !errors.Is(err, ErrNoRouteAvailable) {
+		if _, err := s.routing.SelectProvider(
+			context.Background(),
+			domain.ServiceCollection,
+			domain.PaymentMethodMomo,
+			"TZ",
+		); !errors.Is(err, ErrNoRouteAvailable) {
 			t.Fatalf("unexpected fallback for unsupported country: %v", err)
 		}
 	})
@@ -122,7 +175,12 @@ func TestCoreFlows(t *testing.T) {
 		s := stack(t)
 		account := s.provider(t, "success", "UG")
 		before, _ := s.runtime.Get(account.ID)
-		if err := s.providerAdmin.UpdateConfig(context.Background(), s.actor, account.ID, map[string]any{"mode": "init_error", "webhook_secret": "secret"}); err == nil {
+		if err := s.providerAdmin.UpdateConfig(
+			context.Background(),
+			s.actor,
+			account.ID,
+			map[string]any{"mode": "init_error", "webhook_secret": "secret"},
+		); err == nil {
 			t.Fatal("bad config accepted")
 		}
 		after, ok := s.runtime.Get(account.ID)
@@ -151,7 +209,10 @@ func TestCountryAndPhoneNormalization(t *testing.T) {
 type fakeProvider struct{ mode string }
 
 func (*fakeProvider) Capabilities() []providers.Capability {
-	return []providers.Capability{{ServiceType: domain.ServiceCollection, PaymentMethod: domain.PaymentMethodMomo}, {ServiceType: domain.ServiceDisbursement, PaymentMethod: domain.PaymentMethodMomo}}
+	return []providers.Capability{
+		{ServiceType: domain.ServiceCollection, PaymentMethod: domain.PaymentMethodMomo},
+		{ServiceType: domain.ServiceDisbursement, PaymentMethod: domain.PaymentMethodMomo},
+	}
 }
 func (p *fakeProvider) Init(_ context.Context, config providers.ProviderConfig) error {
 	p.mode, _ = config["mode"].(string)

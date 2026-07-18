@@ -23,11 +23,24 @@ type ProviderAdminService struct {
 	runtime   *ProviderRuntimeManager
 }
 
-func NewProviderAdminService(db *gorm.DB, audit *AuditService, enc *platform.Encryptor, registry providers.Registry, runtime *ProviderRuntimeManager) *ProviderAdminService {
+func NewProviderAdminService(
+	db *gorm.DB,
+	audit *AuditService,
+	enc *platform.Encryptor,
+	registry providers.Registry,
+	runtime *ProviderRuntimeManager,
+) *ProviderAdminService {
 	return &ProviderAdminService{db: db, audit: audit, encryptor: enc, registry: registry, runtime: runtime}
 }
 
-func (s *ProviderAdminService) CreateAccount(actor *domain.AdminUser, code, name, environment string, countries []string, config map[string]any) (*domain.ProviderAccount, error) {
+func (s *ProviderAdminService) CreateAccount(
+	actor *domain.AdminUser,
+	code string,
+	name string,
+	environment string,
+	countries []string,
+	config map[string]any,
+) (*domain.ProviderAccount, error) {
 	if _, err := s.registry.Create(code, nil); err != nil {
 		return nil, err
 	}
@@ -58,7 +71,16 @@ func (s *ProviderAdminService) CreateAccount(actor *domain.AdminUser, code, name
 	if err = s.db.Create(account).Error; err != nil {
 		return nil, err
 	}
-	s.audit.RecordBestEffort(actorID(actor), "admin", "provider_account.created", "provider_account", account.ID, map[string]any{"provider_code": code, "countries": countries}, "", "")
+	s.audit.RecordBestEffort(
+		actorID(actor),
+		"admin",
+		"provider_account.created",
+		"provider_account",
+		account.ID,
+		map[string]any{"provider_code": code, "countries": countries},
+		"",
+		"",
+	)
 	return account, nil
 }
 
@@ -89,7 +111,16 @@ func (s *ProviderAdminService) UpdateCountries(ctx context.Context, actor *domai
 			return err
 		}
 	}
-	s.audit.RecordBestEffort(actorID(actor), "admin", "provider_countries.updated", "provider_account", id, map[string]any{"countries": countries}, "", "")
+	s.audit.RecordBestEffort(
+		actorID(actor),
+		"admin",
+		"provider_countries.updated",
+		"provider_account",
+		id,
+		map[string]any{"countries": countries},
+		"",
+		"",
+	)
 	return nil
 }
 
@@ -114,13 +145,21 @@ func (s *ProviderAdminService) UpdateConfig(ctx context.Context, actor *domain.A
 	if err != nil {
 		return err
 	}
-	err = store.Affected(s.db.Model(&account).Updates(map[string]any{"encrypted_config_json": cipher, "config_hash": hash, "config_version": gorm.Expr("config_version + 1")}))
+	err = store.Affected(s.db.Model(&account).Updates(map[string]any{
+		"encrypted_config_json": cipher,
+		"config_hash":           hash,
+		"config_version":        gorm.Expr("config_version + 1"),
+	}))
 	if err != nil {
 		return err
 	}
 	if account.Active {
 		if err = s.runtime.Reload(ctx, id); err != nil {
-			restore := map[string]any{"encrypted_config_json": account.EncryptedConfigJSON, "config_hash": account.ConfigHash, "config_version": account.ConfigVersion}
+			restore := map[string]any{
+				"encrypted_config_json": account.EncryptedConfigJSON,
+				"config_hash":           account.ConfigHash,
+				"config_version":        account.ConfigVersion,
+			}
 			if rollback := s.db.Model(&domain.ProviderAccount{}).Where("id = ?", id).Updates(restore).Error; rollback != nil {
 				return errors.Join(err, rollback)
 			}

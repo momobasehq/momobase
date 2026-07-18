@@ -21,23 +21,40 @@ func NewProviderExecutor(runtime *ProviderRuntimeManager) *RuntimeProviderExecut
 	return &RuntimeProviderExecutor{runtime, 45 * time.Second}
 }
 
-func (e *RuntimeProviderExecutor) Collect(ctx context.Context, id string, req providers.PaymentRequest) (*providers.ProviderPaymentResponse, error) {
+func (e *RuntimeProviderExecutor) Collect(
+	ctx context.Context,
+	id string,
+	req providers.PaymentRequest,
+) (*providers.ProviderPaymentResponse, error) {
 	p, err := e.ready(id, domain.ServiceCollection, req.Country)
 	if err != nil {
 		return nil, err
 	}
-	return execute(ctx, e, p, "collect", func(c context.Context) (*providers.ProviderPaymentResponse, error) { return p.Adapter.Collect(c, req) })
+	return execute(ctx, e, p, "collect", func(c context.Context) (*providers.ProviderPaymentResponse, error) {
+		return p.Adapter.Collect(c, req)
+	})
 }
 
-func (e *RuntimeProviderExecutor) Disburse(ctx context.Context, id string, req providers.PaymentRequest) (*providers.ProviderPaymentResponse, error) {
+func (e *RuntimeProviderExecutor) Disburse(
+	ctx context.Context,
+	id string,
+	req providers.PaymentRequest,
+) (*providers.ProviderPaymentResponse, error) {
 	p, err := e.ready(id, domain.ServiceDisbursement, req.Country)
 	if err != nil {
 		return nil, err
 	}
-	return execute(ctx, e, p, "disburse", func(c context.Context) (*providers.ProviderPaymentResponse, error) { return p.Adapter.Disburse(c, req) })
+	return execute(ctx, e, p, "disburse", func(c context.Context) (*providers.ProviderPaymentResponse, error) {
+		return p.Adapter.Disburse(c, req)
+	})
 }
 
-func (e *RuntimeProviderExecutor) QueryTransaction(ctx context.Context, id, ref, country string) (*providers.ProviderTransactionStatus, error) {
+func (e *RuntimeProviderExecutor) QueryTransaction(
+	ctx context.Context,
+	id string,
+	ref string,
+	country string,
+) (*providers.ProviderTransactionStatus, error) {
 	p, err := e.ready(id, "", country)
 	if err != nil {
 		return nil, err
@@ -58,7 +75,9 @@ func (e *RuntimeProviderExecutor) QueryBalance(ctx context.Context, id, country 
 		}
 		country = p.Countries[0]
 	}
-	return execute(ctx, e, p, "balance", func(c context.Context) (*providers.ProviderBalance, error) { return p.Adapter.QueryBalance(c, country) })
+	return execute(ctx, e, p, "balance", func(c context.Context) (*providers.ProviderBalance, error) {
+		return p.Adapter.QueryBalance(c, country)
+	})
 }
 
 func (e *RuntimeProviderExecutor) Health(ctx context.Context, id string) error {
@@ -66,11 +85,18 @@ func (e *RuntimeProviderExecutor) Health(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	_, err = execute(ctx, e, p, "health", func(c context.Context) (struct{}, error) { return struct{}{}, p.Adapter.HealthCheck(c) })
+	_, err = execute(ctx, e, p, "health", func(c context.Context) (struct{}, error) {
+		return struct{}{}, p.Adapter.HealthCheck(c)
+	})
 	return err
 }
 
-func (e *RuntimeProviderExecutor) VerifyWebhook(ctx context.Context, id string, payload []byte, headers map[string]string) (*providers.ProviderWebhookEvent, error) {
+func (e *RuntimeProviderExecutor) VerifyWebhook(
+	ctx context.Context,
+	id string,
+	payload []byte,
+	headers map[string]string,
+) (*providers.ProviderWebhookEvent, error) {
 	p, err := e.ready(id, "", "")
 	if err != nil {
 		return nil, err
@@ -97,7 +123,13 @@ func (e *RuntimeProviderExecutor) ready(id, service, country string) (*RuntimePr
 	return p, nil
 }
 
-func execute[T any](ctx context.Context, e *RuntimeProviderExecutor, p *RuntimeProvider, op string, call func(context.Context) (T, error)) (T, error) {
+func execute[T any](
+	ctx context.Context,
+	e *RuntimeProviderExecutor,
+	p *RuntimeProvider,
+	op string,
+	call func(context.Context) (T, error),
+) (T, error) {
 	var zero T
 	if err := p.breaker.before(time.Now()); err != nil {
 		return zero, err
@@ -111,7 +143,12 @@ func execute[T any](ctx context.Context, e *RuntimeProviderExecutor, p *RuntimeP
 		breakerErr = nil // Caller cancellation is not a provider failure.
 	}
 	p.breaker.after(time.Now(), breakerErr)
-	attrs := []any{slog.String("provider", p.ProviderCode), slog.String("provider_account_id", p.AccountID), slog.String("operation", op), slog.Int64("duration_ms", time.Since(start).Milliseconds())}
+	attrs := []any{
+		slog.String("provider", p.ProviderCode),
+		slog.String("provider_account_id", p.AccountID),
+		slog.String("operation", op),
+		slog.Int64("duration_ms", time.Since(start).Milliseconds()),
+	}
 	if err != nil {
 		attrs = append(attrs, slog.String("error", providers.Redact(err.Error())))
 		e.runtime.logger.Warn("provider operation failed", attrs...)

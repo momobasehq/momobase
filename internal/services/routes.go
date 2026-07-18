@@ -23,7 +23,14 @@ type RouteAdminService struct {
 func NewRouteAdminService(db *gorm.DB, audit *AuditService) *RouteAdminService {
 	return &RouteAdminService{db, audit}
 }
-func (s *RouteAdminService) Create(actor *domain.AdminUser, service, method, accountID string, priority int, active bool) (*domain.PaymentRoute, error) {
+func (s *RouteAdminService) Create(
+	actor *domain.AdminUser,
+	service string,
+	method string,
+	accountID string,
+	priority int,
+	active bool,
+) (*domain.PaymentRoute, error) {
 	if service != domain.ServiceCollection && service != domain.ServiceDisbursement {
 		return nil, errors.New("invalid service_type")
 	}
@@ -37,7 +44,14 @@ func (s *RouteAdminService) Create(actor *domain.AdminUser, service, method, acc
 	if priority < 1 {
 		priority = 1
 	}
-	route := &domain.PaymentRoute{BaseModel: domain.BaseModel{ID: platform.NewID("route")}, ServiceType: service, PaymentMethod: method, ProviderAccountID: accountID, Priority: priority, Active: active}
+	route := &domain.PaymentRoute{
+		BaseModel:         domain.BaseModel{ID: platform.NewID("route")},
+		ServiceType:       service,
+		PaymentMethod:     method,
+		ProviderAccountID: accountID,
+		Priority:          priority,
+		Active:            active,
+	}
 	if err := s.db.Create(route).Error; err != nil {
 		return nil, err
 	}
@@ -48,10 +62,23 @@ func (s *RouteAdminService) Update(actor *domain.AdminUser, id string, priority 
 	if priority < 1 {
 		return errors.New("priority must be at least 1")
 	}
-	if err := store.Affected(s.db.Model(&domain.PaymentRoute{}).Where("id = ?", id).Updates(map[string]any{"priority": priority, "active": active})); err != nil {
+	if err := store.Affected(
+		s.db.Model(&domain.PaymentRoute{}).
+			Where("id = ?", id).
+			Updates(map[string]any{"priority": priority, "active": active}),
+	); err != nil {
 		return err
 	}
-	s.audit.RecordBestEffort(actorID(actor), "admin", "route.updated", "payment_route", id, map[string]any{"priority": priority, "active": active}, "", "")
+	s.audit.RecordBestEffort(
+		actorID(actor),
+		"admin",
+		"route.updated",
+		"payment_route",
+		id,
+		map[string]any{"priority": priority, "active": active},
+		"",
+		"",
+	)
 	return nil
 }
 
@@ -74,7 +101,15 @@ func (e *RouteEngine) SelectProvider(ctx context.Context, service, method, count
 		return nil, err
 	}
 	var routes []domain.PaymentRoute
-	if err := e.db.WithContext(ctx).Where("active = ? AND service_type = ? AND payment_method = ?", true, service, method).Order("priority asc, created_at asc").Find(&routes).Error; err != nil {
+	if err := e.db.WithContext(ctx).
+		Where(
+			"active = ? AND service_type = ? AND payment_method = ?",
+			true,
+			service,
+			method,
+		).
+		Order("priority asc, created_at asc").
+		Find(&routes).Error; err != nil {
 		return nil, err
 	}
 	for _, route := range routes {
@@ -86,7 +121,9 @@ func (e *RouteEngine) SelectProvider(ctx context.Context, service, method, count
 }
 func (e *RouteEngine) candidate(ctx context.Context, route domain.PaymentRoute, service, method, country string) (*SelectedProvider, bool) {
 	var account domain.ProviderAccount
-	if e.db.WithContext(ctx).Where("id = ? AND active = ?", route.ProviderAccountID, true).First(&account).Error != nil || !slices.Contains(account.Countries, country) {
+	if e.db.WithContext(ctx).
+		Where("id = ? AND active = ?", route.ProviderAccountID, true).
+		First(&account).Error != nil || !slices.Contains(account.Countries, country) {
 		return nil, false
 	}
 	rp, ok := e.runtime.Get(account.ID)
@@ -95,7 +132,10 @@ func (e *RouteEngine) candidate(ctx context.Context, route domain.PaymentRoute, 
 	}
 	var health domain.ProviderHealthSnapshot
 	err := e.db.WithContext(ctx).First(&health, "provider_account_id = ?", account.ID).Error
-	if err == nil && (health.Status == domain.ProviderDown || health.Status == domain.ProviderDisabled || health.Status == domain.ProviderMisconfigured || health.CircuitState == domain.CircuitOpen) {
+	if err == nil && (health.Status == domain.ProviderDown ||
+		health.Status == domain.ProviderDisabled ||
+		health.Status == domain.ProviderMisconfigured ||
+		health.CircuitState == domain.CircuitOpen) {
 		return nil, false
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {

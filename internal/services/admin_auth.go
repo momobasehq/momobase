@@ -19,7 +19,12 @@ type TokenResponse struct {
 	ExpiresIn    int64  `json:"expires_in"`
 }
 
-func issueTokenPair(tokens *platform.TokenManager, claims platform.TokenClaims, accessTTL, refreshTTL time.Duration) (*TokenResponse, platform.TokenClaims, platform.TokenClaims, error) {
+func issueTokenPair(
+	tokens *platform.TokenManager,
+	claims platform.TokenClaims,
+	accessTTL time.Duration,
+	refreshTTL time.Duration,
+) (*TokenResponse, platform.TokenClaims, platform.TokenClaims, error) {
 	claims.TokenType = "access"
 	access, ac, err := tokens.Issue(claims, accessTTL)
 	if err != nil {
@@ -40,7 +45,13 @@ type AdminAuthService struct {
 	tokens                *platform.TokenManager
 }
 
-func NewAdminAuthService(db *gorm.DB, accessTTL, refreshTTL time.Duration, audit *AuditService, tokens *platform.TokenManager) *AdminAuthService {
+func NewAdminAuthService(
+	db *gorm.DB,
+	accessTTL time.Duration,
+	refreshTTL time.Duration,
+	audit *AuditService,
+	tokens *platform.TokenManager,
+) *AdminAuthService {
 	return &AdminAuthService{db, accessTTL, refreshTTL, audit, tokens}
 }
 func (s *AdminAuthService) issue(user *domain.AdminUser, session *domain.AdminSession, ip, ua string) (*TokenResponse, error) {
@@ -50,11 +61,33 @@ func (s *AdminAuthService) issue(user *domain.AdminUser, session *domain.AdminSe
 		return nil, err
 	}
 	now := time.Now().UTC()
-	values := domain.AdminSession{BaseModel: domain.BaseModel{ID: platform.NewID("sess")}, AdminUserID: user.ID, TokenHash: platform.SHA256Hex(ac.TokenID), RefreshTokenHash: platform.SHA256Hex(rc.TokenID), IPAddress: ip, UserAgent: ua, ExpiresAt: now.Add(s.refreshTTL)}
+	values := domain.AdminSession{
+		BaseModel:        domain.BaseModel{ID: platform.NewID("sess")},
+		AdminUserID:      user.ID,
+		TokenHash:        platform.SHA256Hex(ac.TokenID),
+		RefreshTokenHash: platform.SHA256Hex(rc.TokenID),
+		IPAddress:        ip,
+		UserAgent:        ua,
+		ExpiresAt:        now.Add(s.refreshTTL),
+	}
 	if session == nil {
 		err = s.db.Create(&values).Error
 	} else {
-		err = store.Affected(s.db.Model(&domain.AdminSession{}).Where("id = ? AND refresh_token_hash = ?", session.ID, session.RefreshTokenHash).Updates(map[string]any{"token_hash": values.TokenHash, "refresh_token_hash": values.RefreshTokenHash, "ip_address": ip, "user_agent": ua, "expires_at": values.ExpiresAt}))
+		err = store.Affected(
+			s.db.Model(&domain.AdminSession{}).
+				Where(
+					"id = ? AND refresh_token_hash = ?",
+					session.ID,
+					session.RefreshTokenHash,
+				).
+				Updates(map[string]any{
+					"token_hash":         values.TokenHash,
+					"refresh_token_hash": values.RefreshTokenHash,
+					"ip_address":         ip,
+					"user_agent":         ua,
+					"expires_at":         values.ExpiresAt,
+				}),
+		)
 	}
 	return response, err
 }
@@ -75,7 +108,11 @@ func (s *AdminAuthService) IssuePasswordToken(email, password, ip, ua string) (*
 		_ = s.db.Model(&user).Updates(updates).Error
 		return nil, errors.New("invalid credentials")
 	}
-	if err := s.db.Model(&user).Updates(map[string]any{"failed_login_attempts": 0, "locked_until": nil, "last_login_at": &now}).Error; err != nil {
+	if err := s.db.Model(&user).Updates(map[string]any{
+		"failed_login_attempts": 0,
+		"locked_until":          nil,
+		"last_login_at":         &now,
+	}).Error; err != nil {
 		return nil, err
 	}
 	s.audit.RecordBestEffort(user.ID, "admin", "admin.login", "admin_user", user.ID, nil, ip, ua)
@@ -88,7 +125,12 @@ func (s *AdminAuthService) RefreshToken(raw, ip, ua string) (*TokenResponse, err
 	}
 	var session domain.AdminSession
 	now := time.Now().UTC()
-	if s.db.Where("admin_user_id = ? AND refresh_token_hash = ? AND expires_at > ? AND revoked_at IS NULL", claims.SubjectID, platform.SHA256Hex(claims.TokenID), now).First(&session).Error != nil {
+	if s.db.Where(
+		"admin_user_id = ? AND refresh_token_hash = ? AND expires_at > ? AND revoked_at IS NULL",
+		claims.SubjectID,
+		platform.SHA256Hex(claims.TokenID),
+		now,
+	).First(&session).Error != nil {
 		return nil, errors.New("invalid refresh session")
 	}
 	user, err := s.activeUser(claims.SubjectID)
@@ -110,7 +152,12 @@ func (s *AdminAuthService) AuthenticateBearer(raw string) (*domain.AdminUser, er
 		return nil, errors.New("invalid admin token")
 	}
 	var session domain.AdminSession
-	if s.db.Where("admin_user_id = ? AND token_hash = ? AND expires_at > ? AND revoked_at IS NULL", claims.SubjectID, platform.SHA256Hex(claims.TokenID), time.Now().UTC()).First(&session).Error != nil {
+	if s.db.Where(
+		"admin_user_id = ? AND token_hash = ? AND expires_at > ? AND revoked_at IS NULL",
+		claims.SubjectID,
+		platform.SHA256Hex(claims.TokenID),
+		time.Now().UTC(),
+	).First(&session).Error != nil {
 		return nil, errors.New("invalid admin session")
 	}
 	return s.activeUser(claims.SubjectID)
@@ -121,7 +168,13 @@ func (s *AdminAuthService) LogoutBearer(raw, ip, ua string) error {
 		return err
 	}
 	now := time.Now().UTC()
-	err = s.db.Model(&domain.AdminSession{}).Where("admin_user_id = ? AND token_hash = ? AND revoked_at IS NULL", claims.SubjectID, platform.SHA256Hex(claims.TokenID)).Update("revoked_at", &now).Error
+	err = s.db.Model(&domain.AdminSession{}).
+		Where(
+			"admin_user_id = ? AND token_hash = ? AND revoked_at IS NULL",
+			claims.SubjectID,
+			platform.SHA256Hex(claims.TokenID),
+		).
+		Update("revoked_at", &now).Error
 	if err == nil {
 		s.audit.RecordBestEffort(claims.SubjectID, "admin", "admin.logout", "admin_user", claims.SubjectID, nil, ip, ua)
 	}
@@ -152,13 +205,30 @@ func (s *AdminUserService) Create(actor *domain.AdminUser, name, email, password
 		return nil, err
 	}
 	now := time.Now().UTC()
-	user := &domain.AdminUser{BaseModel: domain.BaseModel{ID: platform.NewID("admusr")}, Name: name, Email: email, PasswordHash: hash, Role: role, Status: "active", PasswordChangedAt: &now}
+	user := &domain.AdminUser{
+		BaseModel:         domain.BaseModel{ID: platform.NewID("admusr")},
+		Name:              name,
+		Email:             email,
+		PasswordHash:      hash,
+		Role:              role,
+		Status:            "active",
+		PasswordChangedAt: &now,
+	}
 	actorID := "system"
 	if actor != nil {
 		actorID, user.CreatedBy = actor.ID, actor.ID
 	}
 	if err = s.db.Create(user).Error; err == nil {
-		s.audit.RecordBestEffort(actorID, "admin", "admin.created", "admin_user", user.ID, map[string]any{"email": user.Email, "role": role}, "", "")
+		s.audit.RecordBestEffort(
+			actorID,
+			"admin",
+			"admin.created",
+			"admin_user",
+			user.ID,
+			map[string]any{"email": user.Email, "role": role},
+			"",
+			"",
+		)
 	}
 	return user, err
 }
@@ -175,7 +245,14 @@ func (s *AdminUserService) ChangePassword(actor *domain.AdminUser, id, password 
 	}
 	now := time.Now().UTC()
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := store.Affected(tx.Model(&domain.AdminUser{}).Where("id = ?", id).Updates(map[string]any{"password_hash": hash, "password_changed_at": &now})); err != nil {
+		if err := store.Affected(
+			tx.Model(&domain.AdminUser{}).
+				Where("id = ?", id).
+				Updates(map[string]any{
+					"password_hash":       hash,
+					"password_changed_at": &now,
+				}),
+		); err != nil {
 			return err
 		}
 		return tx.Model(&domain.AdminSession{}).Where("admin_user_id = ? AND revoked_at IS NULL", id).Update("revoked_at", &now).Error

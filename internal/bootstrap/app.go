@@ -82,9 +82,22 @@ func NewApp(cfg Config) (*App, error) {
 
 	audit := services.NewAuditService(db, log)
 
-	adminAuth := services.NewAdminAuthService(db, cfg.Security.AdminAccessTTL, cfg.Security.AdminRefreshTTL, audit, adminTokens)
+	adminAuth := services.NewAdminAuthService(
+		db,
+		cfg.Security.AdminAccessTTL,
+		cfg.Security.AdminRefreshTTL,
+		audit,
+		adminTokens,
+	)
 	adminUsers := services.NewAdminUserService(db, audit)
-	appAuth := services.NewAppAuthService(db, cfg.Security.AppClientIDPrefix, cfg.Security.AppClientSecretPrefix, cfg.Security.AppAccessTTL, cfg.Security.AppRefreshTTL, appTokens)
+	appAuth := services.NewAppAuthService(
+		db,
+		cfg.Security.AppClientIDPrefix,
+		cfg.Security.AppClientSecretPrefix,
+		cfg.Security.AppAccessTTL,
+		cfg.Security.AppRefreshTTL,
+		appTokens,
+	)
 	apps := services.NewAppService(db, appAuth, audit)
 	providerAdmin := services.NewProviderAdminService(db, audit, enc, registry, runtime)
 	routeAdmin := services.NewRouteAdminService(db, audit)
@@ -95,13 +108,53 @@ func NewApp(cfg Config) (*App, error) {
 	recon := services.NewReconciliationService(db, runtime, webhooks, log)
 	manager := workers.NewManager(log, workerTasks(cfg, db, health, recon)...)
 
-	info := adminh.SystemInfo{AppName: cfg.App.Name, AppEnv: cfg.App.Env, DBType: cfg.DB.Type, Addr: cfg.App.Addr, WorkersEnabled: cfg.Workers.Enabled, WorkerNames: manager.Names()}
+	info := adminh.SystemInfo{
+		AppName:        cfg.App.Name,
+		AppEnv:         cfg.App.Env,
+		DBType:         cfg.DB.Type,
+		Addr:           cfg.App.Addr,
+		WorkersEnabled: cfg.Workers.Enabled,
+		WorkerNames:    manager.Names(),
+	}
 
 	publicHandler := publich.NewHandler(payments, db)
-	adminHandler := adminh.NewHandler(db, adminAuth, adminUsers, providerAdmin, routeAdmin, apps, runtime, audit, info)
-	router := httpx.NewRouter(httpx.RouterDeps{Logger: log, AdminAuth: adminAuth, AppAuth: appAuth, AdminFrontendEnabled: cfg.Features.AdminFrontendEnabled, CORSAllowedOrigins: cfg.App.CORSAllowedOrigins, Public: publicHandler, Admin: adminHandler, Webhooks: webhookh.NewHandler(webhooks)})
+	adminHandler := adminh.NewHandler(
+		db,
+		adminAuth,
+		adminUsers,
+		providerAdmin,
+		routeAdmin,
+		apps,
+		runtime,
+		audit,
+		info,
+	)
+	router := httpx.NewRouter(httpx.RouterDeps{
+		Logger:               log,
+		AdminAuth:            adminAuth,
+		AppAuth:              appAuth,
+		AdminFrontendEnabled: cfg.Features.AdminFrontendEnabled,
+		CORSAllowedOrigins:   cfg.App.CORSAllowedOrigins,
+		Public:               publicHandler,
+		Admin:                adminHandler,
+		Webhooks:             webhookh.NewHandler(webhooks),
+	})
 
-	app := &App{Logger: log, DB: db, Runtime: runtime, Workers: manager, Server: &http.Server{Addr: cfg.App.Addr, Handler: router, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 65 * time.Second, WriteTimeout: 65 * time.Second, IdleTimeout: 120 * time.Second}, AdminUsers: adminUsers}
+	app := &App{
+		Logger:  log,
+		DB:      db,
+		Runtime: runtime,
+		Workers: manager,
+		Server: &http.Server{
+			Addr:              cfg.App.Addr,
+			Handler:           router,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       65 * time.Second,
+			WriteTimeout:      65 * time.Second,
+			IdleTimeout:       120 * time.Second,
+		},
+		AdminUsers: adminUsers,
+	}
 	databaseOwned = false
 	return app, nil
 }
@@ -112,10 +165,20 @@ func workerTasks(c Config, db *gorm.DB, health *services.HealthService, recon *s
 	}
 	tasks := make([]workers.Task, 0, 3)
 	if c.Workers.HealthEnabled {
-		tasks = append(tasks, workers.Task{Name: "health", Interval: c.Workers.HealthInterval, Run: health.CheckAll})
+		tasks = append(tasks, workers.Task{
+			Name:     "health",
+			Interval: c.Workers.HealthInterval,
+			Run:      health.CheckAll,
+		})
 	}
 	if c.Workers.ReconciliationEnabled {
-		tasks = append(tasks, workers.Task{Name: "reconciliation", Interval: c.Workers.ReconciliationInterval, Run: func(ctx context.Context) error { return recon.RunOnce(ctx, 100) }})
+		tasks = append(tasks, workers.Task{
+			Name:     "reconciliation",
+			Interval: c.Workers.ReconciliationInterval,
+			Run: func(ctx context.Context) error {
+				return recon.RunOnce(ctx, 100)
+			},
+		})
 	}
 	if c.Workers.CleanupEnabled {
 		tasks = append(tasks, workers.Task{Name: "cleanup", Interval: c.Workers.CleanupInterval, Run: func(ctx context.Context) error {
@@ -224,6 +287,15 @@ func (a *App) SeedAdmin(email, password, name string) error {
 	if email == "" || password == "" {
 		return errors.New("email and password are required")
 	}
-	_, err := a.AdminUsers.Create(&domain.AdminUser{BaseModel: domain.BaseModel{ID: "system"}, Role: "super_admin"}, name, email, password, "super_admin")
+	_, err := a.AdminUsers.Create(
+		&domain.AdminUser{
+			BaseModel: domain.BaseModel{ID: "system"},
+			Role:      "super_admin",
+		},
+		name,
+		email,
+		password,
+		"super_admin",
+	)
 	return err
 }

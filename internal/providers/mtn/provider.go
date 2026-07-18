@@ -17,11 +17,20 @@ import (
 
 const baseURL = "https://sandbox.momodeveloper.mtn.com"
 
-type product struct{ name, key, user, secret string }
+type product struct {
+	name   string
+	key    string
+	user   string
+	secret string
+}
 type Config struct {
-	BaseURL, TargetEnvironment, Currency, CallbackURL string
-	Collection, Disbursement                          product
-	Timeout                                           time.Duration
+	BaseURL           string
+	TargetEnvironment string
+	Currency          string
+	CallbackURL       string
+	Collection        product
+	Disbursement      product
+	Timeout           time.Duration
 }
 type Provider struct {
 	client *http.Client
@@ -29,7 +38,9 @@ type Provider struct {
 	tokens map[string]*providers.TokenCache
 }
 
-func New(*slog.Logger) providers.PaymentProvider { return &Provider{} }
+func New(*slog.Logger) providers.PaymentProvider {
+	return &Provider{}
+}
 func (p *Provider) Capabilities() []providers.Capability {
 	out := make([]providers.Capability, 0, 2)
 	if p.cfg.Collection.valid() {
@@ -68,7 +79,13 @@ func (p *Provider) Collect(ctx context.Context, req providers.PaymentRequest) (*
 func (p *Provider) Disburse(ctx context.Context, req providers.PaymentRequest) (*providers.ProviderPaymentResponse, error) {
 	return p.payment(ctx, p.cfg.Disbursement, "/disbursement/v1_0/transfer", "payee", req)
 }
-func (p *Provider) payment(ctx context.Context, item product, path, party string, req providers.PaymentRequest) (*providers.ProviderPaymentResponse, error) {
+func (p *Provider) payment(
+	ctx context.Context,
+	item product,
+	path string,
+	party string,
+	req providers.PaymentRequest,
+) (*providers.ProviderPaymentResponse, error) {
 	if !item.valid() {
 		return nil, fmt.Errorf("mtn %s credentials are incomplete", item.name)
 	}
@@ -77,11 +94,29 @@ func (p *Provider) payment(ctx context.Context, item product, path, party string
 	if len(note) > 160 {
 		note = note[:160]
 	}
-	body := map[string]any{"amount": providers.FormatAmountMinor(req.Amount, currency), "currency": currency, "externalId": req.Reference, party: map[string]string{"partyIdType": "MSISDN", "partyId": req.Phone}, "payerMessage": note, "payeeNote": note}
+	body := map[string]any{
+		"amount":     providers.FormatAmountMinor(req.Amount, currency),
+		"currency":   currency,
+		"externalId": req.Reference,
+		party: map[string]string{
+			"partyIdType": "MSISDN",
+			"partyId":     req.Phone,
+		},
+		"payerMessage": note,
+		"payeeNote":    note,
+	}
 	if err := p.request(ctx, item, http.MethodPost, path, ref, body, nil); err != nil {
 		return nil, err
 	}
-	return &providers.ProviderPaymentResponse{ProviderReference: ref, Status: domain.TxProcessing, Message: "MTN request accepted", Raw: map[string]any{"mtn_reference_id": ref, "external_id": req.Reference}}, nil
+	return &providers.ProviderPaymentResponse{
+		ProviderReference: ref,
+		Status:            domain.TxProcessing,
+		Message:           "MTN request accepted",
+		Raw: map[string]any{
+			"mtn_reference_id": ref,
+			"external_id":      req.Reference,
+		},
+	}, nil
 }
 func (p *Provider) QueryTransaction(ctx context.Context, ref, _ string) (*providers.ProviderTransactionStatus, error) {
 	if ref == "" {
@@ -91,7 +126,10 @@ func (p *Provider) QueryTransaction(ctx context.Context, ref, _ string) (*provid
 	for _, entry := range []struct {
 		product
 		path string
-	}{{p.cfg.Collection, "/collection/v1_0/requesttopay/" + ref}, {p.cfg.Disbursement, "/disbursement/v1_0/transfer/" + ref}} {
+	}{
+		{p.cfg.Collection, "/collection/v1_0/requesttopay/" + ref},
+		{p.cfg.Disbursement, "/disbursement/v1_0/transfer/" + ref},
+	} {
 		var body map[string]any
 		if !entry.valid() {
 			continue
@@ -101,7 +139,11 @@ func (p *Provider) QueryTransaction(ctx context.Context, ref, _ string) (*provid
 			continue
 		}
 		status := providers.Path(body, "status")
-		return &providers.ProviderTransactionStatus{ProviderReference: ref, Status: providers.PaymentStatus(status), Message: providers.First(status, "MTN transaction status")}, nil
+		return &providers.ProviderTransactionStatus{
+			ProviderReference: ref,
+			Status:            providers.PaymentStatus(status),
+			Message:           providers.First(status, "MTN transaction status"),
+		}, nil
 	}
 	return nil, providers.FirstError(last, errors.New("mtn credentials are incomplete"))
 }
@@ -110,7 +152,10 @@ func (p *Provider) QueryBalance(ctx context.Context, _ string) (*providers.Provi
 	for _, entry := range []struct {
 		product
 		path string
-	}{{p.cfg.Collection, "/collection/v1_0/account/balance"}, {p.cfg.Disbursement, "/disbursement/v1_0/account/balance"}} {
+	}{
+		{p.cfg.Collection, "/collection/v1_0/account/balance"},
+		{p.cfg.Disbursement, "/disbursement/v1_0/account/balance"},
+	} {
 		var body map[string]any
 		if !entry.valid() {
 			continue
@@ -135,14 +180,44 @@ func (*Provider) VerifyWebhook(_ context.Context, payload []byte, headers map[st
 	if err != nil {
 		return nil, err
 	}
-	return &providers.ProviderWebhookEvent{ProviderReference: providers.First(providers.Path(body, "referenceId"), providers.Path(body, "reference_id"), providers.Path(body, "provider_reference"), providers.Path(body, "transactionId"), providers.Path(body, "financialTransactionId"), headers["X-Reference-Id"]), Status: providers.PaymentStatus(providers.Path(body, "status")), EventType: "mtn.payment.updated", ExternalReference: providers.First(providers.Path(body, "externalId"), providers.Path(body, "external_id"), providers.Path(body, "data.externalId")), Amount: amount, Currency: currency, Phone: providers.First(providers.Path(body, "payer.partyId"), providers.Path(body, "payee.partyId"), providers.Path(body, "data.payer.partyId"), providers.Path(body, "data.payee.partyId")), Raw: body}, nil
+	return &providers.ProviderWebhookEvent{
+		ProviderReference: providers.First(
+			providers.Path(body, "referenceId"),
+			providers.Path(body, "reference_id"),
+			providers.Path(body, "provider_reference"),
+			providers.Path(body, "transactionId"),
+			providers.Path(body, "financialTransactionId"),
+			headers["X-Reference-Id"],
+		),
+		Status:    providers.PaymentStatus(providers.Path(body, "status")),
+		EventType: "mtn.payment.updated",
+		ExternalReference: providers.First(
+			providers.Path(body, "externalId"),
+			providers.Path(body, "external_id"),
+			providers.Path(body, "data.externalId"),
+		),
+		Amount:   amount,
+		Currency: currency,
+		Phone: providers.First(
+			providers.Path(body, "payer.partyId"),
+			providers.Path(body, "payee.partyId"),
+			providers.Path(body, "data.payer.partyId"),
+			providers.Path(body, "data.payee.partyId"),
+		),
+		Raw: body,
+	}, nil
 }
 func (p *Provider) request(ctx context.Context, item product, method, path, ref string, in, out any) error {
 	access, err := p.token(ctx, item)
 	if err != nil {
 		return err
 	}
-	headers := map[string]string{"Authorization": "Bearer " + access, "Ocp-Apim-Subscription-Key": item.key, "X-Target-Environment": p.cfg.TargetEnvironment, "X-Reference-Id": ref}
+	headers := map[string]string{
+		"Authorization":             "Bearer " + access,
+		"Ocp-Apim-Subscription-Key": item.key,
+		"X-Target-Environment":      p.cfg.TargetEnvironment,
+		"X-Reference-Id":            ref,
+	}
 	if ref != "" {
 		headers["X-Callback-Url"] = p.cfg.CallbackURL
 	}
@@ -153,7 +228,12 @@ func (p *Provider) token(ctx context.Context, item product) (string, error) {
 		return "", fmt.Errorf("mtn %s credentials are incomplete", item.name)
 	}
 	return p.tokens[item.name].Get(func() (string, time.Duration, error) {
-		headers := map[string]string{"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(item.user+":"+item.secret)), "Ocp-Apim-Subscription-Key": item.key}
+		headers := map[string]string{
+			"Authorization": "Basic " + base64.StdEncoding.EncodeToString(
+				[]byte(item.user+":"+item.secret),
+			),
+			"Ocp-Apim-Subscription-Key": item.key,
+		}
 		var out struct {
 			AccessToken string `json:"access_token"`
 			ExpiresIn   int    `json:"expires_in"`
@@ -167,18 +247,33 @@ func (p *Provider) token(ctx context.Context, item product) (string, error) {
 		return out.AccessToken, time.Duration(out.ExpiresIn) * time.Second, nil
 	})
 }
-func (p product) valid() bool { return p.user != "" && p.secret != "" && p.key != "" }
+func (p product) valid() bool {
+	return p.user != "" && p.secret != "" && p.key != ""
+}
 func parseConfig(raw providers.ProviderConfig) (Config, error) {
 	cfg := Config{BaseURL: baseURL, TargetEnvironment: "sandbox", Currency: "UGX", Timeout: 30 * time.Second}
 	cfg.BaseURL = strings.TrimRight(providers.First(providers.String(raw, "base_url"), cfg.BaseURL), "/")
 	cfg.TargetEnvironment = providers.First(providers.String(raw, "target_environment"), cfg.TargetEnvironment)
-	cfg.Currency, cfg.CallbackURL = strings.ToUpper(providers.First(providers.String(raw, "currency"), cfg.Currency)), providers.String(raw, "callback_url")
-	cfg.Collection = product{"collection", providers.String(raw, "collection_subscription_key"), providers.String(raw, "collection_api_user"), providers.String(raw, "collection_api_key")}
-	cfg.Disbursement = product{"disbursement", providers.String(raw, "disbursement_subscription_key"), providers.String(raw, "disbursement_api_user"), providers.String(raw, "disbursement_api_key")}
+	cfg.Currency, cfg.CallbackURL =
+		strings.ToUpper(providers.First(providers.String(raw, "currency"), cfg.Currency)),
+		providers.String(raw, "callback_url")
+	cfg.Collection = product{
+		"collection",
+		providers.String(raw, "collection_subscription_key"),
+		providers.String(raw, "collection_api_user"),
+		providers.String(raw, "collection_api_key"),
+	}
+	cfg.Disbursement = product{
+		"disbursement",
+		providers.String(raw, "disbursement_subscription_key"),
+		providers.String(raw, "disbursement_api_user"),
+		providers.String(raw, "disbursement_api_key"),
+	}
 	if seconds := providers.Int(raw, "timeout_seconds"); seconds > 0 {
 		cfg.Timeout = time.Duration(seconds) * time.Second
 	}
-	if !strings.HasPrefix(cfg.BaseURL, "https://") && !(strings.HasPrefix(cfg.BaseURL, "http://") && providers.Bool(raw, "allow_insecure_http")) {
+	if !strings.HasPrefix(cfg.BaseURL, "https://") &&
+		!(strings.HasPrefix(cfg.BaseURL, "http://") && providers.Bool(raw, "allow_insecure_http")) {
 		return cfg, errors.New("mtn base_url must use https unless allow_insecure_http=true")
 	}
 	return cfg, nil

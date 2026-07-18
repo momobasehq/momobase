@@ -46,11 +46,24 @@ func (s *HealthService) save(ctx context.Context, id string, latency time.Durati
 	if snap.ProviderAccountID == "" {
 		snap.ProviderAccountID, snap.CreatedAt = id, now
 	}
-	snap.LastCheckedAt, snap.LatencyMs, snap.UpdatedAt, snap.CircuitState = &now, int(latency.Milliseconds()), now, s.runtime.CircuitState(id)
+	snap.LastCheckedAt, snap.LatencyMs, snap.UpdatedAt, snap.CircuitState =
+		&now,
+		int(latency.Milliseconds()),
+		now,
+		s.runtime.CircuitState(id)
 	if cause == nil {
-		snap.Status, snap.LastSuccessAt, snap.ConsecutiveFailures, snap.LastErrorCode, snap.LastErrorMessage = domain.ProviderHealthy, &now, 0, "", ""
+		snap.Status, snap.LastSuccessAt, snap.ConsecutiveFailures, snap.LastErrorCode, snap.LastErrorMessage =
+			domain.ProviderHealthy,
+			&now,
+			0,
+			"",
+			""
 	} else {
-		snap.LastFailureAt, snap.ConsecutiveFailures, snap.LastErrorCode, snap.LastErrorMessage = &now, snap.ConsecutiveFailures+1, "health_check_failed", providers.Redact(cause.Error())
+		snap.LastFailureAt, snap.ConsecutiveFailures, snap.LastErrorCode, snap.LastErrorMessage =
+			&now,
+			snap.ConsecutiveFailures+1,
+			"health_check_failed",
+			providers.Redact(cause.Error())
 		snap.Status = domain.ProviderDegraded
 		if snap.ConsecutiveFailures >= 3 || snap.CircuitState == domain.CircuitOpen {
 			snap.Status = domain.ProviderDown

@@ -21,7 +21,12 @@ type ReconciliationService struct {
 	logger   *slog.Logger
 }
 
-func NewReconciliationService(db *gorm.DB, runtime *ProviderRuntimeManager, webhook *WebhookService, logger *slog.Logger) *ReconciliationService {
+func NewReconciliationService(
+	db *gorm.DB,
+	runtime *ProviderRuntimeManager,
+	webhook *WebhookService,
+	logger *slog.Logger,
+) *ReconciliationService {
 	return &ReconciliationService{db, NewProviderExecutor(runtime), webhook, logger}
 }
 func (s *ReconciliationService) RunOnce(ctx context.Context, limit int) error {
@@ -30,7 +35,15 @@ func (s *ReconciliationService) RunOnce(ctx context.Context, limit int) error {
 	}
 	var rows []domain.Transaction
 	now := time.Now().UTC()
-	if err := s.db.WithContext(ctx).Where("status IN ? AND provider_reference <> '' AND (next_reconcile_at IS NULL OR next_reconcile_at <= ?)", []string{domain.TxPending, domain.TxProcessing, domain.TxUnknown}, now).Order("created_at asc").Limit(limit).Find(&rows).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Where(
+			"status IN ? AND provider_reference <> '' AND (next_reconcile_at IS NULL OR next_reconcile_at <= ?)",
+			[]string{domain.TxPending, domain.TxProcessing, domain.TxUnknown},
+			now,
+		).
+		Order("created_at asc").
+		Limit(limit).
+		Find(&rows).Error; err != nil {
 		return err
 	}
 	var errs []error
@@ -68,7 +81,12 @@ func (s *ReconciliationService) reconcile(ctx context.Context, row *domain.Trans
 			return err
 		}
 		now := time.Now().UTC()
-		updates := map[string]any{"status": tx.Status, "last_reconciled_at": &now, "reconciliation_attempts": gorm.Expr("reconciliation_attempts + 1"), "next_reconcile_at": nil}
+		updates := map[string]any{
+			"status":                  tx.Status,
+			"last_reconciled_at":      &now,
+			"reconciliation_attempts": gorm.Expr("reconciliation_attempts + 1"),
+			"next_reconcile_at":       nil,
+		}
 		if !terminal(tx.Status) {
 			next := now.Add(backoff(tx.ReconciliationAttempts + 1))
 			updates["next_reconcile_at"] = &next
@@ -78,7 +96,11 @@ func (s *ReconciliationService) reconcile(ctx context.Context, row *domain.Trans
 			return updated.Error
 		}
 		var attempt domain.TransactionAttempt
-		if err := db.Where("transaction_id = ? AND provider_account_id = ?", tx.ID, tx.SelectedProviderAccountID).Order("created_at desc").First(&attempt).Error; err != nil {
+		if err := db.Where(
+			"transaction_id = ? AND provider_account_id = ?",
+			tx.ID,
+			tx.SelectedProviderAccountID,
+		).Order("created_at desc").First(&attempt).Error; err != nil {
 			return err
 		}
 		attemptUpdates := map[string]any{"status": tx.Status, "error_code": "", "error_message": ""}
@@ -99,7 +121,14 @@ func (s *ReconciliationService) deferRetry(ctx context.Context, row *domain.Tran
 			return err
 		}
 		next := now.Add(backoff(tx.ReconciliationAttempts + 1))
-		result := db.Model(&domain.Transaction{}).Where("id = ? AND status = ?", tx.ID, previous).Updates(map[string]any{"status": tx.Status, "last_reconciled_at": &now, "next_reconcile_at": &next, "reconciliation_attempts": gorm.Expr("reconciliation_attempts + 1")})
+		result := db.Model(&domain.Transaction{}).
+			Where("id = ? AND status = ?", tx.ID, previous).
+			Updates(map[string]any{
+				"status":                  tx.Status,
+				"last_reconciled_at":      &now,
+				"next_reconcile_at":       &next,
+				"reconciliation_attempts": gorm.Expr("reconciliation_attempts + 1"),
+			})
 		if result.Error != nil || result.RowsAffected == 0 {
 			return result.Error
 		}

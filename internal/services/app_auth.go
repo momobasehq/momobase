@@ -25,11 +25,25 @@ type AppAuthService struct {
 	tokens                     *platform.TokenManager
 }
 
-func NewAppAuthService(db *gorm.DB, clientPrefix, secretPrefix string, accessTTL, refreshTTL time.Duration, tokens *platform.TokenManager) *AppAuthService {
+func NewAppAuthService(
+	db *gorm.DB,
+	clientPrefix string,
+	secretPrefix string,
+	accessTTL time.Duration,
+	refreshTTL time.Duration,
+	tokens *platform.TokenManager,
+) *AppAuthService {
 	return &AppAuthService{db, clientPrefix, secretPrefix, accessTTL, refreshTTL, tokens}
 }
 func (s *AppAuthService) claims(id *AppIdentity, kind string) platform.TokenClaims {
-	return platform.TokenClaims{SubjectType: "app", SubjectID: id.App.ID, CredentialID: id.Credential.ID, Scopes: id.Credential.Scopes, TokenType: kind, Extra: map[string]string{"client_id": id.Credential.ClientID}}
+	return platform.TokenClaims{
+		SubjectType:  "app",
+		SubjectID:    id.App.ID,
+		CredentialID: id.Credential.ID,
+		Scopes:       id.Credential.Scopes,
+		TokenType:    kind,
+		Extra:        map[string]string{"client_id": id.Credential.ClientID},
+	}
 }
 func (s *AppAuthService) issue(id *AppIdentity, session *domain.AppSession) (*TokenResponse, error) {
 	response, ac, rc, err := issueTokenPair(s.tokens, s.claims(id, "access"), s.accessTTL, s.refreshTTL)
@@ -37,13 +51,32 @@ func (s *AppAuthService) issue(id *AppIdentity, session *domain.AppSession) (*To
 		return nil, err
 	}
 	now := time.Now().UTC()
-	values := domain.AppSession{BaseModel: domain.BaseModel{ID: platform.NewID("appsess")}, AppID: id.App.ID, CredentialID: id.Credential.ID, AccessTokenHash: platform.SHA256Hex(ac.TokenID), RefreshTokenHash: platform.SHA256Hex(rc.TokenID), ExpiresAt: now.Add(s.refreshTTL)}
+	values := domain.AppSession{
+		BaseModel:        domain.BaseModel{ID: platform.NewID("appsess")},
+		AppID:            id.App.ID,
+		CredentialID:     id.Credential.ID,
+		AccessTokenHash:  platform.SHA256Hex(ac.TokenID),
+		RefreshTokenHash: platform.SHA256Hex(rc.TokenID),
+		ExpiresAt:        now.Add(s.refreshTTL),
+	}
 	err = s.db.Transaction(func(db *gorm.DB) error {
 		if session == nil {
 			if err := db.Create(&values).Error; err != nil {
 				return err
 			}
-		} else if err := store.Affected(db.Model(&domain.AppSession{}).Where("id = ? AND refresh_token_hash = ?", session.ID, session.RefreshTokenHash).Updates(map[string]any{"access_token_hash": values.AccessTokenHash, "refresh_token_hash": values.RefreshTokenHash, "expires_at": values.ExpiresAt})); err != nil {
+		} else if err := store.Affected(
+			db.Model(&domain.AppSession{}).
+				Where(
+					"id = ? AND refresh_token_hash = ?",
+					session.ID,
+					session.RefreshTokenHash,
+				).
+				Updates(map[string]any{
+					"access_token_hash":  values.AccessTokenHash,
+					"refresh_token_hash": values.RefreshTokenHash,
+					"expires_at":         values.ExpiresAt,
+				}),
+		); err != nil {
 			return err
 		}
 		return store.Affected(db.Model(&domain.AppCredential{}).Where("id = ?", id.Credential.ID).Update("last_used_at", &now))
@@ -63,7 +96,13 @@ func (s *AppAuthService) RefreshToken(raw string) (*TokenResponse, error) {
 		return nil, errors.New("invalid app refresh token")
 	}
 	var session domain.AppSession
-	if s.db.Where("app_id = ? AND credential_id = ? AND refresh_token_hash = ? AND expires_at > ? AND revoked_at IS NULL", claims.SubjectID, claims.CredentialID, platform.SHA256Hex(claims.TokenID), time.Now().UTC()).First(&session).Error != nil {
+	if s.db.Where(
+		"app_id = ? AND credential_id = ? AND refresh_token_hash = ? AND expires_at > ? AND revoked_at IS NULL",
+		claims.SubjectID,
+		claims.CredentialID,
+		platform.SHA256Hex(claims.TokenID),
+		time.Now().UTC(),
+	).First(&session).Error != nil {
 		return nil, errors.New("invalid app refresh session")
 	}
 	id, err := s.identity(claims.SubjectID, claims.CredentialID)
@@ -77,7 +116,8 @@ func (s *AppAuthService) ValidateClientCredentials(clientID, secret string) (*Ap
 		return nil, errors.New("missing client credentials")
 	}
 	var cred domain.AppCredential
-	if s.db.Where("client_id = ? AND status = ?", clientID, "active").First(&cred).Error != nil || !platform.VerifyPassword(cred.ClientSecretHash, secret) {
+	if s.db.Where("client_id = ? AND status = ?", clientID, "active").
+		First(&cred).Error != nil || !platform.VerifyPassword(cred.ClientSecretHash, secret) {
 		return nil, errors.New("invalid client credentials")
 	}
 	return s.fromCredential(&cred)
@@ -88,14 +128,22 @@ func (s *AppAuthService) AuthenticateBearer(raw string) (*AppIdentity, error) {
 		return nil, errors.New("invalid app token")
 	}
 	var session domain.AppSession
-	if s.db.Where("app_id = ? AND credential_id = ? AND access_token_hash = ? AND expires_at > ? AND revoked_at IS NULL", claims.SubjectID, claims.CredentialID, platform.SHA256Hex(claims.TokenID), time.Now().UTC()).First(&session).Error != nil {
+	if s.db.Where(
+		"app_id = ? AND credential_id = ? AND access_token_hash = ? AND expires_at > ? AND revoked_at IS NULL",
+		claims.SubjectID,
+		claims.CredentialID,
+		platform.SHA256Hex(claims.TokenID),
+		time.Now().UTC(),
+	).First(&session).Error != nil {
 		return nil, errors.New("invalid app session")
 	}
 	return s.identity(claims.SubjectID, claims.CredentialID)
 }
 func (s *AppAuthService) identity(appID, credentialID string) (*AppIdentity, error) {
 	var cred domain.AppCredential
-	if appID == "" || credentialID == "" || s.db.Where("id = ? AND app_id = ? AND status = ?", credentialID, appID, "active").First(&cred).Error != nil {
+	if appID == "" || credentialID == "" ||
+		s.db.Where("id = ? AND app_id = ? AND status = ?", credentialID, appID, "active").
+			First(&cred).Error != nil {
 		return nil, errors.New("app credential inactive")
 	}
 	return s.fromCredential(&cred)
@@ -141,7 +189,13 @@ func (s *AppService) CreateApp(actor *domain.AdminUser, name, description, env s
 	if name == "" || len(name) > 255 || len(description) > 1000 || env != "sandbox" && env != "production" {
 		return nil, errors.New("invalid app name, description, or environment")
 	}
-	app := &domain.App{BaseModel: domain.BaseModel{ID: platform.NewID("app")}, Name: name, Description: description, Environment: env, Status: "active"}
+	app := &domain.App{
+		BaseModel:   domain.BaseModel{ID: platform.NewID("app")},
+		Name:        name,
+		Description: description,
+		Environment: env,
+		Status:      "active",
+	}
 	if actor != nil {
 		app.CreatedBy = actor.ID
 	}
@@ -213,7 +267,16 @@ func (s *AppService) CreateCredential(actor *domain.AdminUser, appID, name, scop
 	if err != nil {
 		return nil, err
 	}
-	cred := domain.AppCredential{BaseModel: domain.BaseModel{ID: platform.NewID("cred")}, AppID: appID, Name: name, ClientID: platform.NewID(s.auth.clientPrefix), ClientSecretHash: hash, Status: "active", Scopes: scopes, ExpiresAt: expires}
+	cred := domain.AppCredential{
+		BaseModel:        domain.BaseModel{ID: platform.NewID("cred")},
+		AppID:            appID,
+		Name:             name,
+		ClientID:         platform.NewID(s.auth.clientPrefix),
+		ClientSecretHash: hash,
+		Status:           "active",
+		Scopes:           scopes,
+		ExpiresAt:        expires,
+	}
 	if actor != nil {
 		cred.CreatedBy = actor.ID
 	}
@@ -229,7 +292,11 @@ func (s *AppService) revokeSessions(tx *gorm.DB, credentialID string) error {
 }
 func (s *AppService) RevokeCredential(actor *domain.AdminUser, appID, id string) error {
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := store.Affected(tx.Model(&domain.AppCredential{}).Where("id = ? AND app_id = ?", id, appID).Update("status", "revoked")); err != nil {
+		if err := store.Affected(
+			tx.Model(&domain.AppCredential{}).
+				Where("id = ? AND app_id = ?", id, appID).
+				Update("status", "revoked"),
+		); err != nil {
 			return err
 		}
 		return s.revokeSessions(tx, id)

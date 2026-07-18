@@ -30,7 +30,17 @@ func (s *AuditService) RecordBestEffort(actorID, actorType, action, entityType, 
 	if err != nil {
 		data = []byte(`{"marshal_error":true}`)
 	}
-	err = s.db.Create(&domain.AuditLog{BaseModel: domain.BaseModel{ID: platform.NewID("aud")}, ActorID: actorID, ActorType: actorType, Action: action, EntityType: entityType, EntityID: entityID, MetadataJSON: string(data), IPAddress: ip, UserAgent: ua}).Error
+	err = s.db.Create(&domain.AuditLog{
+		BaseModel:    domain.BaseModel{ID: platform.NewID("aud")},
+		ActorID:      actorID,
+		ActorType:    actorType,
+		Action:       action,
+		EntityType:   entityType,
+		EntityID:     entityID,
+		MetadataJSON: string(data),
+		IPAddress:    ip,
+		UserAgent:    ua,
+	}).Error
 	if err != nil && s.logger != nil {
 		s.logger.Error("audit log write failed", slog.String("action", action), slog.String("error", err.Error()))
 	}

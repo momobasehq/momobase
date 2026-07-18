@@ -69,7 +69,10 @@ func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 	if err != nil {
 		return err
 	}
-	req.Country, req.Currency, req.PaymentMethod = country, strings.ToUpper(strings.TrimSpace(req.Currency)), strings.ToLower(strings.TrimSpace(req.PaymentMethod))
+	req.Country, req.Currency, req.PaymentMethod =
+		country,
+		strings.ToUpper(strings.TrimSpace(req.Currency)),
+		strings.ToLower(strings.TrimSpace(req.PaymentMethod))
 	if req.Momo != nil {
 		req.Momo.Network = strings.ToLower(strings.TrimSpace(req.Momo.Network))
 	}
@@ -99,7 +102,13 @@ func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 	}
 	return err
 }
-func (o *PaymentOrchestrator) Create(ctx context.Context, appID, service, key string, req *CreatePaymentRequest) (*CreatePaymentResponse, error) {
+func (o *PaymentOrchestrator) Create(
+	ctx context.Context,
+	appID string,
+	service string,
+	key string,
+	req *CreatePaymentRequest,
+) (*CreatePaymentResponse, error) {
 	if err := ValidatePaymentPayload(service, req); err != nil {
 		return nil, err
 	}
@@ -117,8 +126,34 @@ func (o *PaymentOrchestrator) Create(ctx context.Context, appID, service, key st
 		return nil, err
 	}
 	party := paymentParty(service, req)
-	tx := &domain.Transaction{BaseModel: domain.BaseModel{ID: platform.NewID("txn")}, AppID: appID, ServiceType: service, PaymentMethod: req.PaymentMethod, Amount: req.Amount, Currency: req.Currency, Country: req.Country, Reference: req.Reference, IdempotencyKey: key, Status: domain.TxProcessing, SelectedRouteID: selected.Route.ID, SelectedProviderAccountID: selected.Account.ID, CustomerPhone: party.Phone, CustomerEmail: party.Email, CustomerName: party.Name, Description: req.Description, RequestHash: hash}
-	attempt := &domain.TransactionAttempt{BaseModel: domain.BaseModel{ID: platform.NewID("att")}, TransactionID: tx.ID, ProviderAccountID: selected.Account.ID, ProviderCode: selected.Runtime.ProviderCode, Status: domain.TxProcessing, RequestHash: hash, StartedAt: time.Now().UTC()}
+	tx := &domain.Transaction{
+		BaseModel:                 domain.BaseModel{ID: platform.NewID("txn")},
+		AppID:                     appID,
+		ServiceType:               service,
+		PaymentMethod:             req.PaymentMethod,
+		Amount:                    req.Amount,
+		Currency:                  req.Currency,
+		Country:                   req.Country,
+		Reference:                 req.Reference,
+		IdempotencyKey:            key,
+		Status:                    domain.TxProcessing,
+		SelectedRouteID:           selected.Route.ID,
+		SelectedProviderAccountID: selected.Account.ID,
+		CustomerPhone:             party.Phone,
+		CustomerEmail:             party.Email,
+		CustomerName:              party.Name,
+		Description:               req.Description,
+		RequestHash:               hash,
+	}
+	attempt := &domain.TransactionAttempt{
+		BaseModel:         domain.BaseModel{ID: platform.NewID("att")},
+		TransactionID:     tx.ID,
+		ProviderAccountID: selected.Account.ID,
+		ProviderCode:      selected.Runtime.ProviderCode,
+		Status:            domain.TxProcessing,
+		RequestHash:       hash,
+		StartedAt:         time.Now().UTC(),
+	}
 	if err := store.Within(ctx, o.db, func(db *gorm.DB) error {
 		if err := db.Create(tx).Error; err != nil {
 			return err
@@ -130,7 +165,16 @@ func (o *PaymentOrchestrator) Create(ctx context.Context, appID, service, key st
 		}
 		return nil, err
 	}
-	call := providers.PaymentRequest{TransactionID: tx.ID, Amount: req.Amount, Currency: req.Currency, Country: req.Country, Reference: req.Reference, Phone: req.Momo.Phone, Network: req.Momo.Network, Description: req.Description}
+	call := providers.PaymentRequest{
+		TransactionID: tx.ID,
+		Amount:        req.Amount,
+		Currency:      req.Currency,
+		Country:       req.Country,
+		Reference:     req.Reference,
+		Phone:         req.Momo.Phone,
+		Network:       req.Momo.Network,
+		Description:   req.Description,
+	}
 	var result *providers.ProviderPaymentResponse
 	if service == domain.ServiceCollection {
 		result, err = o.executor.Collect(ctx, selected.Account.ID, call)
@@ -139,7 +183,14 @@ func (o *PaymentOrchestrator) Create(ctx context.Context, appID, service, key st
 	}
 	return o.persist(ctx, tx, attempt, selected.Runtime.ProviderCode, result, err)
 }
-func (o *PaymentOrchestrator) persist(ctx context.Context, tx *domain.Transaction, attempt *domain.TransactionAttempt, providerCode string, result *providers.ProviderPaymentResponse, cause error) (*CreatePaymentResponse, error) {
+func (o *PaymentOrchestrator) persist(
+	ctx context.Context,
+	tx *domain.Transaction,
+	attempt *domain.TransactionAttempt,
+	providerCode string,
+	result *providers.ProviderPaymentResponse,
+	cause error,
+) (*CreatePaymentResponse, error) {
 	now := time.Now().UTC()
 	attemptUpdates := map[string]any{}
 	txUpdates := map[string]any{"next_reconcile_at": nil}
@@ -160,7 +211,10 @@ func (o *PaymentOrchestrator) persist(ctx context.Context, tx *domain.Transactio
 		}
 		tx.ProviderReference, message = result.ProviderReference, result.Message
 		raw, _ := json.Marshal(redactRawMap(result.Raw))
-		attemptUpdates["status"], attemptUpdates["provider_reference"], attemptUpdates["raw_response"] = tx.Status, tx.ProviderReference, string(raw)
+		attemptUpdates["status"], attemptUpdates["provider_reference"], attemptUpdates["raw_response"] =
+			tx.Status,
+			tx.ProviderReference,
+			string(raw)
 		txUpdates["status"], txUpdates["provider_reference"] = tx.Status, tx.ProviderReference
 	}
 	if terminal(tx.Status) {
@@ -177,7 +231,16 @@ func (o *PaymentOrchestrator) persist(ctx context.Context, tx *domain.Transactio
 	}); err != nil {
 		return nil, fmt.Errorf("provider result persistence failed: %w", err)
 	}
-	return &CreatePaymentResponse{TransactionID: tx.ID, Reference: tx.Reference, ServiceType: tx.ServiceType, PaymentMethod: tx.PaymentMethod, Status: tx.Status, SelectedProvider: providerCode, ProviderReference: tx.ProviderReference, Message: message}, nil
+	return &CreatePaymentResponse{
+		TransactionID:     tx.ID,
+		Reference:         tx.Reference,
+		ServiceType:       tx.ServiceType,
+		PaymentMethod:     tx.PaymentMethod,
+		Status:            tx.Status,
+		SelectedProvider:  providerCode,
+		ProviderReference: tx.ProviderReference,
+		Message:           message,
+	}, nil
 }
 func (o *PaymentOrchestrator) find(ctx context.Context, appID, key string) (*domain.Transaction, error) {
 	var tx domain.Transaction
@@ -187,7 +250,15 @@ func replay(tx *domain.Transaction, hash, _ string, _ *CreatePaymentRequest) (*C
 	if tx.RequestHash != hash {
 		return nil, errors.New("idempotency key reused with a different request")
 	}
-	return &CreatePaymentResponse{TransactionID: tx.ID, Reference: tx.Reference, ServiceType: tx.ServiceType, PaymentMethod: tx.PaymentMethod, Status: tx.Status, ProviderReference: tx.ProviderReference, Message: "idempotent replay"}, nil
+	return &CreatePaymentResponse{
+		TransactionID:     tx.ID,
+		Reference:         tx.Reference,
+		ServiceType:       tx.ServiceType,
+		PaymentMethod:     tx.PaymentMethod,
+		Status:            tx.Status,
+		ProviderReference: tx.ProviderReference,
+		Message:           "idempotent replay",
+	}, nil
 }
 func PaymentRequestHash(service string, req *CreatePaymentRequest) string {
 	data, _ := json.Marshal(struct {
@@ -225,7 +296,10 @@ func redactRawMap(raw map[string]any) map[string]any {
 	out := make(map[string]any, len(raw))
 	for k, v := range raw {
 		key := strings.ToLower(k)
-		if strings.Contains(key, "token") || strings.Contains(key, "secret") || strings.Contains(key, "key") || strings.Contains(key, "password") {
+		if strings.Contains(key, "token") ||
+			strings.Contains(key, "secret") ||
+			strings.Contains(key, "key") ||
+			strings.Contains(key, "password") {
 			v = "[redacted]"
 		}
 		out[k] = v

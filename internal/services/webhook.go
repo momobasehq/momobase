@@ -33,7 +33,12 @@ type WebhookService struct {
 func NewWebhookService(db *gorm.DB, runtime *ProviderRuntimeManager) *WebhookService {
 	return &WebhookService{db, runtime, NewProviderExecutor(runtime)}
 }
-func (s *WebhookService) verify(ctx context.Context, accountID string, payload []byte, headers map[string]string) (*VerifiedWebhook, error) {
+func (s *WebhookService) verify(
+	ctx context.Context,
+	accountID string,
+	payload []byte,
+	headers map[string]string,
+) (*VerifiedWebhook, error) {
 	rp, ok := s.runtime.Get(accountID)
 	if !ok || rp.WebhookSecret == "" {
 		return nil, errors.New("provider webhook is not initialized")
@@ -52,7 +57,10 @@ func (s *WebhookService) verify(ctx context.Context, accountID string, payload [
 	if event.ProviderReference == "" {
 		return nil, errors.New("invalid provider reference")
 	}
-	event.Currency, event.Country, event.Raw = strings.ToUpper(event.Currency), strings.ToUpper(event.Country), redactRawMap(event.Raw)
+	event.Currency, event.Country, event.Raw =
+		strings.ToUpper(event.Currency),
+		strings.ToUpper(event.Country),
+		redactRawMap(event.Raw)
 	out := &VerifiedWebhook{ProviderWebhookEvent: *event, ProviderAccountID: accountID}
 	out.PayloadHash = CanonicalWebhookHash(out)
 	return out, nil
@@ -66,9 +74,22 @@ func (s *WebhookService) Handle(ctx context.Context, accountID string, payload [
 	if err != nil {
 		return err
 	}
-	row := &domain.WebhookEvent{BaseModel: domain.BaseModel{ID: platform.NewID("wh")}, ProviderAccountID: accountID, ProviderReference: event.ProviderReference, EventType: event.EventType, PayloadHash: event.PayloadHash, PayloadJSON: string(stored)}
+	row := &domain.WebhookEvent{
+		BaseModel:         domain.BaseModel{ID: platform.NewID("wh")},
+		ProviderAccountID: accountID,
+		ProviderReference: event.ProviderReference,
+		EventType:         event.EventType,
+		PayloadHash:       event.PayloadHash,
+		PayloadJSON:       string(stored),
+	}
 	return store.Within(ctx, s.db, func(db *gorm.DB) error {
-		created := db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "provider_account_id"}, {Name: "payload_hash"}}, DoNothing: true}).Create(row)
+		created := db.Clauses(clause.OnConflict{
+			Columns: []clause.Column{
+				{Name: "provider_account_id"},
+				{Name: "payload_hash"},
+			},
+			DoNothing: true,
+		}).Create(row)
 		if created.Error != nil || created.RowsAffected == 0 {
 			return created.Error
 		}
@@ -121,7 +142,9 @@ func (s *WebhookService) ReprocessPending(ctx context.Context, limit int) error 
 		if json.Unmarshal([]byte(rows[i].PayloadJSON), &event) != nil {
 			continue
 		}
-		if err := store.Within(ctx, s.db, func(db *gorm.DB) error { return s.apply(db, &rows[i], &event) }); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := store.Within(ctx, s.db, func(db *gorm.DB) error {
+			return s.apply(db, &rows[i], &event)
+		}); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
 	}
@@ -129,7 +152,11 @@ func (s *WebhookService) ReprocessPending(ctx context.Context, limit int) error 
 }
 func findWebhookTarget(db *gorm.DB, accountID, ref string) (*domain.Transaction, *domain.TransactionAttempt, error) {
 	var attempt domain.TransactionAttempt
-	if err := db.Where("provider_account_id = ? AND provider_reference = ?", accountID, ref).Order("created_at desc").First(&attempt).Error; err != nil {
+	if err := db.Where(
+		"provider_account_id = ? AND provider_reference = ?",
+		accountID,
+		ref,
+	).Order("created_at desc").First(&attempt).Error; err != nil {
 		return nil, nil, err
 	}
 	var tx domain.Transaction
@@ -144,7 +171,15 @@ func CanonicalWebhookHash(event *VerifiedWebhook) string {
 	if event.Amount != nil {
 		amount = strconv.FormatInt(*event.Amount, 10)
 	}
-	return platform.SHA256Hex(strings.Join([]string{event.ProviderAccountID, event.ProviderReference, event.EventType, event.Status, event.ExternalReference, amount, strings.ToUpper(event.Currency)}, "|"))
+	return platform.SHA256Hex(strings.Join([]string{
+		event.ProviderAccountID,
+		event.ProviderReference,
+		event.EventType,
+		event.Status,
+		event.ExternalReference,
+		amount,
+		strings.ToUpper(event.Currency),
+	}, "|"))
 }
 func validateWebhook(event *VerifiedWebhook, tx *domain.Transaction) error {
 	phoneMatches := true
@@ -152,7 +187,11 @@ func validateWebhook(event *VerifiedWebhook, tx *domain.Transaction) error {
 		phone, err := NormalizeMSISDN(event.Phone, tx.Country)
 		phoneMatches = err == nil && phone == tx.CustomerPhone
 	}
-	if event.Amount != nil && *event.Amount != tx.Amount || event.Currency != "" && !strings.EqualFold(event.Currency, tx.Currency) || event.Country != "" && !strings.EqualFold(event.Country, tx.Country) || event.ExternalReference != "" && event.ExternalReference != tx.Reference || !phoneMatches {
+	if event.Amount != nil && *event.Amount != tx.Amount ||
+		event.Currency != "" && !strings.EqualFold(event.Currency, tx.Currency) ||
+		event.Country != "" && !strings.EqualFold(event.Country, tx.Country) ||
+		event.ExternalReference != "" && event.ExternalReference != tx.Reference ||
+		!phoneMatches {
 		return fmt.Errorf("webhook payload does not match transaction")
 	}
 	return nil

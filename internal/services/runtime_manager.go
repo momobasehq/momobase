@@ -79,7 +79,12 @@ type ProviderRuntimeManager struct {
 	items     map[string]*RuntimeProvider
 }
 
-func NewProviderRuntimeManager(db *gorm.DB, registry providers.Registry, enc *platform.Encryptor, log *slog.Logger) *ProviderRuntimeManager {
+func NewProviderRuntimeManager(
+	db *gorm.DB,
+	registry providers.Registry,
+	enc *platform.Encryptor,
+	log *slog.Logger,
+) *ProviderRuntimeManager {
 	return &ProviderRuntimeManager{db: db, registry: registry, encryptor: enc, logger: log, items: map[string]*RuntimeProvider{}}
 }
 func (m *ProviderRuntimeManager) Get(id string) (*RuntimeProvider, bool) {
@@ -139,7 +144,16 @@ func (m *ProviderRuntimeManager) Reload(ctx context.Context, id string) error {
 		return err
 	}
 	caps := adapter.Capabilities()
-	fresh := &RuntimeProvider{AccountID: id, ProviderCode: account.ProviderCode, Countries: slices.Clone(account.Countries), ConfigVersion: account.ConfigVersion, Adapter: adapter, Capabilities: caps, WebhookSecret: providers.String(plain, "webhook_secret"), breaker: &circuit{}}
+	fresh := &RuntimeProvider{
+		AccountID:     id,
+		ProviderCode:  account.ProviderCode,
+		Countries:     slices.Clone(account.Countries),
+		ConfigVersion: account.ConfigVersion,
+		Adapter:       adapter,
+		Capabilities:  caps,
+		WebhookSecret: providers.String(plain, "webhook_secret"),
+		breaker:       &circuit{},
+	}
 	m.mu.Lock()
 	m.items[id] = fresh
 	m.mu.Unlock()
@@ -157,7 +171,11 @@ func (m *ProviderRuntimeManager) TestProviderConfig(ctx context.Context, id stri
 	_, err = m.build(ctx, account.ProviderCode, plain)
 	return err
 }
-func (m *ProviderRuntimeManager) build(ctx context.Context, code string, plain providers.ProviderConfig) (providers.PaymentProvider, error) {
+func (m *ProviderRuntimeManager) build(
+	ctx context.Context,
+	code string,
+	plain providers.ProviderConfig,
+) (providers.PaymentProvider, error) {
 	adapter, err := m.registry.Create(code, m.logger.With(slog.String("provider", code)))
 	if err != nil {
 		return nil, err
@@ -199,7 +217,12 @@ func (m *ProviderRuntimeManager) QueryActiveBalances(ctx context.Context) ([]Pro
 	var out []ProviderBalanceResult
 	for _, runtime := range m.List() {
 		for _, country := range runtime.Countries {
-			item := ProviderBalanceResult{ProviderAccountID: runtime.AccountID, ProviderCode: runtime.ProviderCode, Country: country, Status: "failed"}
+			item := ProviderBalanceResult{
+				ProviderAccountID: runtime.AccountID,
+				ProviderCode:      runtime.ProviderCode,
+				Country:           country,
+				Status:            "failed",
+			}
 			balance, err := m.QueryBalance(ctx, runtime.AccountID, country)
 			if err != nil {
 				item.Error = providers.Redact(err.Error())
