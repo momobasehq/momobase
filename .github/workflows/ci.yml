@@ -1,0 +1,104 @@
+name: Go CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Format, dependencies, vet, test, and coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Go
+        uses: actions/setup-go@v6.4.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Verify formatting
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l $(git ls-files '*.go'))"
+          if [[ -n "${unformatted}" ]]; then
+            echo "The following files are not formatted:"
+            echo "${unformatted}"
+            exit 1
+          fi
+
+      - name: Verify module files are tidy
+        run: go mod tidy -diff
+
+      - name: Verify downloaded modules
+        run: go mod verify
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run tests with coverage
+        run: go test -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Report coverage
+        env:
+          MINIMUM_COVERAGE: "20.0"
+        run: |
+          go tool cover -func=coverage.out | tee coverage.txt
+          total="$(awk '/^total:/ {gsub(/%/, "", $3); print $3}' coverage.txt)"
+          awk -v total="${total}" -v minimum="${MINIMUM_COVERAGE}" 'BEGIN {
+            if (total + 0 < minimum + 0) {
+              printf "Total coverage %.1f%% is below the %.1f%% minimum.\n", total, minimum
+              exit 1
+            }
+          }'
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: go-coverage
+          path: |
+            coverage.out
+            coverage.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  race:
+    name: Race detector
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Go
+        uses: actions/setup-go@v6.4.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Run race detector
+        run: go test -race ./...
+
+  staticcheck:
+    name: Staticcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Run Staticcheck
+        uses: dominikh/staticcheck-action@v1.4.1
+        with:
+          version: "2026.1"
+          cache-key: staticcheck-2026.1
