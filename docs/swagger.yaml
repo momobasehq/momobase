@@ -1,0 +1,2044 @@
+basePath: /
+definitions:
+  apidoc.ChangePasswordRequest:
+    properties:
+      password:
+        example: change-me-now
+        format: password
+        type: string
+    type: object
+  apidoc.ChangeStatusRequest:
+    properties:
+      status:
+        example: active
+        type: string
+    type: object
+  apidoc.CreateAdminRequest:
+    properties:
+      email:
+        example: ops@example.com
+        format: email
+        type: string
+      name:
+        example: Operations Admin
+        type: string
+      password:
+        example: change-me-now
+        format: password
+        type: string
+      role:
+        enum:
+        - super_admin
+        - operations
+        example: operations
+        type: string
+    type: object
+  apidoc.CreateAppRequest:
+    properties:
+      description:
+        example: Checkout payment application
+        type: string
+      environment:
+        enum:
+        - sandbox
+        - production
+        example: sandbox
+        type: string
+      name:
+        example: Checkout
+        type: string
+    type: object
+  apidoc.CreateCredentialRequest:
+    properties:
+      expires_at:
+        example: "2030-01-02T03:04:05Z"
+        format: date-time
+        type: string
+      name:
+        example: Backend credential
+        type: string
+      scopes:
+        example: collections:create transactions:read
+        type: string
+    type: object
+  apidoc.CreateProviderAccountRequest:
+    properties:
+      config:
+        type: object
+      countries:
+        example:
+        - UG
+        items:
+          type: string
+        type: array
+      environment:
+        enum:
+        - sandbox
+        - production
+        example: sandbox
+        type: string
+      name:
+        example: MTN Uganda
+        type: string
+      provider_code:
+        example: mtn
+        type: string
+    type: object
+  apidoc.CreateRouteRequest:
+    properties:
+      active:
+        example: true
+        type: boolean
+      payment_method:
+        enum:
+        - momo
+        example: momo
+        type: string
+      priority:
+        example: 1
+        minimum: 1
+        type: integer
+      provider_account_id:
+        example: pacc_123
+        type: string
+      service_type:
+        enum:
+        - collection
+        - disbursement
+        example: collection
+        type: string
+    type: object
+  apidoc.DocResponse:
+    properties:
+      data: {}
+      error:
+        $ref: '#/definitions/github_com_momobasehq_momobase_internal_platform.APIError'
+      message:
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
+  apidoc.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/github_com_momobasehq_momobase_internal_platform.APIError'
+      message:
+        example: request failed
+        type: string
+      success:
+        example: false
+        type: boolean
+    type: object
+  apidoc.TokenResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      token_type:
+        type: string
+    type: object
+  apidoc.UpdateAppRequest:
+    properties:
+      description:
+        example: Checkout payment application
+        type: string
+      environment:
+        enum:
+        - sandbox
+        - production
+        example: sandbox
+        type: string
+      name:
+        example: Checkout
+        type: string
+    type: object
+  apidoc.UpdateCountriesRequest:
+    properties:
+      countries:
+        example:
+        - UG
+        - RW
+        items:
+          type: string
+        type: array
+    type: object
+  apidoc.UpdateProviderConfigRequest:
+    properties:
+      config:
+        type: object
+    type: object
+  apidoc.UpdateRouteRequest:
+    properties:
+      active:
+        example: true
+        type: boolean
+      priority:
+        example: 1
+        minimum: 1
+        type: integer
+    type: object
+  github_com_momobasehq_momobase_internal_platform.APIError:
+    properties:
+      code:
+        type: string
+      message:
+        type: string
+    type: object
+  github_com_momobasehq_momobase_internal_services.CreatePaymentRequest:
+    properties:
+      amount:
+        description: Amount is the payment amount in the currency's minor unit.
+        type: integer
+      country:
+        description: Country is the ISO 3166-1 alpha-2 transaction country.
+        type: string
+      currency:
+        description: Currency is the three-letter currency code.
+        type: string
+      customer:
+        allOf:
+        - $ref: '#/definitions/github_com_momobasehq_momobase_internal_services.PartyPayload'
+        description: Customer identifies the collection customer.
+      description:
+        description: Description is optional payment context shown to downstream systems.
+        type: string
+      momo:
+        allOf:
+        - $ref: '#/definitions/github_com_momobasehq_momobase_internal_services.PartyPayload'
+        description: Momo contains the mobile-money account details used for the provider
+          request.
+      payment_method:
+        description: PaymentMethod identifies the requested payment rail.
+        type: string
+      recipient:
+        allOf:
+        - $ref: '#/definitions/github_com_momobasehq_momobase_internal_services.PartyPayload'
+        description: Recipient identifies the disbursement recipient.
+      reference:
+        description: Reference is the application's unique business reference.
+        type: string
+    type: object
+  github_com_momobasehq_momobase_internal_services.PartyPayload:
+    properties:
+      email:
+        description: Email is the party's email address.
+        type: string
+      name:
+        description: Name is the party's display name.
+        type: string
+      network:
+        description: Network optionally identifies the party's mobile-money network.
+        type: string
+      phone:
+        description: Phone is the party's mobile telephone number.
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Mobile-money orchestration API for application payments and administrative
+    operations.
+  title: Momobase API
+  version: "1.0"
+paths:
+  /api/admin/apps:
+    get:
+      parameters:
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List applications
+      tags:
+      - Admin - Applications
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Application
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apidoc.CreateAppRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create an application
+      tags:
+      - Admin - Applications
+  /api/admin/apps/{id}:
+    get:
+      parameters:
+      - description: Application ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get an application
+      tags:
+      - Admin - Applications
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Application ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Application changes
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apidoc.UpdateAppRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update an application
+      tags:
+      - Admin - Applications
+  /api/admin/apps/{id}/credentials:
+    get:
+      parameters:
+      - description: Application ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List application credentials
+      tags:
+      - Admin - Credentials
+    post:
+      consumes:
+      - application/json
+      description: Returns the client secret once. Store it securely because it cannot
+        be retrieved later.
+      parameters:
+      - description: Application ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Credential
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apidoc.CreateCredentialRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create an application credential
+      tags:
+      - Admin - Credentials
+  /api/admin/apps/{id}/credentials/{credentialID}/revoke:
+    patch:
+      parameters:
+      - description: Application ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Credential ID
+        in: path
+        name: credentialID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Revoke an application credential
+      tags:
+      - Admin - Credentials
+  /api/admin/apps/{id}/credentials/{credentialID}/rotate:
+    post:
+      description: Replaces the client secret, revokes existing sessions, and returns
+        the new secret once.
+      parameters:
+      - description: Application ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Credential ID
+        in: path
+        name: credentialID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Rotate an application credential
+      tags:
+      - Admin - Credentials
+  /api/admin/apps/{id}/status:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Application ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Status
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apidoc.ChangeStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change application status
+      tags:
+      - Admin - Applications
+  /api/admin/audit-logs:
+    get:
+      parameters:
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List audit logs
+      tags:
+      - Admin - Audit
+  /api/admin/balances/providers:
+    get:
+      parameters:
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Query all active provider balances
+      tags:
+      - Admin - Providers
+  /api/admin/health/providers:
+    get:
+      parameters:
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List provider health snapshots
+      tags:
+      - Admin - Providers
+  /api/admin/login:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: The grant_type field may be omitted for compatibility with the
+        admin login form.
+      parameters:
+      - description: OAuth grant type
+        enum:
+        - password
+        in: formData
+        name: grant_type
+        type: string
+      - description: Administrator email
+        in: formData
+        name: username
+        required: true
+        type: string
+      - description: Administrator password
+        in: formData
+        name: password
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      summary: Issue administrator tokens
+      tags:
+      - Authentication
+  /api/admin/logout:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Log out an administrator
+      tags:
+      - Admin - Authentication
+  /api/admin/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get the current administrator
+      tags:
+      - Admin - Authentication
+  /api/admin/providers:
+    get:
+      parameters:
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List provider accounts
+      tags:
+      - Admin - Providers
+  /api/admin/providers/accounts:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Provider account
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apidoc.CreateProviderAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a provider account
+      tags:
+      - Admin - Providers
+  /api/admin/providers/accounts/{id}/activate:
+    patch:
+      parameters:
+      - description: Provider account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Activate a provider account
+      tags:
+      - Admin - Providers
+  /api/admin/providers/accounts/{id}/balance:
+    get:
+      parameters:
+      - description: Provider account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: ISO 3166-1 alpha-2 country code
+        in: query
+        name: country
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Query a provider balance
+      tags:
+      - Admin - Providers
+  /api/admin/providers/accounts/{id}/config:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Provider account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Provider configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apidoc.UpdateProviderConfigRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update provider configuration
+      tags:
+      - Admin - Providers
+  /api/admin/providers/accounts/{id}/countries:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Provider account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Countries
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apidoc.UpdateCountriesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update provider countries
+      tags:
+      - Admin - Providers
+  /api/admin/providers/accounts/{id}/deactivate:
+    patch:
+      parameters:
+      - description: Provider account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Deactivate a provider account
+      tags:
+      - Admin - Providers
+  /api/admin/providers/accounts/{id}/test:
+    post:
+      parameters:
+      - description: Provider account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Test provider configuration
+      tags:
+      - Admin - Providers
+  /api/admin/routes:
+    get:
+      parameters:
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List payment routes
+      tags:
+      - Admin - Routes
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Payment route
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apidoc.CreateRouteRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a payment route
+      tags:
+      - Admin - Routes
+  /api/admin/routes/{id}:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Payment route ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Route changes
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apidoc.UpdateRouteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a payment route
+      tags:
+      - Admin - Routes
+  /api/admin/runtime/providers:
+    get:
+      parameters:
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List provider runtimes
+      tags:
+      - Admin - System
+  /api/admin/system/health:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get system health
+      tags:
+      - Admin - System
+  /api/admin/system/info:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get system information
+      tags:
+      - Admin - System
+  /api/admin/token:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: The grant_type field may be omitted for compatibility with the
+        admin login form.
+      parameters:
+      - description: OAuth grant type
+        enum:
+        - password
+        in: formData
+        name: grant_type
+        type: string
+      - description: Administrator email
+        in: formData
+        name: username
+        required: true
+        type: string
+      - description: Administrator password
+        in: formData
+        name: password
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      summary: Issue administrator tokens
+      tags:
+      - Authentication
+  /api/admin/token/refresh:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      parameters:
+      - description: OAuth grant type
+        enum:
+        - refresh_token
+        in: formData
+        name: grant_type
+        required: true
+        type: string
+      - description: Administrator refresh token
+        in: formData
+        name: refresh_token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      summary: Refresh administrator tokens
+      tags:
+      - Authentication
+  /api/admin/transactions:
+    get:
+      parameters:
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List transactions
+      tags:
+      - Admin - Transactions
+  /api/admin/users:
+    get:
+      parameters:
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List administrators
+      tags:
+      - Admin - Users
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Administrator
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apidoc.CreateAdminRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create an administrator
+      tags:
+      - Admin - Users
+  /api/admin/users/{id}/password:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Administrator ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: New password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apidoc.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change an administrator password
+      tags:
+      - Admin - Users
+  /api/admin/users/{id}/status:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Administrator ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Status
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apidoc.ChangeStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change an administrator status
+      tags:
+      - Admin - Users
+  /api/admin/workers:
+    get:
+      parameters:
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List configured workers
+      tags:
+      - Admin - System
+  /api/v1/collections:
+    post:
+      consumes:
+      - application/json
+      description: Creates and executes an idempotent mobile-money collection.
+      parameters:
+      - description: Unique idempotency key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Collection request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_momobasehq_momobase_internal_services.CreatePaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a collection
+      tags:
+      - Payments
+  /api/v1/disbursements:
+    post:
+      consumes:
+      - application/json
+      description: Creates and executes an idempotent mobile-money disbursement.
+      parameters:
+      - description: Unique idempotency key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Disbursement request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_momobasehq_momobase_internal_services.CreatePaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a disbursement
+      tags:
+      - Payments
+  /api/v1/token:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Validates an active client ID and secret and returns an access/refresh
+        token pair.
+      parameters:
+      - description: OAuth grant type
+        enum:
+        - client_credentials
+        in: formData
+        name: grant_type
+        required: true
+        type: string
+      - description: Application client ID
+        in: formData
+        name: client_id
+        required: true
+        type: string
+      - description: Application client secret
+        in: formData
+        name: client_secret
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      summary: Issue application tokens
+      tags:
+      - Authentication
+  /api/v1/token/refresh:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      parameters:
+      - description: OAuth grant type
+        enum:
+        - refresh_token
+        in: formData
+        name: grant_type
+        required: true
+        type: string
+      - description: Application refresh token
+        in: formData
+        name: refresh_token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      summary: Refresh application tokens
+      tags:
+      - Authentication
+  /api/v1/transactions/{id}:
+    get:
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a transaction
+      tags:
+      - Transactions
+  /api/v1/transactions/by-reference/{reference}:
+    get:
+      parameters:
+      - description: Application transaction reference
+        in: path
+        name: reference
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a transaction by reference
+      tags:
+      - Transactions
+  /healthz:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+      summary: Check API health
+      tags:
+      - System
+  /ping:
+    get:
+      responses:
+        "200":
+          description: OK
+      summary: Check liveness
+      tags:
+      - System
+  /webhooks/{providerAccountID}:
+    post:
+      consumes:
+      - application/json
+      description: Verifies, deduplicates, and applies a provider-specific webhook
+        payload.
+      parameters:
+      - description: Provider account ID
+        in: path
+        name: providerAccountID
+        required: true
+        type: string
+      - description: Provider-specific webhook payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      summary: Receive a provider webhook
+      tags:
+      - Webhooks
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: 'Enter a bearer token using the format: Bearer {token}'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

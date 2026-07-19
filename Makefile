@@ -46,3 +46,12 @@ smoke-api:
 
 sdk-build:
 	cd packages/sdk && npm install && npm run build
+
+docs:
+	swag init -g ./cmd/momobase/main.go --parseDependency --parseInternal --output docs --outputTypes json,yaml
+	# rm -f docs/docs.go
+	# install swag if not already installed
+	# $ go install github.com/swaggo/swag/cmd/swag@latest
+
+# tell make that these targets are not files
+.PHONY: docs run build test tidy fmt fmt-check vet lint lint-fix lint-format quality seed-admin smoke smoke-api sdk-build docs

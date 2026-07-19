@@ -14,6 +14,15 @@ import (
 	"github.com/momobasehq/momobase/internal/bootstrap"
 )
 
+// @title Momobase API
+// @version 1.0
+// @description Mobile-money orchestration API for application payments and administrative operations.
+// @BasePath /
+// @schemes http https
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Enter a bearer token using the format: Bearer {token}
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
