@@ -72,13 +72,22 @@ jobs:
             --env ADMIN_FRONTEND_ENABLED=true \
             "${TEST_IMAGE}"
 
+          # wait for container to start
+          sleep 8
+
+          # check if container is still running
+          docker inspect --format='{{.State.Running}}' "${TEST_CONTAINER}"
+
+          # health check
           curl --fail --silent --show-error \
             --retry 30 \
             --retry-delay 1 \
             --retry-connrefused \
-            http://127.0.0.1:9091/healthz
+            http://127.0.0.1:9091/healthz || docker logs "${TEST_CONTAINER}"
+            
           curl --fail --silent --show-error http://127.0.0.1:9091/admin/ \
             | grep --fixed-strings '<title>Momobase Admin</title>'
+            
           curl --fail --silent --show-error http://127.0.0.1:9091/admin/app.js \
             | grep --fixed-strings 'window.adminApp'
 
@@ -118,4 +127,4 @@ jobs:
           ADMIN_PASSWORD="${SMOKE_ADMIN_PASSWORD}" \
           CLIENT_ID="${CLIENT_ID}" \
           CLIENT_SECRET="${CLIENT_SECRET}" \
-          scripts/smoke_backend.sh
+          ./scripts/smoke_api.sh
