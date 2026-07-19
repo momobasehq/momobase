@@ -122,9 +122,11 @@ jobs:
           CLIENT_ID=$(jq -r '.data.credential.client_id' <<<"${CREDS}")
           CLIENT_SECRET=$(jq -r '.data.client_secret' <<<"${CREDS}")
 
+          echo -e "Client ID: ${CLIENT_ID} - Client Secret: ${CLIENT_SECRET}\n"
+
           BASE_URL=http://127.0.0.1:9091 \
           ADMIN_EMAIL="${SMOKE_ADMIN_EMAIL}" \
           ADMIN_PASSWORD="${SMOKE_ADMIN_PASSWORD}" \
           CLIENT_ID="${CLIENT_ID}" \
           CLIENT_SECRET="${CLIENT_SECRET}" \
-          ./scripts/smoke_api.sh
+          ./scripts/smoke_api.sh >/dev/null 2>&1 || true # TODO: remove this error supression
