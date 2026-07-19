@@ -7,10 +7,70 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	httpcommon "github.com/momobasehq/momobase/internal/http/common"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/services"
 )
+
+// Ping writes a plain 200 response for the liveness endpoint.
+//
+// @Summary Check liveness
+// @Tags System
+// @Success 200
+// @Router /ping [get]
+func Ping(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }
+
+// Health writes the lightweight health payload.
+//
+// @Summary Check API health
+// @Tags System
+// @Produce json
+// @Success 200 {object} apidoc.DocResponse
+// @Router /healthz [get]
+func Health(w http.ResponseWriter, _ *http.Request) {
+	platform.JSON(w, 200, map[string]bool{"ok": true})
+}
+
+// ClientToken documents application token issuance.
+//
+// @Summary Issue application tokens
+// @Description Validates an active client ID and secret and returns an access/refresh token pair.
+// @Tags Authentication
+// @Accept x-www-form-urlencoded
+// @Produce json
+// @Param grant_type formData string true "OAuth grant type" Enums(client_credentials)
+// @Param client_id formData string true "Application client ID"
+// @Param client_secret formData string true "Application client secret"
+// @Success 200 {object} apidoc.TokenResponse
+// @Failure 400 {object} apidoc.ErrorResponse
+// @Failure 401 {object} apidoc.ErrorResponse
+// @Failure 429 {object} apidoc.ErrorResponse
+// @Router /api/v1/token [post]
+func ClientToken(auth *services.AppAuthService) http.HandlerFunc {
+	return httpcommon.Token("client_credentials", func(r *http.Request) (any, error) {
+		return auth.IssueClientToken(r.Context(), r.Form.Get("client_id"), r.Form.Get("client_secret"))
+	})
+}
+
+// AppRefreshToken documents application token refresh.
+//
+// @Summary Refresh application tokens
+// @Tags Authentication
+// @Accept x-www-form-urlencoded
+// @Produce json
+// @Param grant_type formData string true "OAuth grant type" Enums(refresh_token)
+// @Param refresh_token formData string true "Application refresh token"
+// @Success 200 {object} apidoc.TokenResponse
+// @Failure 400 {object} apidoc.ErrorResponse
+// @Failure 401 {object} apidoc.ErrorResponse
+// @Failure 429 {object} apidoc.ErrorResponse
+// @Router /api/v1/token/refresh [post]
+func AppRefreshToken(auth *services.AppAuthService) http.HandlerFunc {
+	return httpcommon.Token("refresh_token", func(r *http.Request) (any, error) {
+		return auth.RefreshToken(r.Context(), r.Form.Get("refresh_token"))
+	})
+}
 
 // Handler serves authenticated client-facing payment endpoints.
 type Handler struct {

@@ -164,7 +164,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_momobasehq_momobase_internal_domain.App"
+                            "$ref": "#/definitions/apidoc.DocResponse"
                         }
                     },
                     "401": {
@@ -914,7 +914,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_momobasehq_momobase_internal_domain.AdminUser"
+                            "$ref": "#/definitions/apidoc.DocResponse"
                         }
                     },
                     "401": {
@@ -3124,76 +3124,6 @@
                     "type": "integer",
                     "minimum": 1,
                     "example": 1
-                }
-            }
-        },
-        "github_com_momobasehq_momobase_internal_domain.AdminUser": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "failed_login_attempts": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "last_login_at": {
-                    "type": "string"
-                },
-                "locked_until": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "password_changed_at": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_momobasehq_momobase_internal_domain.App": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "environment": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
                 }
             }
         },

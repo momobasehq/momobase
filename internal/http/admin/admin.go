@@ -3,6 +3,7 @@ package admin
 import (
 	"net/http"
 
+	httpcommon "github.com/momobasehq/momobase/internal/http/common"
 	"github.com/momobasehq/momobase/internal/platform"
 )
 
@@ -12,11 +13,52 @@ import (
 // @Tags Admin - Authentication
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} domain.AdminUser
+// @Success 200 {object} apidoc.DocResponse
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/me [get]
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) { platform.JSON(w, 200, actor(r)) }
+
+// Token documents administrator login.
+//
+// @Summary Issue administrator tokens
+// @Description The grant_type field may be omitted for compatibility with the admin login form.
+// @Tags Authentication
+// @Accept x-www-form-urlencoded
+// @Produce json
+// @Param grant_type formData string false "OAuth grant type" Enums(password)
+// @Param username formData string true "Administrator email"
+// @Param password formData string true "Administrator password"
+// @Success 200 {object} apidoc.TokenResponse
+// @Failure 400 {object} apidoc.ErrorResponse
+// @Failure 401 {object} apidoc.ErrorResponse
+// @Failure 429 {object} apidoc.ErrorResponse
+// @Router /api/admin/token [post]
+// @Router /api/admin/login [post]
+func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
+	httpcommon.Token("password", func(r *http.Request) (any, error) {
+		return h.auth.IssuePasswordToken(r.Context(), r.Form.Get("username"), r.Form.Get("password"), r.RemoteAddr, r.UserAgent())
+	})(w, r)
+}
+
+// RefreshToken documents administrator token refresh.
+//
+// @Summary Refresh administrator tokens
+// @Tags Authentication
+// @Accept x-www-form-urlencoded
+// @Produce json
+// @Param grant_type formData string true "OAuth grant type" Enums(refresh_token)
+// @Param refresh_token formData string true "Administrator refresh token"
+// @Success 200 {object} apidoc.TokenResponse
+// @Failure 400 {object} apidoc.ErrorResponse
+// @Failure 401 {object} apidoc.ErrorResponse
+// @Failure 429 {object} apidoc.ErrorResponse
+// @Router /api/admin/token/refresh [post]
+func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	httpcommon.Token("refresh_token", func(r *http.Request) (any, error) {
+		return h.auth.RefreshToken(r.Context(), r.Form.Get("refresh_token"), r.RemoteAddr, r.UserAgent())
+	})(w, r)
+}
 
 // GetApp writes the application identified by the request path or a not-found
 // response when no matching application exists.
@@ -26,7 +68,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) { platform.JSON(w, 
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Application ID"
-// @Success 200 {object} domain.App
+// @Success 200 {object} apidoc.DocResponse
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 404 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse

@@ -14,6 +14,7 @@ import (
 	adminh "github.com/momobasehq/momobase/internal/http/admin"
 	publich "github.com/momobasehq/momobase/internal/http/public"
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
+	"github.com/momobasehq/momobase/internal/platform"
 )
 
 func testRouter() http.Handler {
@@ -163,6 +164,26 @@ func TestTokenHandlerValidatesGrantAndReportsErrors(t *testing.T) {
 	handler.ServeHTTP(recorder, malformed)
 	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "BAD_REQUEST") {
 		t.Fatalf("malformed form response = %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func token(grant string, issue func(*http.Request) (any, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			platform.Error(w, 400, "BAD_REQUEST", err.Error())
+			return
+		}
+		actual := r.Form.Get("grant_type")
+		if actual != grant && (grant != "password" || actual != "") {
+			platform.Error(w, 400, "UNSUPPORTED_GRANT", "grant_type must be "+grant)
+			return
+		}
+		out, err := issue(r)
+		if err != nil {
+			platform.Error(w, 401, "UNAUTHORIZED", err.Error())
+			return
+		}
+		platform.RawJSON(w, 200, out)
 	}
 }
 
