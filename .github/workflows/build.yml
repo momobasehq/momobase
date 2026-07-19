@@ -1,0 +1,121 @@
+name: Go Docker Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker:
+    name: Build and smoke test Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TEST_IMAGE: momobase:ci
+      TEST_CONTAINER: momobase-ci
+      SMOKE_ADMIN_EMAIL: admin@momobase.local
+      SMOKE_ADMIN_PASSWORD: ci-smoke-admin-password
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ${{ env.TEST_IMAGE }}
+          cache-from: type=gha,scope=momobase-ci
+          cache-to: type=gha,mode=max,scope=momobase-ci
+
+      - name: Bootstrap and run smoke scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cleanup() {
+            result=$?
+            if [[ ${result} -ne 0 ]]; then
+              docker logs "${TEST_CONTAINER}" || true
+            fi
+            docker rm --force "${TEST_CONTAINER}" >/dev/null 2>&1 || true
+            trap - EXIT
+            exit "${result}"
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name "${TEST_CONTAINER}" \
+            --publish 127.0.0.1:9091:9090 \
+            --env APP_ENV=staging \
+            --env APP_ADDR=:9090 \
+            --env APP_PUBLIC_URL=https://momobase.test \
+            --env CORS_ALLOWED_ORIGINS=https://momobase.test \
+            --env AUTO_MIGRATE=true \
+            --env DB_TYPE=sqlite \
+            --env DB_PATH=/app/data/momobase-ci.db \
+            --env ENCRYPTION_MASTER_KEY_BASE64=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY= \
+            --env ADMIN_OAUTH_SECRET=ci-admin-oauth-secret-0123456789abcdef \
+            --env APP_OAUTH_SECRET=ci-application-oauth-secret-0123456789abcdef \
+            --env WORKERS_ENABLED=false \
+            --env ADMIN_FRONTEND_ENABLED=true \
+            "${TEST_IMAGE}"
+
+          curl --fail --silent --show-error \
+            --retry 30 \
+            --retry-delay 1 \
+            --retry-connrefused \
+            http://127.0.0.1:9091/healthz
+          curl --fail --silent --show-error http://127.0.0.1:9091/admin/ \
+            | grep --fixed-strings '<title>Momobase Admin</title>'
+          curl --fail --silent --show-error http://127.0.0.1:9091/admin/app.js \
+            | grep --fixed-strings 'window.adminApp'
+
+          docker exec \
+            --env ADMIN_PASSWORD="${SMOKE_ADMIN_PASSWORD}" \
+            "${TEST_CONTAINER}" \
+            momobase seed-admin \
+            --email "${SMOKE_ADMIN_EMAIL}" \
+            --password "${SMOKE_ADMIN_PASSWORD}" \
+            --name "Super Admin"
+
+          ADMIN_TOKEN=$(curl --fail --silent --show-error \
+            -X POST http://127.0.0.1:9091/api/admin/token \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode grant_type=password \
+            --data-urlencode "username=${SMOKE_ADMIN_EMAIL}" \
+            --data-urlencode "password=${SMOKE_ADMIN_PASSWORD}" \
+            | jq -r '.access_token')
+
+          APP=$(curl --fail --silent --show-error \
+            -X POST http://127.0.0.1:9091/api/admin/apps \
+            -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"CI smoke app","environment":"sandbox"}')
+          APP_ID=$(jq -r '.data.id' <<<"${APP}")
+
+          CREDS=$(curl --fail --silent --show-error \
+            -X POST "http://127.0.0.1:9091/api/admin/apps/${APP_ID}/credentials" \
+            -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"CI smoke credential","scopes":"collections:create transactions:read"}')
+          CLIENT_ID=$(jq -r '.data.credential.client_id' <<<"${CREDS}")
+          CLIENT_SECRET=$(jq -r '.data.client_secret' <<<"${CREDS}")
+
+          BASE_URL=http://127.0.0.1:9091 \
+          ADMIN_EMAIL="${SMOKE_ADMIN_EMAIL}" \
+          ADMIN_PASSWORD="${SMOKE_ADMIN_PASSWORD}" \
+          CLIENT_ID="${CLIENT_ID}" \
+          CLIENT_SECRET="${CLIENT_SECRET}" \
+          scripts/smoke_backend.sh
