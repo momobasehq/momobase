@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -61,7 +62,7 @@ func NewAdminAuthService(
 ) *AdminAuthService {
 	return &AdminAuthService{db, accessTTL, refreshTTL, audit, tokens}
 }
-func (s *AdminAuthService) issue(user *domain.AdminUser, session *domain.AdminSession, ip, ua string) (*TokenResponse, error) {
+func (s *AdminAuthService) issue(ctx context.Context, user *domain.AdminUser, session *domain.AdminSession, ip, ua string) (*TokenResponse, error) {
 	base := platform.TokenClaims{SubjectType: "admin", SubjectID: user.ID, Email: user.Email, Role: user.Role}
 	response, ac, rc, err := issueTokenPair(s.tokens, base, s.accessTTL, s.refreshTTL)
 	if err != nil {
@@ -77,11 +78,12 @@ func (s *AdminAuthService) issue(user *domain.AdminUser, session *domain.AdminSe
 		UserAgent:        ua,
 		ExpiresAt:        now.Add(s.refreshTTL),
 	}
+	db := s.db.WithContext(ctx)
 	if session == nil {
-		err = s.db.Create(&values).Error
+		err = db.Create(&values).Error
 	} else {
 		err = store.Affected(
-			s.db.Model(&domain.AdminSession{}).
+			db.Model(&domain.AdminSession{}).
 				Where(
 					"id = ? AND refresh_token_hash = ?",
 					session.ID,
@@ -100,9 +102,10 @@ func (s *AdminAuthService) issue(user *domain.AdminUser, session *domain.AdminSe
 }
 
 // IssuePasswordToken validates administrator credentials and issues a new token pair and session.
-func (s *AdminAuthService) IssuePasswordToken(email, password, ip, ua string) (*TokenResponse, error) {
+func (s *AdminAuthService) IssuePasswordToken(ctx context.Context, email, password, ip, ua string) (*TokenResponse, error) {
 	var user domain.AdminUser
-	if s.db.Where("email = ?", strings.ToLower(strings.TrimSpace(email))).First(&user).Error != nil || user.Status != "active" {
+	db := s.db.WithContext(ctx)
+	if db.Where("email = ?", strings.ToLower(strings.TrimSpace(email))).First(&user).Error != nil || user.Status != "active" {
 		return nil, errors.New("invalid credentials")
 	}
 	now := time.Now().UTC()
@@ -114,29 +117,29 @@ func (s *AdminAuthService) IssuePasswordToken(email, password, ip, ua string) (*
 		if user.FailedLoginAttempts >= 4 {
 			updates["locked_until"] = now.Add(15 * time.Minute)
 		}
-		_ = s.db.Model(&user).Updates(updates).Error
+		_ = db.Model(&user).Updates(updates).Error
 		return nil, errors.New("invalid credentials")
 	}
-	if err := s.db.Model(&user).Updates(map[string]any{
+	if err := db.Model(&user).Updates(map[string]any{
 		"failed_login_attempts": 0,
 		"locked_until":          nil,
 		"last_login_at":         &now,
 	}).Error; err != nil {
 		return nil, err
 	}
-	s.audit.RecordBestEffort(user.ID, "admin", "admin.login", "admin_user", user.ID, nil, ip, ua)
-	return s.issue(&user, nil, ip, ua)
+	s.audit.RecordBestEffort(ctx, user.ID, "admin", "admin.login", "admin_user", user.ID, nil, ip, ua)
+	return s.issue(ctx, &user, nil, ip, ua)
 }
 
 // RefreshToken validates an administrator refresh token and rotates its session token pair.
-func (s *AdminAuthService) RefreshToken(raw, ip, ua string) (*TokenResponse, error) {
+func (s *AdminAuthService) RefreshToken(ctx context.Context, raw, ip, ua string) (*TokenResponse, error) {
 	claims, err := s.tokens.Verify(raw)
 	if err != nil || claims.SubjectType != "admin" || claims.TokenType != "refresh" {
 		return nil, errors.New("invalid refresh token")
 	}
 	var session domain.AdminSession
 	now := time.Now().UTC()
-	if s.db.Where(
+	if s.db.WithContext(ctx).Where(
 		"admin_user_id = ? AND refresh_token_hash = ? AND expires_at > ? AND revoked_at IS NULL",
 		claims.SubjectID,
 		platform.SHA256Hex(claims.TokenID),
@@ -144,28 +147,28 @@ func (s *AdminAuthService) RefreshToken(raw, ip, ua string) (*TokenResponse, err
 	).First(&session).Error != nil {
 		return nil, errors.New("invalid refresh session")
 	}
-	user, err := s.activeUser(claims.SubjectID)
+	user, err := s.activeUser(ctx, claims.SubjectID)
 	if err != nil {
 		return nil, err
 	}
-	return s.issue(user, &session, ip, ua)
+	return s.issue(ctx, user, &session, ip, ua)
 }
-func (s *AdminAuthService) activeUser(id string) (*domain.AdminUser, error) {
+func (s *AdminAuthService) activeUser(ctx context.Context, id string) (*domain.AdminUser, error) {
 	var user domain.AdminUser
-	if s.db.Where("id = ? AND status = ?", id, "active").First(&user).Error != nil {
+	if s.db.WithContext(ctx).Where("id = ? AND status = ?", id, "active").First(&user).Error != nil {
 		return nil, errors.New("admin inactive")
 	}
 	return &user, nil
 }
 
 // AuthenticateBearer validates an administrator access token and returns its active user.
-func (s *AdminAuthService) AuthenticateBearer(raw string) (*domain.AdminUser, error) {
+func (s *AdminAuthService) AuthenticateBearer(ctx context.Context, raw string) (*domain.AdminUser, error) {
 	claims, err := s.tokens.Verify(raw)
 	if err != nil || claims.SubjectType != "admin" || claims.TokenType != "access" {
 		return nil, errors.New("invalid admin token")
 	}
 	var session domain.AdminSession
-	if s.db.Where(
+	if s.db.WithContext(ctx).Where(
 		"admin_user_id = ? AND token_hash = ? AND expires_at > ? AND revoked_at IS NULL",
 		claims.SubjectID,
 		platform.SHA256Hex(claims.TokenID),
@@ -173,17 +176,17 @@ func (s *AdminAuthService) AuthenticateBearer(raw string) (*domain.AdminUser, er
 	).First(&session).Error != nil {
 		return nil, errors.New("invalid admin session")
 	}
-	return s.activeUser(claims.SubjectID)
+	return s.activeUser(ctx, claims.SubjectID)
 }
 
 // LogoutBearer revokes the active administrator session represented by a bearer token.
-func (s *AdminAuthService) LogoutBearer(raw, ip, ua string) error {
+func (s *AdminAuthService) LogoutBearer(ctx context.Context, raw, ip, ua string) error {
 	claims, err := s.tokens.Verify(raw)
 	if err != nil {
 		return err
 	}
 	now := time.Now().UTC()
-	err = s.db.Model(&domain.AdminSession{}).
+	err = s.db.WithContext(ctx).Model(&domain.AdminSession{}).
 		Where(
 			"admin_user_id = ? AND token_hash = ? AND revoked_at IS NULL",
 			claims.SubjectID,
@@ -191,7 +194,7 @@ func (s *AdminAuthService) LogoutBearer(raw, ip, ua string) error {
 		).
 		Update("revoked_at", &now).Error
 	if err == nil {
-		s.audit.RecordBestEffort(claims.SubjectID, "admin", "admin.logout", "admin_user", claims.SubjectID, nil, ip, ua)
+		s.audit.RecordBestEffort(ctx, claims.SubjectID, "admin", "admin.logout", "admin_user", claims.SubjectID, nil, ip, ua)
 	}
 	return err
 }

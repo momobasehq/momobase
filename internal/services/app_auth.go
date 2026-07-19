@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -50,7 +51,7 @@ func (s *AppAuthService) claims(id *AppIdentity, kind string) platform.TokenClai
 		Extra:        map[string]string{"client_id": id.Credential.ClientID},
 	}
 }
-func (s *AppAuthService) issue(id *AppIdentity, session *domain.AppSession) (*TokenResponse, error) {
+func (s *AppAuthService) issue(ctx context.Context, id *AppIdentity, session *domain.AppSession) (*TokenResponse, error) {
 	response, ac, rc, err := issueTokenPair(s.tokens, s.claims(id, "access"), s.accessTTL, s.refreshTTL)
 	if err != nil {
 		return nil, err
@@ -64,7 +65,7 @@ func (s *AppAuthService) issue(id *AppIdentity, session *domain.AppSession) (*To
 		RefreshTokenHash: platform.SHA256Hex(rc.TokenID),
 		ExpiresAt:        now.Add(s.refreshTTL),
 	}
-	err = s.db.Transaction(func(db *gorm.DB) error {
+	err = store.Within(ctx, s.db, func(db *gorm.DB) error {
 		if session == nil {
 			if err := db.Create(&values).Error; err != nil {
 				return err
@@ -90,22 +91,22 @@ func (s *AppAuthService) issue(id *AppIdentity, session *domain.AppSession) (*To
 }
 
 // IssueClientToken validates client credentials and issues a new application token pair and session.
-func (s *AppAuthService) IssueClientToken(clientID, secret string) (*TokenResponse, error) {
-	id, err := s.ValidateClientCredentials(clientID, secret)
+func (s *AppAuthService) IssueClientToken(ctx context.Context, clientID, secret string) (*TokenResponse, error) {
+	id, err := s.ValidateClientCredentials(ctx, clientID, secret)
 	if err != nil {
 		return nil, err
 	}
-	return s.issue(id, nil)
+	return s.issue(ctx, id, nil)
 }
 
 // RefreshToken validates an application refresh token and rotates its session token pair.
-func (s *AppAuthService) RefreshToken(raw string) (*TokenResponse, error) {
+func (s *AppAuthService) RefreshToken(ctx context.Context, raw string) (*TokenResponse, error) {
 	claims, err := s.tokens.Verify(raw)
 	if err != nil || claims.SubjectType != "app" || claims.TokenType != "refresh" {
 		return nil, errors.New("invalid app refresh token")
 	}
 	var session domain.AppSession
-	if s.db.Where(
+	if s.db.WithContext(ctx).Where(
 		"app_id = ? AND credential_id = ? AND refresh_token_hash = ? AND expires_at > ? AND revoked_at IS NULL",
 		claims.SubjectID,
 		claims.CredentialID,
@@ -114,34 +115,34 @@ func (s *AppAuthService) RefreshToken(raw string) (*TokenResponse, error) {
 	).First(&session).Error != nil {
 		return nil, errors.New("invalid app refresh session")
 	}
-	id, err := s.identity(claims.SubjectID, claims.CredentialID)
+	id, err := s.identity(ctx, claims.SubjectID, claims.CredentialID)
 	if err != nil {
 		return nil, err
 	}
-	return s.issue(id, &session)
+	return s.issue(ctx, id, &session)
 }
 
 // ValidateClientCredentials verifies an active client ID and secret and returns the associated identity.
-func (s *AppAuthService) ValidateClientCredentials(clientID, secret string) (*AppIdentity, error) {
+func (s *AppAuthService) ValidateClientCredentials(ctx context.Context, clientID, secret string) (*AppIdentity, error) {
 	if clientID == "" || secret == "" {
 		return nil, errors.New("missing client credentials")
 	}
 	var cred domain.AppCredential
-	if s.db.Where("client_id = ? AND status = ?", clientID, "active").
+	if s.db.WithContext(ctx).Where("client_id = ? AND status = ?", clientID, "active").
 		First(&cred).Error != nil || !platform.VerifyPassword(cred.ClientSecretHash, secret) {
 		return nil, errors.New("invalid client credentials")
 	}
-	return s.fromCredential(&cred)
+	return s.fromCredential(ctx, &cred)
 }
 
 // AuthenticateBearer validates an application access token and returns its active identity.
-func (s *AppAuthService) AuthenticateBearer(raw string) (*AppIdentity, error) {
+func (s *AppAuthService) AuthenticateBearer(ctx context.Context, raw string) (*AppIdentity, error) {
 	claims, err := s.tokens.Verify(raw)
 	if err != nil || claims.SubjectType != "app" || claims.TokenType != "access" {
 		return nil, errors.New("invalid app token")
 	}
 	var session domain.AppSession
-	if s.db.Where(
+	if s.db.WithContext(ctx).Where(
 		"app_id = ? AND credential_id = ? AND access_token_hash = ? AND expires_at > ? AND revoked_at IS NULL",
 		claims.SubjectID,
 		claims.CredentialID,
@@ -150,23 +151,23 @@ func (s *AppAuthService) AuthenticateBearer(raw string) (*AppIdentity, error) {
 	).First(&session).Error != nil {
 		return nil, errors.New("invalid app session")
 	}
-	return s.identity(claims.SubjectID, claims.CredentialID)
+	return s.identity(ctx, claims.SubjectID, claims.CredentialID)
 }
-func (s *AppAuthService) identity(appID, credentialID string) (*AppIdentity, error) {
+func (s *AppAuthService) identity(ctx context.Context, appID, credentialID string) (*AppIdentity, error) {
 	var cred domain.AppCredential
 	if appID == "" || credentialID == "" ||
-		s.db.Where("id = ? AND app_id = ? AND status = ?", credentialID, appID, "active").
+		s.db.WithContext(ctx).Where("id = ? AND app_id = ? AND status = ?", credentialID, appID, "active").
 			First(&cred).Error != nil {
 		return nil, errors.New("app credential inactive")
 	}
-	return s.fromCredential(&cred)
+	return s.fromCredential(ctx, &cred)
 }
-func (s *AppAuthService) fromCredential(cred *domain.AppCredential) (*AppIdentity, error) {
+func (s *AppAuthService) fromCredential(ctx context.Context, cred *domain.AppCredential) (*AppIdentity, error) {
 	if cred.Status != "active" || (cred.ExpiresAt != nil && !cred.ExpiresAt.After(time.Now().UTC())) {
 		return nil, errors.New("app credential inactive or expired")
 	}
 	var app domain.App
-	if s.db.Where("id = ? AND status = ?", cred.AppID, "active").First(&app).Error != nil {
+	if s.db.WithContext(ctx).Where("id = ? AND status = ?", cred.AppID, "active").First(&app).Error != nil {
 		return nil, errors.New("app inactive")
 	}
 	return &AppIdentity{app, *cred}, nil

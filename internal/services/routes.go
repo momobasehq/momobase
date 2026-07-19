@@ -29,6 +29,7 @@ func NewRouteAdminService(db *gorm.DB, audit *AuditService) *RouteAdminService {
 
 // Create validates and persists a payment route for an existing provider account.
 func (s *RouteAdminService) Create(
+	ctx context.Context,
 	actor *domain.AdminUser,
 	service string,
 	method string,
@@ -43,7 +44,8 @@ func (s *RouteAdminService) Create(
 		return nil, errors.New("only payment_method=momo is implemented")
 	}
 	var count int64
-	if err := s.db.Model(&domain.ProviderAccount{}).Where("id = ?", accountID).Count(&count).Error; err != nil || count != 1 {
+	db := s.db.WithContext(ctx)
+	if err := db.Model(&domain.ProviderAccount{}).Where("id = ?", accountID).Count(&count).Error; err != nil || count != 1 {
 		return nil, gorm.ErrRecordNotFound
 	}
 	if priority < 1 {
@@ -57,26 +59,27 @@ func (s *RouteAdminService) Create(
 		Priority:          priority,
 		Active:            active,
 	}
-	if err := s.db.Create(route).Error; err != nil {
+	if err := db.Create(route).Error; err != nil {
 		return nil, err
 	}
-	s.audit.RecordBestEffort(actorID(actor), "admin", "route.created", "payment_route", route.ID, nil, "", "")
+	s.audit.RecordBestEffort(ctx, actorID(actor), "admin", "route.created", "payment_route", route.ID, nil, "", "")
 	return route, nil
 }
 
 // Update replaces a payment route's priority and active state.
-func (s *RouteAdminService) Update(actor *domain.AdminUser, id string, priority int, active bool) error {
+func (s *RouteAdminService) Update(ctx context.Context, actor *domain.AdminUser, id string, priority int, active bool) error {
 	if priority < 1 {
 		return errors.New("priority must be at least 1")
 	}
 	if err := store.Affected(
-		s.db.Model(&domain.PaymentRoute{}).
+		s.db.WithContext(ctx).Model(&domain.PaymentRoute{}).
 			Where("id = ?", id).
 			Updates(map[string]any{"priority": priority, "active": active}),
 	); err != nil {
 		return err
 	}
 	s.audit.RecordBestEffort(
+		ctx,
 		actorID(actor),
 		"admin",
 		"route.updated",

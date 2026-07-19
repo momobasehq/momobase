@@ -1,6 +1,7 @@
 package public
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -54,7 +55,7 @@ func authenticatedHandler(t *testing.T) (*Handler, *services.AppAuthService, str
 		t.Fatalf("NewTokenManager() error = %v", err)
 	}
 	auth := services.NewAppAuthService(db, "client", "secret", time.Minute, time.Hour, manager)
-	tokens, err := auth.IssueClientToken("client-1", "client-secret")
+	tokens, err := auth.IssueClientToken(context.Background(), "client-1", "client-secret")
 	if err != nil {
 		t.Fatalf("IssueClientToken() error = %v", err)
 	}

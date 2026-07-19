@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -23,7 +24,7 @@ func NewAdminUserService(db *gorm.DB, audit *AuditService) *AdminUserService {
 }
 
 // Create validates and persists an administrator account, subject to the actor's role.
-func (s *AdminUserService) Create(actor *domain.AdminUser, name, email, password, role string) (*domain.AdminUser, error) {
+func (s *AdminUserService) Create(ctx context.Context, actor *domain.AdminUser, name, email, password, role string) (*domain.AdminUser, error) {
 	if actor != nil && actor.Role != "super_admin" {
 		return nil, errors.New("only super_admin can create admins")
 	}
@@ -52,8 +53,9 @@ func (s *AdminUserService) Create(actor *domain.AdminUser, name, email, password
 	if actor != nil {
 		actorID, user.CreatedBy = actor.ID, actor.ID
 	}
-	if err = s.db.Create(user).Error; err == nil {
+	if err = s.db.WithContext(ctx).Create(user).Error; err == nil {
 		s.audit.RecordBestEffort(
+			ctx,
 			actorID,
 			"admin",
 			"admin.created",
@@ -68,7 +70,7 @@ func (s *AdminUserService) Create(actor *domain.AdminUser, name, email, password
 }
 
 // ChangePassword replaces an administrator's password and revokes all of that user's active sessions.
-func (s *AdminUserService) ChangePassword(actor *domain.AdminUser, id, password string) error {
+func (s *AdminUserService) ChangePassword(ctx context.Context, actor *domain.AdminUser, id, password string) error {
 	if actor == nil || actor.Role != "super_admin" && actor.ID != id {
 		return errors.New("not allowed")
 	}
@@ -80,7 +82,7 @@ func (s *AdminUserService) ChangePassword(actor *domain.AdminUser, id, password 
 		return err
 	}
 	now := time.Now().UTC()
-	err = s.db.Transaction(func(tx *gorm.DB) error {
+	err = store.Within(ctx, s.db, func(tx *gorm.DB) error {
 		if err := store.Affected(
 			tx.Model(&domain.AdminUser{}).
 				Where("id = ?", id).
@@ -94,20 +96,20 @@ func (s *AdminUserService) ChangePassword(actor *domain.AdminUser, id, password 
 		return tx.Model(&domain.AdminSession{}).Where("admin_user_id = ? AND revoked_at IS NULL", id).Update("revoked_at", &now).Error
 	})
 	if err == nil {
-		s.audit.RecordBestEffort(actor.ID, "admin", "admin.password_changed", "admin_user", id, nil, "", "")
+		s.audit.RecordBestEffort(ctx, actor.ID, "admin", "admin.password_changed", "admin_user", id, nil, "", "")
 	}
 	return err
 }
 
 // ChangeStatus activates or deactivates an administrator and revokes sessions when deactivating.
-func (s *AdminUserService) ChangeStatus(actor *domain.AdminUser, id, status string) error {
+func (s *AdminUserService) ChangeStatus(ctx context.Context, actor *domain.AdminUser, id, status string) error {
 	if actor == nil || actor.Role != "super_admin" {
 		return errors.New("only super_admin can change status")
 	}
 	if status != "active" && status != "inactive" {
 		return errors.New("invalid status")
 	}
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err := store.Within(ctx, s.db, func(tx *gorm.DB) error {
 		if err := store.Affected(tx.Model(&domain.AdminUser{}).Where("id = ?", id).Update("status", status)); err != nil {
 			return err
 		}
@@ -118,7 +120,7 @@ func (s *AdminUserService) ChangeStatus(actor *domain.AdminUser, id, status stri
 		return tx.Model(&domain.AdminSession{}).Where("admin_user_id = ? AND revoked_at IS NULL", id).Update("revoked_at", &now).Error
 	})
 	if err == nil {
-		s.audit.RecordBestEffort(actor.ID, "admin", "admin.status_changed", "admin_user", id, map[string]any{"status": status}, "", "")
+		s.audit.RecordBestEffort(ctx, actor.ID, "admin", "admin.status_changed", "admin_user", id, map[string]any{"status": status}, "", "")
 	}
 	return err
 }

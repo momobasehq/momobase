@@ -53,10 +53,10 @@ func NewRouter(d RouterDeps) http.Handler {
 	adminLimit := authmw.RateLimitByIP(120, time.Minute)
 	webhookLimit := authmw.RateLimitByIP(300, time.Minute)
 	route(mux, "POST /api/v1/token", token("client_credentials", func(r *http.Request) (any, error) {
-		return d.AppAuth.IssueClientToken(r.Form.Get("client_id"), r.Form.Get("client_secret"))
+		return d.AppAuth.IssueClientToken(r.Context(), r.Form.Get("client_id"), r.Form.Get("client_secret"))
 	}), tokens)
 	route(mux, "POST /api/v1/token/refresh", token("refresh_token", func(r *http.Request) (any, error) {
-		return d.AppAuth.RefreshToken(r.Form.Get("refresh_token"))
+		return d.AppAuth.RefreshToken(r.Context(), r.Form.Get("refresh_token"))
 	}), tokens)
 	app := []middleware{publicLimit, authmw.WithAppBearer(d.AppAuth), authmw.JSONOnly}
 	route(mux, "POST /api/v1/collections", d.Public.CreateCollection, append(app, authmw.RequireAppScope("collections:create"))...)
@@ -79,12 +79,12 @@ func NewRouter(d RouterDeps) http.Handler {
 	)
 
 	adminToken := token("password", func(r *http.Request) (any, error) {
-		return d.AdminAuth.IssuePasswordToken(r.Form.Get("username"), r.Form.Get("password"), r.RemoteAddr, r.UserAgent())
+		return d.AdminAuth.IssuePasswordToken(r.Context(), r.Form.Get("username"), r.Form.Get("password"), r.RemoteAddr, r.UserAgent())
 	})
 	route(mux, "POST /api/admin/token", adminToken, tokens)
 	route(mux, "POST /api/admin/login", adminToken, tokens)
 	route(mux, "POST /api/admin/token/refresh", token("refresh_token", func(r *http.Request) (any, error) {
-		return d.AdminAuth.RefreshToken(r.Form.Get("refresh_token"), r.RemoteAddr, r.UserAgent())
+		return d.AdminAuth.RefreshToken(r.Context(), r.Form.Get("refresh_token"), r.RemoteAddr, r.UserAgent())
 	}), tokens)
 	adminRoutes(mux, d.Admin, adminLimit, authmw.WithAdminBearer(d.AdminAuth), authmw.NoCache)
 	route(mux, "POST /webhooks/{providerAccountID}", d.Webhooks.ProviderWebhook, webhookLimit, authmw.MaxBodyBytes(256<<10))

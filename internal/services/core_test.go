@@ -81,12 +81,13 @@ func stack(t *testing.T) *testStack {
 	}
 }
 func (s *testStack) app(t *testing.T) (*domain.App, *domain.AppCredential, string) {
-	app := must(s.apps.CreateApp(s.actor, "Test", "", "sandbox"))
-	created := must(s.apps.CreateCredential(s.actor, app.ID, "Default", defaultScopes, nil))
+	app := must(s.apps.CreateApp(context.Background(), s.actor, "Test", "", "sandbox"))
+	created := must(s.apps.CreateCredential(context.Background(), s.actor, app.ID, "Default", defaultScopes, nil))
 	return app, &created.Credential, created.ClientSecret
 }
 func (s *testStack) provider(t *testing.T, mode string, countries ...string) *domain.ProviderAccount {
 	account := must(s.providerAdmin.CreateAccount(
+		context.Background(),
 		s.actor,
 		"test_provider",
 		"Test",
@@ -98,20 +99,20 @@ func (s *testStack) provider(t *testing.T, mode string, countries ...string) *do
 	return account
 }
 func (s *testStack) route(t *testing.T, id string, priority int) {
-	must(s.routes.Create(s.actor, domain.ServiceCollection, domain.PaymentMethodMomo, id, priority, true))
+	must(s.routes.Create(context.Background(), s.actor, domain.ServiceCollection, domain.PaymentMethodMomo, id, priority, true))
 }
 
 func TestCoreFlows(t *testing.T) {
 	t.Run("credential rotation", func(t *testing.T) {
 		s := stack(t)
 		app, credential, secret := s.app(t)
-		token := must(s.auth.IssueClientToken(credential.ClientID, secret))
-		rotated := must(s.apps.RotateCredential(s.actor, app.ID, credential.ID))
-		if _, err := s.auth.ValidateClientCredentials(credential.ClientID, secret); err == nil {
+		token := must(s.auth.IssueClientToken(context.Background(), credential.ClientID, secret))
+		rotated := must(s.apps.RotateCredential(context.Background(), s.actor, app.ID, credential.ID))
+		if _, err := s.auth.ValidateClientCredentials(context.Background(), credential.ClientID, secret); err == nil {
 			t.Fatal("old secret accepted")
 		}
-		must(s.auth.ValidateClientCredentials(credential.ClientID, rotated.ClientSecret))
-		if _, err := s.auth.AuthenticateBearer(token.AccessToken); err == nil {
+		must(s.auth.ValidateClientCredentials(context.Background(), credential.ClientID, rotated.ClientSecret))
+		if _, err := s.auth.AuthenticateBearer(context.Background(), token.AccessToken); err == nil {
 			t.Fatal("old access token accepted")
 		}
 	})
@@ -203,6 +204,15 @@ func TestCountryAndPhoneNormalization(t *testing.T) {
 	}
 	if _, err := NormalizeMSISDN("+254712123456", "UG"); err == nil {
 		t.Fatal("accepted a phone number from a different country")
+	}
+}
+
+func TestServiceQueriesHonorCanceledContext(t *testing.T) {
+	s := stack(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := s.apps.GetApp(ctx, "missing"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("GetApp() error = %v, want context canceled", err)
 	}
 }
 

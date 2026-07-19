@@ -289,11 +289,12 @@ func closeDatabase(db *gorm.DB) error {
 
 // SeedAdmin creates a super administrator using the application's admin user
 // service.
-func (a *App) SeedAdmin(email, password, name string) error {
+func (a *App) SeedAdmin(ctx context.Context, email, password, name string) error {
 	if email == "" || password == "" {
 		return errors.New("email and password are required")
 	}
 	_, err := a.AdminUsers.Create(
+		ctx,
 		&domain.AdminUser{
 			BaseModel: domain.BaseModel{ID: "system"},
 			Role:      "super_admin",

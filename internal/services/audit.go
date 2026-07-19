@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 
@@ -26,7 +27,7 @@ func NewAuditService(db *gorm.DB, logger ...*slog.Logger) *AuditService {
 }
 
 // RecordBestEffort attempts to persist an audit entry without returning failures to the caller.
-func (s *AuditService) RecordBestEffort(actorID, actorType, action, entityType, entityID string, meta any, ip, ua string) {
+func (s *AuditService) RecordBestEffort(ctx context.Context, actorID, actorType, action, entityType, entityID string, meta any, ip, ua string) {
 	if s == nil {
 		return
 	}
@@ -34,7 +35,7 @@ func (s *AuditService) RecordBestEffort(actorID, actorType, action, entityType, 
 	if err != nil {
 		data = []byte(`{"marshal_error":true}`)
 	}
-	err = s.db.Create(&domain.AuditLog{
+	err = s.db.WithContext(ctx).Create(&domain.AuditLog{
 		BaseModel:    domain.BaseModel{ID: platform.NewID("aud")},
 		ActorID:      actorID,
 		ActorType:    actorType,

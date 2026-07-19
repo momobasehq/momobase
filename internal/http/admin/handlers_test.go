@@ -2,6 +2,7 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -156,6 +157,18 @@ func TestHandlerListAndGetApp(t *testing.T) {
 	h.GetApp(recorder, req)
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("GetApp(missing) status = %d", recorder.Code)
+	}
+}
+
+func TestHandlerListHonorsCanceledContext(t *testing.T) {
+	h := testHandler(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodGet, "/admins", nil).WithContext(ctx)
+	recorder := httptest.NewRecorder()
+	h.List("admins")(recorder, req)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("List(admins) with canceled context status = %d", recorder.Code)
 	}
 }
 

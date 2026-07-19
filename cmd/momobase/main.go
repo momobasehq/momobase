@@ -96,13 +96,13 @@ func newSeedAdminCommand() *cobra.Command {
 		Use:   "seed-admin",
 		Short: "Create a super administrator",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) (err error) {
+		RunE: func(command *cobra.Command, _ []string) (err error) {
 			app, err := loadApp()
 			if err != nil {
 				return err
 			}
 			defer closeApp(app, &err)
-			if err = app.SeedAdmin(email, password, name); err == nil {
+			if err = app.SeedAdmin(command.Context(), email, password, name); err == nil {
 				fmt.Printf("admin created: %s\n", email)
 			}
 			return err

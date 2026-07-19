@@ -111,12 +111,17 @@ func TestAuthenticationContextAndAuthorization(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer  token-value ")
+	type requestMarker struct{}
+	req = req.WithContext(context.WithValue(req.Context(), requestMarker{}, true))
 	if got := BearerToken(req); got != "token-value" {
 		t.Fatalf("BearerToken() = %q", got)
 	}
 
 	verified := &domain.AdminUser{Role: "operations"}
-	auth := authenticate(adminKey, func(token string) (*domain.AdminUser, error) {
+	auth := authenticate(adminKey, func(ctx context.Context, token string) (*domain.AdminUser, error) {
+		if marked, _ := ctx.Value(requestMarker{}).(bool); token == "token-value" && !marked {
+			t.Fatal("request context was not passed to authentication")
+		}
 		if token != "token-value" {
 			return nil, errors.New("bad token")
 		}

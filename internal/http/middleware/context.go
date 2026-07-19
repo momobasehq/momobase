@@ -40,10 +40,10 @@ func App(r *http.Request) *services.AppIdentity {
 	value, _ := r.Context().Value(appKey).(*services.AppIdentity)
 	return value
 }
-func authenticate[T any](key key, verify func(string) (*T, error)) func(http.Handler) http.Handler {
+func authenticate[T any](key key, verify func(context.Context, string) (*T, error)) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			identity, err := verify(BearerToken(r))
+			identity, err := verify(r.Context(), BearerToken(r))
 			if err != nil {
 				platform.Error(w, 401, "UNAUTHORIZED", err.Error())
 				return

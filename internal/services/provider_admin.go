@@ -37,6 +37,7 @@ func NewProviderAdminService(
 
 // CreateAccount validates and persists an inactive provider account with encrypted configuration.
 func (s *ProviderAdminService) CreateAccount(
+	ctx context.Context,
 	actor *domain.AdminUser,
 	code string,
 	name string,
@@ -71,10 +72,11 @@ func (s *ProviderAdminService) CreateAccount(
 		Environment: environment, Countries: countries, ConfigVersion: 1,
 		EncryptedConfigJSON: cipher, ConfigHash: hash,
 	}
-	if err = s.db.Create(account).Error; err != nil {
+	if err = s.db.WithContext(ctx).Create(account).Error; err != nil {
 		return nil, err
 	}
 	s.audit.RecordBestEffort(
+		ctx,
 		actorID(actor),
 		"admin",
 		"provider_account.created",
@@ -94,7 +96,8 @@ func (s *ProviderAdminService) UpdateCountries(ctx context.Context, actor *domai
 		return err
 	}
 	var account domain.ProviderAccount
-	if err = s.db.First(&account, "id = ?", id).Error; err != nil {
+	db := s.db.WithContext(ctx)
+	if err = db.First(&account, "id = ?", id).Error; err != nil {
 		return err
 	}
 	plain, err := s.runtime.plain(&account)
@@ -104,18 +107,19 @@ func (s *ProviderAdminService) UpdateCountries(ctx context.Context, actor *domai
 	if err = validateProviderConfig(plain); err != nil {
 		return err
 	}
-	if err = updateProviderCountries(s.db, id, countries); err != nil {
+	if err = updateProviderCountries(db, id, countries); err != nil {
 		return err
 	}
 	if account.Active {
 		if err = s.runtime.Reload(ctx, id); err != nil {
-			if rollback := updateProviderCountries(s.db, id, account.Countries); rollback != nil {
+			if rollback := updateProviderCountries(db, id, account.Countries); rollback != nil {
 				return errors.Join(err, rollback)
 			}
 			return err
 		}
 	}
 	s.audit.RecordBestEffort(
+		ctx,
 		actorID(actor),
 		"admin",
 		"provider_countries.updated",
@@ -139,7 +143,8 @@ func updateProviderCountries(db *gorm.DB, id string, countries []string) error {
 // UpdateConfig validates and encrypts replacement provider configuration and reloads an active runtime.
 func (s *ProviderAdminService) UpdateConfig(ctx context.Context, actor *domain.AdminUser, id string, config map[string]any) error {
 	var account domain.ProviderAccount
-	if err := s.db.First(&account, "id = ?", id).Error; err != nil {
+	db := s.db.WithContext(ctx)
+	if err := db.First(&account, "id = ?", id).Error; err != nil {
 		return err
 	}
 	cleanProviderConfig(config)
@@ -150,7 +155,7 @@ func (s *ProviderAdminService) UpdateConfig(ctx context.Context, actor *domain.A
 	if err != nil {
 		return err
 	}
-	err = store.Affected(s.db.Model(&account).Updates(map[string]any{
+	err = store.Affected(db.Model(&account).Updates(map[string]any{
 		"encrypted_config_json": cipher,
 		"config_hash":           hash,
 		"config_version":        gorm.Expr("config_version + 1"),
@@ -165,43 +170,44 @@ func (s *ProviderAdminService) UpdateConfig(ctx context.Context, actor *domain.A
 				"config_hash":           account.ConfigHash,
 				"config_version":        account.ConfigVersion,
 			}
-			if rollback := s.db.Model(&domain.ProviderAccount{}).Where("id = ?", id).Updates(restore).Error; rollback != nil {
+			if rollback := db.Model(&domain.ProviderAccount{}).Where("id = ?", id).Updates(restore).Error; rollback != nil {
 				return errors.Join(err, rollback)
 			}
 			return err
 		}
 	}
-	s.audit.RecordBestEffort(actorID(actor), "admin", "provider_config.updated", "provider_account", id, nil, "", "")
+	s.audit.RecordBestEffort(ctx, actorID(actor), "admin", "provider_config.updated", "provider_account", id, nil, "", "")
 	return nil
 }
 
 // Activate marks a configured provider account active and loads its runtime adapter.
 func (s *ProviderAdminService) Activate(ctx context.Context, actor *domain.AdminUser, id string) error {
 	var account domain.ProviderAccount
-	if err := s.db.First(&account, "id = ?", id).Error; err != nil {
+	db := s.db.WithContext(ctx)
+	if err := db.First(&account, "id = ?", id).Error; err != nil {
 		return err
 	}
 	if len(account.Countries) == 0 {
 		return errors.New("provider must support at least one country before activation")
 	}
-	if err := store.Affected(s.db.Model(&account).Update("active", true)); err != nil {
+	if err := store.Affected(db.Model(&account).Update("active", true)); err != nil {
 		return err
 	}
 	if err := s.runtime.Reload(ctx, id); err != nil {
-		_ = s.db.Model(&domain.ProviderAccount{}).Where("id = ?", id).Update("active", false).Error
+		_ = db.Model(&domain.ProviderAccount{}).Where("id = ?", id).Update("active", false).Error
 		return err
 	}
-	s.audit.RecordBestEffort(actorID(actor), "admin", "provider.activated", "provider_account", id, nil, "", "")
+	s.audit.RecordBestEffort(ctx, actorID(actor), "admin", "provider.activated", "provider_account", id, nil, "", "")
 	return nil
 }
 
 // Deactivate marks a provider account inactive and removes its runtime adapter.
-func (s *ProviderAdminService) Deactivate(_ context.Context, actor *domain.AdminUser, id string) error {
-	if err := store.Affected(s.db.Model(&domain.ProviderAccount{}).Where("id = ?", id).Update("active", false)); err != nil {
+func (s *ProviderAdminService) Deactivate(ctx context.Context, actor *domain.AdminUser, id string) error {
+	if err := store.Affected(s.db.WithContext(ctx).Model(&domain.ProviderAccount{}).Where("id = ?", id).Update("active", false)); err != nil {
 		return err
 	}
 	s.runtime.Disable(id)
-	s.audit.RecordBestEffort(actorID(actor), "admin", "provider.deactivated", "provider_account", id, nil, "", "")
+	s.audit.RecordBestEffort(ctx, actorID(actor), "admin", "provider.deactivated", "provider_account", id, nil, "", "")
 	return nil
 }
 
