@@ -79,7 +79,13 @@ func NewRouter(d RouterDeps) http.Handler {
 	route(mux, "POST /api/admin/token/refresh", d.Admin.RefreshToken, tokens)
 	adminRoutes(mux, d.Admin, adminLimit, middlewarex.WithAdminBearer(d.AdminAuth), middlewarex.NoCache)
 	route(mux, "POST /webhooks/{providerAccountID}", d.Webhooks.ProviderWebhook, webhookLimit, middlewarex.MaxBodyBytes(256<<10))
-	return chain(mux, middlewarex.Recover(d.Logger), middlewarex.MaxBodyBytes(1<<20), middlewarex.StructuredLogger(d.Logger), middlewarex.CORS(d.CORSAllowedOrigins))
+	return chain(
+		mux,
+		middlewarex.Recover(d.Logger),
+		middlewarex.MaxBodyBytes(1<<20),
+		middlewarex.StructuredLogger(d.Logger),
+		middlewarex.CORS(d.CORSAllowedOrigins),
+	)
 }
 
 func adminRoutes(mux *http.ServeMux, h *adminh.Handler, base ...middleware) {

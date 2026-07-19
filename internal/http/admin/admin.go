@@ -5,6 +5,7 @@ import (
 
 	httpcommon "github.com/momobasehq/momobase/internal/http/common"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/services"
 )
 
 // Me writes the authenticated administrator stored in the request context.
@@ -36,7 +37,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) { platform.JSON(w, 
 // @Router /api/admin/token [post]
 // @Router /api/admin/login [post]
 func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
-	httpcommon.Token("password", func(r *http.Request) (any, error) {
+	httpcommon.Token("password", func(r *http.Request) (*services.TokenResponse, error) {
 		return h.auth.IssuePasswordToken(r.Context(), r.Form.Get("username"), r.Form.Get("password"), r.RemoteAddr, r.UserAgent())
 	})(w, r)
 }
@@ -55,7 +56,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/token/refresh [post]
 func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
-	httpcommon.Token("refresh_token", func(r *http.Request) (any, error) {
+	httpcommon.Token("refresh_token", func(r *http.Request) (*services.TokenResponse, error) {
 		return h.auth.RefreshToken(r.Context(), r.Form.Get("refresh_token"), r.RemoteAddr, r.UserAgent())
 	})(w, r)
 }

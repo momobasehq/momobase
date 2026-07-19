@@ -48,7 +48,7 @@ func Health(w http.ResponseWriter, _ *http.Request) {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/v1/token [post]
 func ClientToken(auth *services.AppAuthService) http.HandlerFunc {
-	return httpcommon.Token("client_credentials", func(r *http.Request) (any, error) {
+	return httpcommon.Token("client_credentials", func(r *http.Request) (*services.TokenResponse, error) {
 		return auth.IssueClientToken(r.Context(), r.Form.Get("client_id"), r.Form.Get("client_secret"))
 	})
 }
@@ -67,7 +67,7 @@ func ClientToken(auth *services.AppAuthService) http.HandlerFunc {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/v1/token/refresh [post]
 func AppRefreshToken(auth *services.AppAuthService) http.HandlerFunc {
-	return httpcommon.Token("refresh_token", func(r *http.Request) (any, error) {
+	return httpcommon.Token("refresh_token", func(r *http.Request) (*services.TokenResponse, error) {
 		return auth.RefreshToken(r.Context(), r.Form.Get("refresh_token"))
 	})
 }

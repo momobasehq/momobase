@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"log/slog"
@@ -15,6 +14,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/http/apidoc"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/providers"
 	"github.com/momobasehq/momobase/internal/services"
@@ -136,9 +136,9 @@ func TestHandlerListAndGetApp(t *testing.T) {
 		}
 	}
 	recorder := httptest.NewRecorder()
-	h.List("admins")(recorder, httptest.NewRequest(http.MethodGet, "/admins?per_page=1", nil))
+	h.ListAdmins(recorder, httptest.NewRequest(http.MethodGet, "/admins?per_page=1", nil))
 	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"total":2`) || !strings.Contains(recorder.Body.String(), `"count":1`) {
-		t.Fatalf("List(admins) response = %d %s", recorder.Code, recorder.Body.String())
+		t.Fatalf("ListAdmins() response = %d %s", recorder.Code, recorder.Body.String())
 	}
 
 	app := domain.App{BaseModel: domain.BaseModel{ID: "app-1"}, Name: "App", Status: "active", Environment: "sandbox"}
@@ -166,38 +166,38 @@ func TestHandlerListHonorsCanceledContext(t *testing.T) {
 	cancel()
 	req := httptest.NewRequest(http.MethodGet, "/admins", nil).WithContext(ctx)
 	recorder := httptest.NewRecorder()
-	h.List("admins")(recorder, req)
+	h.ListAdmins(recorder, req)
 	if recorder.Code != http.StatusInternalServerError {
-		t.Fatalf("List(admins) with canceled context status = %d", recorder.Code)
+		t.Fatalf("ListAdmins() with canceled context status = %d", recorder.Code)
 	}
 }
 
-func TestHandlerActionValidationAndUnsupportedAction(t *testing.T) {
+func TestHandlerCreateHandlersRejectInvalidJSON(t *testing.T) {
 	h := testHandler(t)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/action", bytes.NewBufferString(`{"unknown":true}`))
-	h.Action(http.StatusCreated, "ACTION_FAILED", "unsupported", true)(recorder, req)
+	req := httptest.NewRequest(http.MethodPost, "/admin/users", strings.NewReader(`{"unknown":true}`))
+	h.CreateAdminUser(recorder, req)
 	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "VALIDATION_ERROR") {
-		t.Fatalf("Action(validation) response = %d %s", recorder.Code, recorder.Body.String())
+		t.Fatalf("CreateAdminUser(validation) response = %d %s", recorder.Code, recorder.Body.String())
 	}
 
 	recorder = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/action", nil)
-	h.Action(http.StatusOK, "ACTION_FAILED", "unsupported", false)(recorder, req)
-	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "unsupported admin action") {
-		t.Fatalf("Action(unsupported) response = %d %s", recorder.Code, recorder.Body.String())
+	req = httptest.NewRequest(http.MethodPost, "/admin/apps", strings.NewReader(`{"unknown":true}`))
+	h.CreateApp(recorder, req)
+	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "VALIDATION_ERROR") {
+		t.Fatalf("CreateApp(validation) response = %d %s", recorder.Code, recorder.Body.String())
 	}
 }
 
 func TestReplySuccessAndError(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	reply(recorder, http.StatusAccepted, "FAILED", func() (any, error) { return nil, nil })
+	reply(recorder, http.StatusAccepted, "FAILED", func() (apidoc.OK, error) { return apidoc.OK{OK: true}, nil })
 	if recorder.Code != http.StatusAccepted || !strings.Contains(recorder.Body.String(), `"ok":true`) {
 		t.Fatalf("reply(success) = %d %s", recorder.Code, recorder.Body.String())
 	}
 
 	recorder = httptest.NewRecorder()
-	reply(recorder, http.StatusOK, "FAILED", func() (any, error) { return nil, io.EOF })
+	reply(recorder, http.StatusOK, "FAILED", func() (apidoc.OK, error) { return apidoc.OK{OK: true}, io.EOF })
 	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "FAILED") {
 		t.Fatalf("reply(error) = %d %s", recorder.Code, recorder.Body.String())
 	}
