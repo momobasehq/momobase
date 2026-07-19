@@ -119,7 +119,12 @@ func (s *AppService) newSecret() (string, string, error) {
 }
 
 // CreateCredential generates and persists a credential for an existing application.
-func (s *AppService) CreateCredential(ctx context.Context, actor *domain.AdminUser, appID, name, scopes string, expires *time.Time) (*CreatedCredential, error) {
+func (s *AppService) CreateCredential(
+	ctx context.Context,
+	actor *domain.AdminUser,
+	appID, name, scopes string,
+	expires *time.Time,
+) (*CreatedCredential, error) {
 	if _, err := s.GetApp(ctx, appID); err != nil {
 		return nil, err
 	}
