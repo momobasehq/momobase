@@ -97,67 +97,67 @@ func adminRoutes(mux *http.ServeMux, h *adminh.Handler, base ...middleware) {
 	add := func(pattern string, handler http.HandlerFunc, extra ...middleware) {
 		route(mux, pattern, handler, append(base, extra...)...)
 	}
-	add("POST /api/admin/logout", h.Action(200, "LOGOUT_FAILED", "logout", false))
+	add("POST /api/admin/logout", h.Logout)
 	add("GET /api/admin/me", h.Me)
-	add("GET /api/admin/transactions", h.List("transactions"))
-	add("GET /api/admin/audit-logs", h.List("audit"))
-	add("GET /api/admin/health/providers", h.List("health"))
+	add("GET /api/admin/transactions", h.ListTransactions)
+	add("GET /api/admin/audit-logs", h.ListAuditLogs)
+	add("GET /api/admin/health/providers", h.ListProviderHealth)
 	add("GET /api/admin/balances/providers", h.ActiveProviderBalances, ops)
 	add("GET /api/admin/system/info", h.SystemInfo)
 	add("GET /api/admin/system/health", h.SystemHealth)
 	add("GET /api/admin/workers", h.Workers)
 	add("GET /api/admin/runtime/providers", h.RuntimeProviders)
-	add("GET /api/admin/users", h.List("admins"))
-	add("POST /api/admin/users", h.Action(201, "ADMIN_CREATE_FAILED", "admin.create", true), super, authmw.JSONOnly)
-	add("PATCH /api/admin/users/{id}/password", h.Action(200, "PASSWORD_CHANGE_FAILED", "admin.password", true), super, authmw.JSONOnly)
-	add("PATCH /api/admin/users/{id}/status", h.Action(200, "STATUS_CHANGE_FAILED", "admin.status", true), super, authmw.JSONOnly)
-	add("GET /api/admin/apps", h.List("apps"))
-	add("POST /api/admin/apps", h.Action(201, "APP_CREATE_FAILED", "app.create", true), super, authmw.JSONOnly)
+	add("GET /api/admin/users", h.ListAdmins)
+	add("POST /api/admin/users", h.CreateAdminUser, super, authmw.JSONOnly)
+	add("PATCH /api/admin/users/{id}/password", h.ChangeAdminPassword, super, authmw.JSONOnly)
+	add("PATCH /api/admin/users/{id}/status", h.ChangeAdminStatus, super, authmw.JSONOnly)
+	add("GET /api/admin/apps", h.ListApps)
+	add("POST /api/admin/apps", h.CreateApp, super, authmw.JSONOnly)
 	add("GET /api/admin/apps/{id}", h.GetApp)
-	add("PATCH /api/admin/apps/{id}", h.Action(200, "APP_UPDATE_FAILED", "app.update", true), super, authmw.JSONOnly)
-	add("PATCH /api/admin/apps/{id}/status", h.Action(200, "APP_STATUS_CHANGE_FAILED", "app.status", true), super, authmw.JSONOnly)
-	add("GET /api/admin/apps/{id}/credentials", h.List("credentials"))
+	add("PATCH /api/admin/apps/{id}", h.UpdateApp, super, authmw.JSONOnly)
+	add("PATCH /api/admin/apps/{id}/status", h.ChangeAppStatus, super, authmw.JSONOnly)
+	add("GET /api/admin/apps/{id}/credentials", h.ListCredentials)
 	add(
 		"POST /api/admin/apps/{id}/credentials",
-		h.Action(201, "APP_CREDENTIAL_CREATE_FAILED", "credential.create", true),
+		h.CreateCredential,
 		super,
 		authmw.JSONOnly,
 	)
 	add(
 		"PATCH /api/admin/apps/{id}/credentials/{credentialID}/revoke",
-		h.Action(200, "APP_CREDENTIAL_REVOKE_FAILED", "credential.revoke", false),
+		h.RevokeCredential,
 		super,
 	)
 	add(
 		"POST /api/admin/apps/{id}/credentials/{credentialID}/rotate",
-		h.Action(200, "APP_CREDENTIAL_ROTATE_FAILED", "credential.rotate", false),
+		h.RotateCredential,
 		super,
 	)
-	add("GET /api/admin/providers", h.List("providers"))
-	add("POST /api/admin/providers/accounts", h.Action(201, "PROVIDER_CREATE_FAILED", "provider.create", true), super, authmw.JSONOnly)
+	add("GET /api/admin/providers", h.ListProviders)
+	add("POST /api/admin/providers/accounts", h.CreateProvider, super, authmw.JSONOnly)
 	add(
 		"PATCH /api/admin/providers/accounts/{id}/countries",
-		h.Action(200, "COUNTRIES_UPDATE_FAILED", "provider.countries", true),
+		h.UpdateProviderCountries,
 		super,
 		authmw.JSONOnly,
 	)
 	add(
 		"PATCH /api/admin/providers/accounts/{id}/config",
-		h.Action(200, "CONFIG_UPDATE_FAILED", "provider.config", true),
+		h.UpdateProviderConfig,
 		super,
 		authmw.JSONOnly,
 	)
-	add("PATCH /api/admin/providers/accounts/{id}/activate", h.Action(200, "PROVIDER_ACTIVATE_FAILED", "provider.activate", false), super)
+	add("PATCH /api/admin/providers/accounts/{id}/activate", h.ActivateProvider, super)
 	add(
 		"PATCH /api/admin/providers/accounts/{id}/deactivate",
-		h.Action(200, "PROVIDER_DEACTIVATE_FAILED", "provider.deactivate", false),
+		h.DeactivateProvider,
 		super,
 	)
-	add("POST /api/admin/providers/accounts/{id}/test", h.Action(200, "PROVIDER_TEST_FAILED", "provider.test", false), super)
+	add("POST /api/admin/providers/accounts/{id}/test", h.TestProvider, super)
 	add("GET /api/admin/providers/accounts/{id}/balance", h.ProviderBalance, ops)
-	add("GET /api/admin/routes", h.List("routes"))
-	add("POST /api/admin/routes", h.Action(201, "ROUTE_CREATE_FAILED", "route.create", true), super, authmw.JSONOnly)
-	add("PATCH /api/admin/routes/{id}", h.Action(200, "ROUTE_UPDATE_FAILED", "route.update", true), super, authmw.JSONOnly)
+	add("GET /api/admin/routes", h.ListRoutes)
+	add("POST /api/admin/routes", h.CreateRoute, super, authmw.JSONOnly)
+	add("PATCH /api/admin/routes/{id}", h.UpdateRoute, super, authmw.JSONOnly)
 }
 
 func token(grant string, issue func(*http.Request) (any, error)) http.HandlerFunc {

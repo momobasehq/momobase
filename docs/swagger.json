@@ -164,7 +164,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/apidoc.DocResponse"
+                            "$ref": "#/definitions/github_com_momobasehq_momobase_internal_domain.App"
                         }
                     },
                     "401": {
@@ -914,7 +914,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/apidoc.DocResponse"
+                            "$ref": "#/definitions/github_com_momobasehq_momobase_internal_domain.AdminUser"
                         }
                     },
                     "401": {
@@ -1720,7 +1720,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/apidoc.DocResponse"
+                            "$ref": "#/definitions/apidoc.SystemHealth"
                         }
                     },
                     "401": {
@@ -1762,7 +1762,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/apidoc.DocResponse"
+                            "$ref": "#/definitions/apidoc.SystemInfo"
                         }
                     },
                     "401": {
@@ -2972,6 +2972,86 @@
                 }
             }
         },
+        "apidoc.SystemHealth": {
+            "type": "object",
+            "properties": {
+                "active_provider_account_count": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "database": {
+                    "type": "string",
+                    "enum": [
+                        "ok",
+                        "error"
+                    ],
+                    "example": "ok"
+                },
+                "ok": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "runtime_provider_count": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "server_time": {
+                    "type": "string"
+                },
+                "workers_configured": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "health",
+                        "reconciliation"
+                    ]
+                }
+            }
+        },
+        "apidoc.SystemInfo": {
+            "type": "object",
+            "properties": {
+                "addr": {
+                    "type": "string",
+                    "example": ":9090"
+                },
+                "app_env": {
+                    "type": "string",
+                    "example": "production"
+                },
+                "app_name": {
+                    "type": "string",
+                    "example": "momobase"
+                },
+                "db_type": {
+                    "type": "string",
+                    "example": "postgres"
+                },
+                "go_version": {
+                    "type": "string",
+                    "example": "go1.23.0"
+                },
+                "server_time": {
+                    "type": "string"
+                },
+                "worker_names": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "health",
+                        "reconciliation"
+                    ]
+                },
+                "workers_enabled": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
         "apidoc.TokenResponse": {
             "type": "object",
             "properties": {
@@ -3044,6 +3124,76 @@
                     "type": "integer",
                     "minimum": 1,
                     "example": 1
+                }
+            }
+        },
+        "github_com_momobasehq_momobase_internal_domain.AdminUser": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "failed_login_attempts": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_login_at": {
+                    "type": "string"
+                },
+                "locked_until": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "password_changed_at": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_momobasehq_momobase_internal_domain.App": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "environment": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
