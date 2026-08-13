@@ -440,6 +440,23 @@ func (h *Handler) ListProviders(w http.ResponseWriter, r *http.Request) {
 	page[domain.ProviderAccount](w, r, h.db.WithContext(r.Context()).Model(&domain.ProviderAccount{}), "created_at desc")
 }
 
+// ProviderRegistry writes the provider codes registered in this build, including
+// any supplied by the embedding application, so that clients can offer them
+// without knowing them in advance.
+//
+// @Summary List registered provider codes
+// @Description Returns the provider codes accepted when creating a provider account.
+// @Tags Admin - Providers
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} apidoc.ProviderRegistryResponse
+// @Failure 401 {object} apidoc.ErrorResponse
+// @Failure 429 {object} apidoc.ErrorResponse
+// @Router /api/admin/providers/registry [get]
+func (h *Handler) ProviderRegistry(w http.ResponseWriter, _ *http.Request) {
+	platform.JSON(w, 200, apidoc.ProviderRegistry{Providers: h.providers.RegisteredProviders()})
+}
+
 // CreateProvider documents provider account creation.
 //
 // @Summary Create a provider account

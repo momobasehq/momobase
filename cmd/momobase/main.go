@@ -11,7 +11,9 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/spf13/cobra"
 
-	"github.com/momobasehq/momobase/internal/bootstrap"
+	"github.com/momobasehq/momobase"
+	"github.com/momobasehq/momobase/providers/airtel"
+	"github.com/momobasehq/momobase/providers/mtn"
 )
 
 // @title Momobase API
@@ -53,31 +55,30 @@ func newServeCommand() *cobra.Command {
 	}
 }
 
-func loadApp() (*bootstrap.App, error) {
-	cfg, err := bootstrap.LoadConfig()
-	if err != nil {
-		return nil, err
-	}
-	return bootstrap.NewApp(cfg)
+// loadInstance builds the instance served by this command. Momobase registers
+// no providers of its own, so this binary chooses the adapters it ships with;
+// applications embedding Momobase call momobase.New directly and register
+// whichever providers they need.
+func loadInstance() (*momobase.Instance, error) {
+	return momobase.New(
+		momobase.WithProvider("mtn_momo", mtn.New),
+		momobase.WithProvider("airtel_money", airtel.New),
+	)
 }
 
-func closeApp(app *bootstrap.App, err *error) {
-	if closeErr := app.Close(); closeErr != nil {
+func closeInstance(instance *momobase.Instance, err *error) {
+	if closeErr := instance.Close(); closeErr != nil {
 		*err = errors.Join(*err, closeErr)
 	}
 }
 
 func runServe(cmd *cobra.Command, _ []string) (err error) {
-	app, err := loadApp()
+	instance, err := loadInstance()
 	if err != nil {
 		return err
 	}
-	defer closeApp(app, &err)
-	err = app.Serve(cmd.Context())
-	if errors.Is(err, context.Canceled) {
-		return nil
-	}
-	return err
+	defer closeInstance(instance, &err)
+	return instance.Serve(cmd.Context())
 }
 
 func newMigrateCommand() *cobra.Command {
@@ -86,12 +87,12 @@ func newMigrateCommand() *cobra.Command {
 		Short: "Apply database schema migrations",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) (err error) {
-			app, err := loadApp()
+			instance, err := loadInstance()
 			if err != nil {
 				return err
 			}
-			defer closeApp(app, &err)
-			if err = bootstrap.AutoMigrate(app.DB); err == nil {
+			defer closeInstance(instance, &err)
+			if err = instance.Migrate(); err == nil {
 				fmt.Println("migrations applied")
 			}
 			return err
@@ -106,12 +107,12 @@ func newSeedAdminCommand() *cobra.Command {
 		Short: "Create a super administrator",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) (err error) {
-			app, err := loadApp()
+			instance, err := loadInstance()
 			if err != nil {
 				return err
 			}
-			defer closeApp(app, &err)
-			if err = app.SeedAdmin(command.Context(), email, password, name); err == nil {
+			defer closeInstance(instance, &err)
+			if err = instance.SeedAdmin(command.Context(), email, password, name); err == nil {
 				fmt.Printf("admin created: %s\n", email)
 			}
 			return err

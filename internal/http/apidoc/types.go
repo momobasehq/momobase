@@ -6,7 +6,7 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/providers"
+	"github.com/momobasehq/momobase/providers"
 )
 
 // Response describes the successful JSON envelope returned by the API.
@@ -104,6 +104,19 @@ type CreateProviderAccountRequest struct {
 	Environment  string         `json:"environment" enums:"sandbox,production" example:"sandbox"`
 	Countries    []string       `json:"countries" example:"UG"`
 	Config       map[string]any `json:"config" swaggertype:"object"`
+}
+
+// ProviderRegistry lists the provider codes registered in the running build.
+type ProviderRegistry struct {
+	Providers []string `json:"providers" example:"airtel_money,mtn_momo"`
+}
+
+// ProviderRegistryResponse is a swagger-friendly registered-provider response.
+type ProviderRegistryResponse struct {
+	Success bool               `json:"success" example:"true"`
+	Data    ProviderRegistry   `json:"data"`
+	Error   *platform.APIError `json:"error,omitempty"`
+	Message string             `json:"message,omitempty"`
 }
 
 // UpdateCountriesRequest replaces a provider account's countries.

@@ -10,8 +10,8 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/providers"
 	"github.com/momobasehq/momobase/internal/store"
+	"github.com/momobasehq/momobase/providers"
 )
 
 // ReconciliationService refreshes non-terminal transaction states and retries pending webhook processing.

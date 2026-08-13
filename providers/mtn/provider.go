@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/providers"
+	"github.com/momobasehq/momobase/providers"
 )
 
 const baseURL = "https://sandbox.momodeveloper.mtn.com"

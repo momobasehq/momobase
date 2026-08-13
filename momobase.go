@@ -1,0 +1,187 @@
+package momobase
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"os/signal"
+	"syscall"
+
+	"gorm.io/gorm"
+
+	"github.com/momobasehq/momobase/internal/bootstrap"
+)
+
+// Configuration groups. Config carries every setting the server needs; the
+// remaining types are its fields, exposed so that they can be built directly.
+type (
+	// Config contains all application configuration groups.
+	Config = bootstrap.Config
+	// AppConfig contains process-level application settings.
+	AppConfig = bootstrap.AppConfig
+	// LogConfig contains structured logging settings.
+	LogConfig = bootstrap.LogConfig
+	// DatabaseConfig contains settings shared by the supported database drivers.
+	DatabaseConfig = bootstrap.DatabaseConfig
+	// SecurityConfig contains encryption, token, and application credential settings.
+	SecurityConfig = bootstrap.SecurityConfig
+	// WorkersConfig controls background task activation and scheduling.
+	WorkersConfig = bootstrap.WorkersConfig
+	// FeaturesConfig controls optional application behavior.
+	FeaturesConfig = bootstrap.FeaturesConfig
+)
+
+// LoadConfig reads configuration from the environment and rejects invalid
+// explicitly configured boolean and duration values. New calls it when no
+// configuration is supplied through WithConfig.
+func LoadConfig() (Config, error) {
+	return bootstrap.LoadConfig()
+}
+
+// Option customizes the instance constructed by New.
+type Option func(*options)
+
+type options struct {
+	config    *Config
+	mutators  []func(*Config)
+	bootstrap []bootstrap.Option
+}
+
+// WithConfig uses cfg instead of reading configuration from the environment.
+func WithConfig(cfg Config) Option {
+	return func(o *options) { o.config = &cfg }
+}
+
+// WithConfigFunc applies fn to the resolved configuration before the instance is
+// built. Functions run in the order supplied, after any WithConfig value.
+func WithConfigFunc(fn func(*Config)) Option {
+	return func(o *options) { o.mutators = append(o.mutators, fn) }
+}
+
+// WithAddr overrides the address the HTTP server listens on, such as ":9090".
+func WithAddr(addr string) Option {
+	return WithConfigFunc(func(cfg *Config) { cfg.App.Addr = addr })
+}
+
+// WithLogger uses log instead of a logger derived from the configured log level.
+func WithLogger(log *slog.Logger) Option {
+	return with(bootstrap.WithLogger(log))
+}
+
+// WithProvider registers a payment provider under code, replacing any provider
+// previously registered under the same code. The code is the value operators
+// select when creating a provider account through the Admin API.
+//
+// Momobase registers no providers of its own, so at least one is required. The
+// adapters in providers/mtn and providers/airtel are registered the same way as
+// any other:
+//
+//	momobase.New(momobase.WithProvider("mtn_momo", mtn.New))
+func WithProvider(code string, factory ProviderFactory) Option {
+	return with(bootstrap.WithProvider(code, factory))
+}
+
+// WithProviders registers each payment provider in factories by its code.
+func WithProviders(factories map[string]ProviderFactory) Option {
+	opts := make([]bootstrap.Option, 0, len(factories))
+	for code, factory := range factories {
+		opts = append(opts, bootstrap.WithProvider(code, factory))
+	}
+	return with(opts...)
+}
+
+func with(opts ...bootstrap.Option) Option {
+	return func(o *options) { o.bootstrap = append(o.bootstrap, opts...) }
+}
+
+// Instance is a configured Momobase server and the runtime dependencies it owns.
+type Instance struct {
+	app *bootstrap.App
+}
+
+// New builds an instance from the supplied options, opening the database and
+// preparing the HTTP server, providers, and background workers. Configuration is
+// read from the environment unless WithConfig is supplied. The caller owns the
+// returned instance and must Close it to release its database connections.
+func New(opts ...Option) (*Instance, error) {
+	o := &options{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(o)
+		}
+	}
+	var cfg Config
+	if o.config != nil {
+		cfg = *o.config
+	} else {
+		var err error
+		if cfg, err = LoadConfig(); err != nil {
+			return nil, err
+		}
+	}
+	for _, mutate := range o.mutators {
+		mutate(&cfg)
+	}
+	app, err := bootstrap.NewApp(cfg, o.bootstrap...)
+	if err != nil {
+		return nil, err
+	}
+	return &Instance{app: app}, nil
+}
+
+// Serve starts the provider runtimes, background workers, and HTTP server, and
+// blocks until ctx is cancelled or the server stops. Shutting down because ctx
+// was cancelled is not reported as an error. An instance may only be served once.
+func (i *Instance) Serve(ctx context.Context) error {
+	if err := i.app.Serve(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		return err
+	}
+	return nil
+}
+
+// Run serves the instance until the process receives an interrupt or
+// termination signal, then shuts it down gracefully.
+func (i *Instance) Run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	return i.Serve(ctx)
+}
+
+// Close stops an active server and its workers before closing the database
+// connection pool. It is safe to call Close more than once.
+func (i *Instance) Close() error {
+	return i.app.Close()
+}
+
+// Migrate applies the database schema migrations. It runs automatically during
+// New unless the AutoMigrate feature is disabled.
+func (i *Instance) Migrate() error {
+	return bootstrap.AutoMigrate(i.app.DB)
+}
+
+// SeedAdmin creates a super administrator with the supplied credentials.
+func (i *Instance) SeedAdmin(ctx context.Context, email, password, name string) error {
+	return i.app.SeedAdmin(ctx, email, password, name)
+}
+
+// Handler returns the server's HTTP handler, which may be mounted in an existing
+// server instead of calling Serve or Run.
+func (i *Instance) Handler() http.Handler {
+	return i.app.Server.Handler
+}
+
+// Addr returns the address the HTTP server listens on.
+func (i *Instance) Addr() string {
+	return i.app.Server.Addr
+}
+
+// DB returns the instance's database handle.
+func (i *Instance) DB() *gorm.DB {
+	return i.app.DB
+}
+
+// Logger returns the instance's structured logger.
+func (i *Instance) Logger() *slog.Logger {
+	return i.app.Logger
+}
