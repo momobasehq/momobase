@@ -112,7 +112,7 @@ definitions:
     properties:
       data: {}
       error:
-        $ref: '#/definitions/github_com_momobasehq_momobase_internal_platform.APIError'
+        $ref: '#/definitions/platform.APIError'
       message:
         type: string
       success:
@@ -122,12 +122,34 @@ definitions:
   apidoc.ErrorResponse:
     properties:
       error:
-        $ref: '#/definitions/github_com_momobasehq_momobase_internal_platform.APIError'
+        $ref: '#/definitions/platform.APIError'
       message:
         example: request failed
         type: string
       success:
         example: false
+        type: boolean
+    type: object
+  apidoc.ProviderRegistry:
+    properties:
+      providers:
+        example:
+        - airtel_money
+        - mtn_momo
+        items:
+          type: string
+        type: array
+    type: object
+  apidoc.ProviderRegistryResponse:
+    properties:
+      data:
+        $ref: '#/definitions/apidoc.ProviderRegistry'
+      error:
+        $ref: '#/definitions/platform.APIError'
+      message:
+        type: string
+      success:
+        example: true
         type: boolean
     type: object
   apidoc.SystemHealth:
@@ -238,14 +260,14 @@ definitions:
         minimum: 1
         type: integer
     type: object
-  github_com_momobasehq_momobase_internal_platform.APIError:
+  platform.APIError:
     properties:
       code:
         type: string
       message:
         type: string
     type: object
-  github_com_momobasehq_momobase_internal_services.CreatePaymentRequest:
+  services.CreatePaymentRequest:
     properties:
       amount:
         description: Amount is the payment amount in the currency's minor unit.
@@ -258,14 +280,14 @@ definitions:
         type: string
       customer:
         allOf:
-        - $ref: '#/definitions/github_com_momobasehq_momobase_internal_services.PartyPayload'
+        - $ref: '#/definitions/services.PartyPayload'
         description: Customer identifies the collection customer.
       description:
         description: Description is optional payment context shown to downstream systems.
         type: string
       momo:
         allOf:
-        - $ref: '#/definitions/github_com_momobasehq_momobase_internal_services.PartyPayload'
+        - $ref: '#/definitions/services.PartyPayload'
         description: Momo contains the mobile-money account details used for the provider
           request.
       payment_method:
@@ -273,13 +295,13 @@ definitions:
         type: string
       recipient:
         allOf:
-        - $ref: '#/definitions/github_com_momobasehq_momobase_internal_services.PartyPayload'
+        - $ref: '#/definitions/services.PartyPayload'
         description: Recipient identifies the disbursement recipient.
       reference:
         description: Reference is the application's unique business reference.
         type: string
     type: object
-  github_com_momobasehq_momobase_internal_services.PartyPayload:
+  services.PartyPayload:
     properties:
       email:
         description: Email is the party's email address.
@@ -1220,6 +1242,29 @@ paths:
       summary: Test provider configuration
       tags:
       - Admin - Providers
+  /api/admin/providers/registry:
+    get:
+      description: Returns the provider codes accepted when creating a provider account.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.ProviderRegistryResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List registered provider codes
+      tags:
+      - Admin - Providers
   /api/admin/routes:
     get:
       parameters:
@@ -1782,7 +1827,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/github_com_momobasehq_momobase_internal_services.CreatePaymentRequest'
+          $ref: '#/definitions/services.CreatePaymentRequest'
       produces:
       - application/json
       responses:
@@ -1835,7 +1880,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/github_com_momobasehq_momobase_internal_services.CreatePaymentRequest'
+          $ref: '#/definitions/services.CreatePaymentRequest'
       produces:
       - application/json
       responses:

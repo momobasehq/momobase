@@ -3,8 +3,8 @@ import type {
   AdminUser, APIEnvelope, App, AppCredential, AuditLog, CreateCollectionRequest,
   CreateDisbursementRequest, CreatePaymentResponse, CreatedCredential, ListOptions,
   OAuthTokenResponse, PaginatedData, PaymentRoute, ProviderAccount, ProviderBalance,
-  ProviderBalanceResult, ProviderHealthSnapshot, RequestOptions, RuntimeProvider,
-  SystemHealth, SystemInfo, Transaction, WorkerState
+  ProviderBalanceResult, ProviderHealthSnapshot, ProviderRegistry, RequestOptions,
+  RuntimeProvider, SystemHealth, SystemInfo, Transaction, WorkerState
 } from "./types.js"
 
 export interface MomobaseClientOptions { baseUrl: string; clientId: string; clientSecret: string; tokenSkewSeconds?: number }
@@ -127,6 +127,7 @@ export class MomobaseAdminClient extends SessionClient {
   }
   readonly providers = {
     list: (o?: ListOptions) => this.get<PaginatedData<ProviderAccount>>(`/api/admin/providers${query(o)}`),
+    registry: () => this.get<ProviderRegistry>("/api/admin/providers/registry"),
     createAccount: (p: { provider_code: string; name: string; environment: "sandbox" | "production"; countries: string[]; config: Record<string, unknown> }) => this.post<ProviderAccount>("/api/admin/providers/accounts", p),
     updateCountries: (id: string, countries: string[]) => this.patch<unknown>(endpoint("/api/admin/providers/accounts", id) + "/countries", { countries }),
     updateConfig: (id: string, config: Record<string, unknown>) => this.patch<unknown>(endpoint("/api/admin/providers/accounts", id) + "/config", { config }),

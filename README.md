@@ -1,6 +1,82 @@
 # Momobase
 
 Momobase is a compact, single-instance mobile-money payment aggregator. 
-It exposes a unified API for applications, supports MTN MoMo and Airtel Money adapters, and includes an Admin API, TypeScript SDK, and minimal browser admin panel.
+It exposes a unified API for applications, ships MTN MoMo and Airtel Money adapters, and includes an Admin API, TypeScript SDK, and minimal browser admin panel.
 
+It runs as a standalone service (`cmd/momobase`) and as a Go package that applications embed and extend with their own payment providers.
 
+## Use as a package
+
+The engine registers no providers of its own — you choose which ones the build carries, whether they ship with Momobase or you wrote them:
+
+```go
+import (
+	"github.com/momobasehq/momobase"
+	"github.com/momobasehq/momobase/providers/mtn"
+)
+
+instance, err := momobase.New(
+	momobase.WithProvider("mtn_momo", mtn.New),
+	momobase.WithProvider("acme_pay", acme.New),
+)
+if err != nil {
+	log.Fatal(err)
+}
+defer instance.Close()
+
+log.Fatal(instance.Run())
+```
+
+Registering none is rejected at startup rather than booting a server that cannot execute a payment.
+
+`New` reads configuration from the environment unless `WithConfig` supplies it, opens the database, and prepares the HTTP server, providers, and background workers. `Run` serves until the process is interrupted; use `Serve(ctx)` to control shutdown yourself, or `Handler()` to mount Momobase in an existing HTTP server.
+
+### Custom providers
+
+A provider is any type implementing `momobase.PaymentProvider`:
+
+```go
+type PaymentProvider interface {
+	Capabilities() []Capability
+	Init(context.Context, ProviderConfig) error
+	HealthCheck(context.Context) error
+	Collect(context.Context, PaymentRequest) (*ProviderPaymentResponse, error)
+	Disburse(context.Context, PaymentRequest) (*ProviderPaymentResponse, error)
+	QueryTransaction(context.Context, string, string) (*ProviderTransactionStatus, error)
+	QueryBalance(context.Context, string) (*ProviderBalance, error)
+	VerifyWebhook(context.Context, []byte, map[string]string) (*ProviderWebhookEvent, error)
+}
+```
+
+Register a factory for it under a provider code, then create, configure, and activate accounts for that code through the Admin API. The configuration stored for an account is encrypted at rest and handed to `Init` as a `ProviderConfig` whenever the account is loaded or changed.
+
+`GET /api/admin/providers/registry` reports the codes the running build accepts, so clients discover custom providers instead of hardcoding a list:
+
+```json
+{ "success": true, "data": { "providers": ["acme_pay", "airtel_money", "mtn_momo"] } }
+```
+
+The TypeScript SDK exposes it as `client.providers.registry()`, and the bundled admin panel builds its provider dropdown from it.
+
+The package also exports the helpers the bundled adapters use, so a third-party provider does not have to reimplement them: `DoJSON`, `Redact`, `TokenCache`, `ConfigString`/`ConfigBool`/`ConfigInt`/`ConfigPath`, `ParseAmountToMinor`, `FormatAmountMinor`, `PaymentStatus`, and the `Service*`, `PaymentMethod*`, and `Tx*` constants. They are also importable directly from `github.com/momobasehq/momobase/providers`, which is the package the bundled adapters use.
+
+See [`examples/customprovider`](examples/customprovider) for a complete provider implementing the whole contract, and [`providers/mtn`](providers/mtn) or [`providers/airtel`](providers/airtel) for adapters against real APIs.
+
+### Options
+
+| Option | Purpose |
+| --- | --- |
+| `WithProvider(code, factory)` | Register a provider, replacing any registered under the same code |
+| `WithProviders(map[string]ProviderFactory)` | Register several providers at once |
+| `WithConfig(cfg)` | Supply configuration instead of reading the environment |
+| `WithConfigFunc(fn)` | Adjust the resolved configuration before the instance is built |
+| `WithAddr(addr)` | Override the HTTP listen address |
+| `WithLogger(log)` | Use an existing `*slog.Logger` |
+
+## Run as a service
+
+```sh
+make run                 # go run ./cmd/momobase serve
+make build               # binary in bin/
+make quality             # fmt-check, vet, test, lint
+```

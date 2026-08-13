@@ -1443,6 +1443,43 @@
                 }
             }
         },
+        "/api/admin/providers/registry": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the provider codes accepted when creating a provider account.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Providers"
+                ],
+                "summary": "List registered provider codes",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ProviderRegistryResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/admin/routes": {
             "get": {
                 "security": [
@@ -2324,7 +2361,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_momobasehq_momobase_internal_services.CreatePaymentRequest"
+                            "$ref": "#/definitions/services.CreatePaymentRequest"
                         }
                     }
                 ],
@@ -2406,7 +2443,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_momobasehq_momobase_internal_services.CreatePaymentRequest"
+                            "$ref": "#/definitions/services.CreatePaymentRequest"
                         }
                     }
                 ],
@@ -2945,7 +2982,7 @@
             "properties": {
                 "data": {},
                 "error": {
-                    "$ref": "#/definitions/github_com_momobasehq_momobase_internal_platform.APIError"
+                    "$ref": "#/definitions/platform.APIError"
                 },
                 "message": {
                     "type": "string"
@@ -2960,7 +2997,7 @@
             "type": "object",
             "properties": {
                 "error": {
-                    "$ref": "#/definitions/github_com_momobasehq_momobase_internal_platform.APIError"
+                    "$ref": "#/definitions/platform.APIError"
                 },
                 "message": {
                     "type": "string",
@@ -2969,6 +3006,39 @@
                 "success": {
                     "type": "boolean",
                     "example": false
+                }
+            }
+        },
+        "apidoc.ProviderRegistry": {
+            "type": "object",
+            "properties": {
+                "providers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "airtel_money",
+                        "mtn_momo"
+                    ]
+                }
+            }
+        },
+        "apidoc.ProviderRegistryResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/apidoc.ProviderRegistry"
+                },
+                "error": {
+                    "$ref": "#/definitions/platform.APIError"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
                 }
             }
         },
@@ -3127,7 +3197,7 @@
                 }
             }
         },
-        "github_com_momobasehq_momobase_internal_platform.APIError": {
+        "platform.APIError": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3138,7 +3208,7 @@
                 }
             }
         },
-        "github_com_momobasehq_momobase_internal_services.CreatePaymentRequest": {
+        "services.CreatePaymentRequest": {
             "type": "object",
             "properties": {
                 "amount": {
@@ -3157,7 +3227,7 @@
                     "description": "Customer identifies the collection customer.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/github_com_momobasehq_momobase_internal_services.PartyPayload"
+                            "$ref": "#/definitions/services.PartyPayload"
                         }
                     ]
                 },
@@ -3169,7 +3239,7 @@
                     "description": "Momo contains the mobile-money account details used for the provider request.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/github_com_momobasehq_momobase_internal_services.PartyPayload"
+                            "$ref": "#/definitions/services.PartyPayload"
                         }
                     ]
                 },
@@ -3181,7 +3251,7 @@
                     "description": "Recipient identifies the disbursement recipient.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/github_com_momobasehq_momobase_internal_services.PartyPayload"
+                            "$ref": "#/definitions/services.PartyPayload"
                         }
                     ]
                 },
@@ -3191,7 +3261,7 @@
                 }
             }
         },
-        "github_com_momobasehq_momobase_internal_services.PartyPayload": {
+        "services.PartyPayload": {
             "type": "object",
             "properties": {
                 "email": {
