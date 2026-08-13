@@ -131,6 +131,7 @@ func adminRoutes(mux *http.ServeMux, h *adminh.Handler, base ...middleware) {
 		super,
 	)
 	add("GET /api/admin/providers", h.ListProviders)
+	add("GET /api/admin/providers/registry", h.ProviderRegistry)
 	add("POST /api/admin/providers/accounts", h.CreateProvider, super, middlewarex.JSONOnly)
 	add(
 		"PATCH /api/admin/providers/accounts/{id}/countries",
