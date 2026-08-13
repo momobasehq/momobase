@@ -1,6 +1,7 @@
 APP=momobase
 GOFILES=$$(find . -name '*.go' -not -path './vendor/*')
 GOLANGCI_LINT?=golangci-lint
+GORELEASER?=goreleaser
 
 run:
 	go run ./cmd/$(APP) serve
@@ -34,6 +35,14 @@ lint-format:
 
 quality: fmt-check vet test lint
 
+release-check:
+	$(GORELEASER) check
+
+# Build the release artifacts locally without publishing anything. Needs the
+# arm64 cross compiler: apt-get install gcc-aarch64-linux-gnu
+snapshot:
+	$(GORELEASER) release --clean --snapshot --skip=publish
+
 seed-admin:
 	@test -n "$$ADMIN_PASSWORD" || (echo "Set ADMIN_PASSWORD before running seed-admin" >&2; exit 1)
 	go run ./cmd/$(APP) seed-admin --email admin@momobase.local --password "$$ADMIN_PASSWORD" --name "Super Admin"
@@ -54,4 +63,4 @@ docs:
 	# $ go install github.com/swaggo/swag/cmd/swag@latest
 
 # tell make that these targets are not files
-.PHONY: docs run build test tidy fmt fmt-check vet lint lint-fix lint-format quality seed-admin smoke smoke-api sdk-build docs
+.PHONY: docs run build test tidy fmt fmt-check vet lint lint-fix lint-format quality release-check snapshot seed-admin smoke smoke-api sdk-build docs
