@@ -80,3 +80,22 @@ make run                 # go run ./cmd/momobase serve
 make build               # binary in bin/
 make quality             # fmt-check, vet, test, lint
 ```
+
+## Releases
+
+Pushing a `v*.*.*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which uses GoReleaser to attach `linux/amd64` and `linux/arm64` archives plus `checksums.txt` to the GitHub release and to publish a multi-platform image to `ghcr.io/momobasehq/momobase`. Image and archive names drop the tag's leading `v`, and a prerelease tag such as `v1.2.3-rc1` is published without moving `latest`:
+
+```sh
+git tag -a v1.2.3 -m "v1.2.3" && git push origin v1.2.3
+docker pull ghcr.io/momobasehq/momobase:1.2.3   # also :1.2 and :latest
+```
+
+Momobase links SQLite through cgo, so released binaries are built with `CGO_ENABLED=1` and linked statically — one artifact runs on any Linux host regardless of its libc, and the `momobase version` command reports the tag, commit, and build date. Building `linux/arm64` therefore needs a cross compiler:
+
+```sh
+sudo apt-get install -y gcc-aarch64-linux-gnu
+make release-check       # validate .goreleaser.yaml
+make snapshot            # build the artifacts locally, publish nothing
+```
+
+Run the workflow manually from the Actions tab to produce a snapshot without tagging or publishing.
