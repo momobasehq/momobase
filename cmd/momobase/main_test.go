@@ -5,6 +5,27 @@ import (
 	"testing"
 )
 
+func TestVersionCommandReportsBuildInformation(t *testing.T) {
+	cmd := newVersionCommand()
+	var out strings.Builder
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	for _, want := range []string{"momobase " + version, "commit: " + commit, "built:  " + date} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("version output %q does not contain %q", out.String(), want)
+		}
+	}
+}
+
+func TestRootCommandCarriesVersion(t *testing.T) {
+	if got := newRootCommand().Version; got != version {
+		t.Fatalf("root command Version = %q, want %q", got, version)
+	}
+}
+
 func TestSeedAdminCommandPasswordFlagHasNoDefault(t *testing.T) {
 	flag := newSeedAdminCommand().Flags().Lookup("password")
 	if flag == nil {

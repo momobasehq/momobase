@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	_ "github.com/joho/godotenv/autoload"
@@ -14,6 +15,13 @@ import (
 	"github.com/momobasehq/momobase"
 	"github.com/momobasehq/momobase/providers/airtel"
 	"github.com/momobasehq/momobase/providers/mtn"
+)
+
+// Build information, replaced at link time by the release build.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 // @title Momobase API
@@ -37,13 +45,30 @@ func newRootCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "momobase",
 		Short:         "Run and manage the Momobase payment service",
+		Version:       version,
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE:          runServe,
 	}
-	cmd.AddCommand(newServeCommand(), newMigrateCommand(), newSeedAdminCommand())
+	cmd.AddCommand(newServeCommand(), newMigrateCommand(), newSeedAdminCommand(), newVersionCommand())
 	return cmd
+}
+
+func newVersionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print version, commit, and build information",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, err := fmt.Fprintf(
+				cmd.OutOrStdout(),
+				"momobase %s\ncommit: %s\nbuilt:  %s\ngo:     %s %s/%s\n",
+				version, commit, date, runtime.Version(), runtime.GOOS, runtime.GOARCH,
+			)
+			return err
+		},
+	}
 }
 
 func newServeCommand() *cobra.Command {
