@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -258,5 +259,31 @@ func TestRegistryCapabilitiesAndReferences(t *testing.T) {
 	}
 	if matched := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(UUID()); !matched {
 		t.Fatalf("UUID() returned an unexpected format")
+	}
+}
+
+func TestRegistryLookupAndFactoryGuards(t *testing.T) {
+	registry := NewRegistry()
+	registry.Register("second", func(*slog.Logger) PaymentProvider { return &testProvider{} })
+	registry.Register("first", func(log *slog.Logger) PaymentProvider {
+		if log == nil {
+			t.Error("Registry.Create() passed a nil logger to a factory")
+		}
+		return &testProvider{}
+	})
+
+	if !registry.Has("first") || registry.Has("missing") {
+		t.Fatal("Registry.Has() returned an unexpected result")
+	}
+	if codes := registry.List(); !slices.Equal(codes, []string{"first", "second"}) {
+		t.Fatalf("Registry.List() = %v, want sorted codes", codes)
+	}
+	if _, err := registry.Create("first", nil); err != nil {
+		t.Fatalf("Registry.Create() error = %v", err)
+	}
+
+	registry.Register("empty", func(*slog.Logger) PaymentProvider { return nil })
+	if _, err := registry.Create("empty", nil); err == nil {
+		t.Fatal("Registry.Create() accepted a factory that returned no provider")
 	}
 }

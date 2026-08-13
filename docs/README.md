@@ -6,7 +6,7 @@ The backend is a modular monolith with six main areas:
 
 - `internal/http`: standard-library routing, middleware, public/admin/webhook handlers.
 - `internal/services`: authentication, payments, routing, provider runtime, health, webhooks, reconciliation, and auditing.
-- `internal/providers`: normalized provider contracts plus MTN and Airtel adapters.
+- `providers`: the public provider contract and shared adapter helpers, plus the MTN and Airtel adapters in `providers/mtn` and `providers/airtel`. Nothing here is registered automatically; a build chooses its providers through `momobase.WithProvider`.
 - `internal/store`: database helpers and transaction boundaries.
 - `internal/workers`: bounded health, reconciliation, and session-cleanup loops.
 - `internal/bootstrap`: configuration, database initialization, dependency wiring, migration, and process lifecycle.

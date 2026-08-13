@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/providers"
+	"github.com/momobasehq/momobase/providers"
 )
 
 // HealthService checks active provider adapters and persists their latest health state.
