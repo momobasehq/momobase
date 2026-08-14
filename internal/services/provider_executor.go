@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/providers"
+	"github.com/momobasehq/momobase/providers"
 )
 
 // RuntimeProviderExecutor invokes loaded provider adapters with readiness checks, timeouts, logging, and circuit breaking.

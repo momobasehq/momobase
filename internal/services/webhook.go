@@ -15,8 +15,8 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/providers"
 	"github.com/momobasehq/momobase/internal/store"
+	"github.com/momobasehq/momobase/providers"
 )
 
 // VerifiedWebhook contains a provider-verified event and its Momobase routing metadata.

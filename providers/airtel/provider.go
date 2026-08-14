@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/providers"
+	"github.com/momobasehq/momobase/providers"
 )
 
 // Config contains the settings required by an Airtel Money provider.

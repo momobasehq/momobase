@@ -16,8 +16,8 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/http/apidoc"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/providers"
 	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/providers"
 )
 
 func handlerDatabase(t *testing.T) *gorm.DB {
@@ -46,23 +46,31 @@ func handlerDatabase(t *testing.T) *gorm.DB {
 
 func testHandler(t *testing.T) *Handler {
 	t.Helper()
+	return testHandlerWithProviders(t, providers.NewRegistry())
+}
+
+// testHandlerWithProviders builds a handler whose provider administration
+// service is backed by registry.
+func testHandlerWithProviders(t *testing.T, registry providers.Registry) *Handler {
+	t.Helper()
 	db := handlerDatabase(t)
 	encryptor, err := platform.NewEncryptor("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	if err != nil {
 		t.Fatalf("NewEncryptor() error = %v", err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	runtime := services.NewProviderRuntimeManager(db, providers.NewRegistry(), encryptor, log)
+	runtime := services.NewProviderRuntimeManager(db, registry, encryptor, log)
+	audit := services.NewAuditService(db, log)
 	apps := services.NewAppService(db, nil, nil)
 	return NewHandler(
 		db,
 		nil,
 		nil,
-		nil,
+		services.NewProviderAdminService(db, audit, encryptor, registry, runtime),
 		nil,
 		apps,
 		runtime,
-		services.NewAuditService(db, log),
+		audit,
 		SystemInfo{
 			AppName:        "momobase-test",
 			AppEnv:         "test",
@@ -72,6 +80,24 @@ func testHandler(t *testing.T) *Handler {
 			WorkerNames:    []string{"health", "cleanup"},
 		},
 	)
+}
+
+func TestHandlerProviderRegistryListsRegisteredCodes(t *testing.T) {
+	registry := providers.NewRegistry()
+	for _, code := range []string{"zeta_pay", "acme_pay"} {
+		registry.Register(code, func(*slog.Logger) providers.PaymentProvider { return nil })
+	}
+	h := testHandlerWithProviders(t, registry)
+
+	recorder := httptest.NewRecorder()
+	h.ProviderRegistry(recorder, httptest.NewRequest(http.MethodGet, "/providers/registry", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("ProviderRegistry() status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, `"providers":["acme_pay","zeta_pay"]`) {
+		t.Fatalf("ProviderRegistry() body = %s, want the registered codes in ascending order", body)
+	}
 }
 
 func TestParseExpiry(t *testing.T) {

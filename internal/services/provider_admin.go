@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/nyaruka/phonenumbers"
@@ -11,8 +12,8 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/providers"
 	"github.com/momobasehq/momobase/internal/store"
+	"github.com/momobasehq/momobase/providers"
 )
 
 // ProviderAdminService manages provider accounts, encrypted configuration, and runtime activation.
@@ -35,6 +36,12 @@ func NewProviderAdminService(
 	return &ProviderAdminService{db: db, audit: audit, encryptor: enc, registry: registry, runtime: runtime}
 }
 
+// RegisteredProviders returns the provider codes this build can create accounts
+// for, in ascending order.
+func (s *ProviderAdminService) RegisteredProviders() []string {
+	return s.registry.List()
+}
+
 // CreateAccount validates and persists an inactive provider account with encrypted configuration.
 func (s *ProviderAdminService) CreateAccount(
 	ctx context.Context,
@@ -45,8 +52,8 @@ func (s *ProviderAdminService) CreateAccount(
 	countries []string,
 	config map[string]any,
 ) (*domain.ProviderAccount, error) {
-	if _, err := s.registry.Create(code, nil); err != nil {
-		return nil, err
+	if !s.registry.Has(code) {
+		return nil, fmt.Errorf("provider factory not registered: %s", code)
 	}
 	name = strings.TrimSpace(name)
 	if name == "" {

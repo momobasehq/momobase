@@ -1,0 +1,160 @@
+# Momobase release build.
+#
+# Momobase links SQLite through github.com/mattn/go-sqlite3, so releases must be
+# built with cgo: a CGO_ENABLED=0 binary compiles but aborts at startup with
+# "go-sqlite3 requires cgo to work", and sqlite is the default DB_TYPE.
+#
+# Every target is therefore linked statically against its C runtime. That keeps
+# one artifact runnable on any glibc or musl host, and removes the mismatch
+# between the glibc the runner builds against and the glibc in the image. The
+# netgo and osusergo tags keep DNS and user lookups in pure Go, which a static
+# glibc binary otherwise cannot do.
+#
+# Cross-compiling arm64 needs gcc-aarch64-linux-gnu, which the release workflow
+# installs. Run `make snapshot` to produce the same artifacts locally.
+#
+# Validated with GoReleaser v2.17. Needs a v2 recent enough for dockers_v2,
+# archives.formats, and archives.ids; the workflow tracks the latest v2.
+version: 2
+
+project_name: momobase
+
+before:
+  hooks:
+    - go mod download
+    - go mod verify
+
+# One build per architecture, each with a complete env. Build overrides would
+# express this in fewer lines, but they restate the whole build-details block
+# for a matched target; spelling out CGO_ENABLED per entry keeps a dropped
+# override from silently producing a binary that aborts on its first query.
+builds:
+  - id: momobase-amd64
+    main: ./cmd/momobase
+    binary: momobase
+    env:
+      - CGO_ENABLED=1
+      - CC=gcc
+    goos:
+      - linux
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+    tags: &build_tags
+      - osusergo
+      - netgo
+      - sqlite_omit_load_extension
+    ldflags: &build_ldflags
+      - -s -w
+      - -extldflags "-static"
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .FullCommit }}
+      - -X main.date={{ .CommitDate }}
+    mod_timestamp: &build_timestamp "{{ .CommitTimestamp }}"
+
+  - id: momobase-arm64
+    main: ./cmd/momobase
+    binary: momobase
+    env:
+      - CGO_ENABLED=1
+      - CC=aarch64-linux-gnu-gcc
+    goos:
+      - linux
+    goarch:
+      - arm64
+    flags:
+      - -trimpath
+    tags: *build_tags
+    ldflags: *build_ldflags
+    mod_timestamp: *build_timestamp
+
+archives:
+  - id: momobase
+    ids:
+      - momobase-amd64
+      - momobase-arm64
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    files:
+      - README.md
+      - LICENSE.txt
+      - .env.example
+      - src: docs/swagger.*
+        dst: docs
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Breaking changes
+      regexp: '^.*?[[:word:]]+(\([[:word:]]+\))?!:.*$'
+      order: 0
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??:.+$'
+      order: 1
+    - title: Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??:.+$'
+      order: 2
+    - title: Other work
+      order: 999
+
+# One entry builds both platforms and publishes the manifest. Building the arm64
+# layer on an amd64 runner runs the Dockerfile's apt steps under emulation, so
+# the workflow installs QEMU. The latest tag renders empty for a prerelease,
+# which drops it, leaving prereleases addressable only by their own version.
+dockers_v2:
+  - id: momobase
+    ids:
+      - momobase-amd64
+      - momobase-arm64
+    dockerfile: Dockerfile.release
+    images:
+      - ghcr.io/momobasehq/momobase
+    tags:
+      - "{{ .Version }}"
+      - "{{ .Major }}.{{ .Minor }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.description: Mobile-money payment aggregator
+      org.opencontainers.image.url: https://github.com/momobasehq/momobase
+      org.opencontainers.image.source: https://github.com/momobasehq/momobase
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.licenses: MIT
+
+release:
+  github:
+    owner: momobasehq
+    name: momobase
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Container images
+
+    ```sh
+    docker pull ghcr.io/momobasehq/momobase:{{ .Version }}
+    ```
+
+    Images are published for linux/amd64 and linux/arm64. Binaries are linked
+    statically and run on any Linux host without a matching libc.

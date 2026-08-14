@@ -17,9 +17,6 @@ import (
 	publich "github.com/momobasehq/momobase/internal/http/public"
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/providers"
-	"github.com/momobasehq/momobase/internal/providers/airtel"
-	"github.com/momobasehq/momobase/internal/providers/mtn"
 	"github.com/momobasehq/momobase/internal/services"
 	"github.com/momobasehq/momobase/internal/workers"
 )
@@ -42,12 +39,21 @@ type App struct {
 }
 
 // NewApp validates cfg and constructs the application and all owned runtime
-// dependencies.
-func NewApp(cfg Config) (*App, error) {
+// dependencies. Options customize the logger and the set of payment providers
+// available to the application.
+func NewApp(cfg Config, opts ...Option) (*App, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	log := NewLogger(cfg.Log.Level)
+	o := newOptions(opts)
+	registry, err := o.buildRegistry()
+	if err != nil {
+		return nil, err
+	}
+	log := o.logger
+	if log == nil {
+		log = NewLogger(cfg.Log.Level)
+	}
 	db, err := OpenDatabase(cfg)
 	if err != nil {
 		return nil, err
@@ -75,10 +81,6 @@ func NewApp(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	registry := providers.NewRegistry()
-	registry.Register("mtn_momo", mtn.New)
-	registry.Register("airtel_money", airtel.New)
 
 	runtime := services.NewProviderRuntimeManager(db, registry, enc, log)
 
