@@ -13,8 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/momobasehq/momobase"
-	"github.com/momobasehq/momobase/providers/airtel"
-	"github.com/momobasehq/momobase/providers/mtn"
+	"github.com/momobasehq/momobase/providers/dummy"
 )
 
 // Build information, replaced at link time by the release build.
@@ -26,7 +25,7 @@ var (
 
 // @title Momobase API
 // @version 1.0
-// @description Mobile-money orchestration API for application payments and administrative operations.
+// @description Payment orchestration API for application payments and administrative operations.
 // @BasePath /
 // @schemes http https
 // @securityDefinitions.apikey BearerAuth
@@ -80,15 +79,24 @@ func newServeCommand() *cobra.Command {
 	}
 }
 
-// loadInstance builds the instance served by this command. Momobase registers
-// no providers of its own, so this binary chooses the adapters it ships with;
+// providerFactories returns the payment providers this binary ships with.
+// Momobase registers none of its own, so a build chooses them explicitly;
 // applications embedding Momobase call momobase.New directly and register
 // whichever providers they need.
+//
+// The dummy provider simulates payments and moves no money. It is registered so
+// that a fresh deployment can be exercised end to end before real credentials
+// exist; creating and activating an account for it remains an explicit
+// administrative action.
+func providerFactories() map[string]momobase.ProviderFactory {
+	return map[string]momobase.ProviderFactory{
+		"dummy": dummy.New,
+	}
+}
+
+// loadInstance builds the instance served by this command.
 func loadInstance() (*momobase.Instance, error) {
-	return momobase.New(
-		momobase.WithProvider("mtn_momo", mtn.New),
-		momobase.WithProvider("airtel_money", airtel.New),
-	)
+	return momobase.New(momobase.WithProviders(providerFactories()))
 }
 
 func closeInstance(instance *momobase.Instance, err *error) {

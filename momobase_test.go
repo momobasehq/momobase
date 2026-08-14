@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -162,5 +164,106 @@ func TestServeReturnsNilWhenContextIsCancelled(t *testing.T) {
 	cancel()
 	if err := instance.Serve(ctx); err != nil {
 		t.Errorf("Serve() error = %v, want nil after cancellation", err)
+	}
+}
+
+// TestExportedProviderHelpers exercises the helpers the root package re-exports
+// for provider authors. It lives in the external test package deliberately: a
+// helper that stops being reachable from outside the module breaks this test
+// rather than silently regressing a documented part of the public surface.
+func TestExportedProviderHelpers(t *testing.T) {
+	caps := []momobase.Capability{{ServiceType: momobase.ServiceCollection, PaymentMethod: momobase.PaymentMethodMomo}}
+	if !momobase.Supports(caps, momobase.ServiceCollection, momobase.PaymentMethodMomo) {
+		t.Error("Supports() = false, want true for a declared capability")
+	}
+	if momobase.Supports(caps, momobase.ServiceDisbursement, momobase.PaymentMethodMomo) {
+		t.Error("Supports() = true, want false for an undeclared capability")
+	}
+
+	config := momobase.ProviderConfig{
+		"name":    "  Acme  ",
+		"enabled": "TRUE",
+		"retries": "3",
+		"nested":  map[string]any{"inner": map[string]any{"leaf": "value"}},
+	}
+	if got := momobase.ConfigString(config, "name"); got != "Acme" {
+		t.Errorf("ConfigString() = %q, want a trimmed value", got)
+	}
+	if !momobase.ConfigBool(config, "enabled") {
+		t.Error("ConfigBool() = false, want true")
+	}
+	if got := momobase.ConfigInt(config, "retries"); got != 3 {
+		t.Errorf("ConfigInt() = %d, want 3", got)
+	}
+	if got := momobase.ConfigPath(config, "nested.inner.leaf"); got != "value" {
+		t.Errorf("ConfigPath() = %q, want the nested value", got)
+	}
+	if got := momobase.First("", "  ", "chosen"); got != "chosen" {
+		t.Errorf("First() = %q, want the first nonblank value", got)
+	}
+	if got := momobase.Slash("v1/ping"); got != "/v1/ping" {
+		t.Errorf("Slash() = %q, want a leading slash", got)
+	}
+	sentinel := errors.New("primary")
+	if got := momobase.FirstError(sentinel, errors.New("fallback")); !errors.Is(got, sentinel) {
+		t.Errorf("FirstError() = %v, want the primary error", got)
+	}
+	if got := momobase.FirstError(nil, sentinel); !errors.Is(got, sentinel) {
+		t.Errorf("FirstError(nil, fallback) = %v, want the fallback", got)
+	}
+
+	if got := momobase.PaymentStatus("SUCCESSFUL"); got != momobase.TxSucceeded {
+		t.Errorf("PaymentStatus() = %q, want %q", got, momobase.TxSucceeded)
+	}
+	minor, err := momobase.ParseAmountToMinor("12.34", "USD")
+	if err != nil || minor != 1234 {
+		t.Fatalf("ParseAmountToMinor() = %d, %v", minor, err)
+	}
+	if got := momobase.FormatAmountMinor(minor, "USD"); got != "12.34" {
+		t.Errorf("FormatAmountMinor() = %q, want 12.34", got)
+	}
+	optional, err := momobase.OptionalAmount("", "USD")
+	if err != nil || optional != nil {
+		t.Errorf("OptionalAmount(blank) = %v, %v, want nil", optional, err)
+	}
+	if optional, err = momobase.OptionalAmount("1.25", "USD"); err != nil || optional == nil || *optional != 125 {
+		t.Errorf("OptionalAmount() = %v, %v, want 125", optional, err)
+	}
+
+	if got := momobase.Redact("bearer abc123"); got == "bearer abc123" {
+		t.Error("Redact() returned credential-like text unchanged")
+	}
+	if got := momobase.Redact("upstream refused the payment"); got != "upstream refused the payment" {
+		t.Errorf("Redact() = %q, want safe text preserved", got)
+	}
+	if got := momobase.RandomRef("acme"); !strings.HasPrefix(got, "acme") || len(got) != len("acme")+32 {
+		t.Errorf("RandomRef() = %q, want the prefix followed by 32 hexadecimal characters", got)
+	}
+	if got := momobase.UUID(); len(got) != 36 {
+		t.Errorf("UUID() = %q, want a 36-character identifier", got)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Test") != "on" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	var out struct {
+		Status string `json:"status"`
+	}
+	headers := map[string]string{"X-Test": "on"}
+	if err = momobase.DoJSON(context.Background(), server.Client(), http.MethodPost, server.URL, headers, map[string]any{"a": 1}, &out); err != nil {
+		t.Fatalf("DoJSON() error = %v", err)
+	}
+	if out.Status != "ok" {
+		t.Errorf("DoJSON() decoded %q, want ok", out.Status)
+	}
+	err = momobase.DoJSON(context.Background(), server.Client(), http.MethodGet, server.URL, nil, nil, nil)
+	if err == nil {
+		t.Error("DoJSON() on a non-2xx response = nil, want an error")
 	}
 }

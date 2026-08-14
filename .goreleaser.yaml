@@ -135,7 +135,7 @@ dockers_v2:
       - linux/arm64
     labels:
       org.opencontainers.image.title: "{{ .ProjectName }}"
-      org.opencontainers.image.description: Mobile-money payment aggregator
+      org.opencontainers.image.description: Pluggable payment orchestration service
       org.opencontainers.image.url: https://github.com/momobasehq/momobase
       org.opencontainers.image.source: https://github.com/momobasehq/momobase
       org.opencontainers.image.version: "{{ .Version }}"

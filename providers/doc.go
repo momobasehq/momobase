@@ -3,7 +3,7 @@
 //
 // Implementations register with a Momobase instance under a provider code and
 // are constructed on demand by a [Factory]. The adapters shipped with Momobase,
-// in providers/mtn and providers/airtel, are built on this package and are
+// in providers/dummy, are built on this package and are
 // registered the same way as any third-party provider.
 //
 // The momobase root package re-exports this package's contract, so a provider

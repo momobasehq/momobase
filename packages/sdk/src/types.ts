@@ -9,7 +9,7 @@ export interface ListOptions { page?: number; perPage?: number; signal?: AbortSi
 export interface RequestOptions { idempotencyKey?: string; signal?: AbortSignal }
 
 export interface PartyPayload { name?: string; email?: string; phone: string }
-export interface MomoPayload { phone: string; network?: "mtn" | "airtel" | "unknown" }
+export interface MomoPayload { phone: string; network?: string }
 interface PaymentRequest {
   payment_method: "momo"; amount: number; currency: string; country: string
   reference: string; description?: string; momo: MomoPayload

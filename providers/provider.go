@@ -90,7 +90,7 @@ type ProviderWebhookEvent struct {
 	Raw map[string]any `json:"raw,omitempty"`
 }
 
-// PaymentProvider defines the operations implemented by a mobile-money provider.
+// PaymentProvider defines the operations implemented by a payment provider.
 type PaymentProvider interface {
 	// Capabilities returns the operations enabled by the provider's current configuration.
 	Capabilities() []Capability

@@ -1,7 +1,7 @@
 # Momobase
 
-Momobase is a compact, single-instance mobile-money payment aggregator. 
-It exposes a unified API for applications, ships MTN MoMo and Airtel Money adapters, and includes an Admin API, TypeScript SDK, and minimal browser admin panel.
+Momobase is a compact, single-instance payment orchestration service.
+It exposes a unified API for applications, routes payments to providers you supply, and includes an Admin API, TypeScript SDK, and minimal browser admin panel.
 
 It runs as a standalone service (`cmd/momobase`) and as a Go package that applications embed and extend with their own payment providers.
 
@@ -12,12 +12,11 @@ The engine registers no providers of its own — you choose which ones the build
 ```go
 import (
 	"github.com/momobasehq/momobase"
-	"github.com/momobasehq/momobase/providers/mtn"
 )
 
 instance, err := momobase.New(
-	momobase.WithProvider("mtn_momo", mtn.New),
 	momobase.WithProvider("acme_pay", acme.New),
+	momobase.WithProvider("acme_bank", acmebank.New),
 )
 if err != nil {
 	log.Fatal(err)
@@ -53,14 +52,14 @@ Register a factory for it under a provider code, then create, configure, and act
 `GET /api/admin/providers/registry` reports the codes the running build accepts, so clients discover custom providers instead of hardcoding a list:
 
 ```json
-{ "success": true, "data": { "providers": ["acme_pay", "airtel_money", "mtn_momo"] } }
+{ "success": true, "data": { "providers": ["acme_bank", "acme_pay", "dummy"] } }
 ```
 
 The TypeScript SDK exposes it as `client.providers.registry()`, and the bundled admin panel builds its provider dropdown from it.
 
 The package also exports the helpers the bundled adapters use, so a third-party provider does not have to reimplement them: `DoJSON`, `Redact`, `TokenCache`, `ConfigString`/`ConfigBool`/`ConfigInt`/`ConfigPath`, `ParseAmountToMinor`, `FormatAmountMinor`, `PaymentStatus`, and the `Service*`, `PaymentMethod*`, and `Tx*` constants. They are also importable directly from `github.com/momobasehq/momobase/providers`, which is the package the bundled adapters use.
 
-See [`examples/customprovider`](examples/customprovider) for a complete provider implementing the whole contract, and [`providers/mtn`](providers/mtn) or [`providers/airtel`](providers/airtel) for adapters against real APIs.
+See [`examples/customprovider`](examples/customprovider) for a complete provider implementing the whole contract against an HTTP API, and [`providers/dummy`](providers/dummy) for the in-tree reference adapter, which simulates payments in memory so a deployment can be exercised end to end without provider credentials.
 
 ### Options
 
