@@ -119,13 +119,13 @@ func newMigrateCommand() *cobra.Command {
 		Use:   "migrate",
 		Short: "Apply database schema migrations",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) (err error) {
+		RunE: func(cmd *cobra.Command, _ []string) (err error) {
 			instance, err := loadInstance()
 			if err != nil {
 				return err
 			}
 			defer closeInstance(instance, &err)
-			if err = instance.Migrate(); err == nil {
+			if err = instance.Migrate(cmd.Context()); err == nil {
 				fmt.Println("migrations applied")
 			}
 			return err

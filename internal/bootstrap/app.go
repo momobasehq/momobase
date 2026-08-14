@@ -64,10 +64,14 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 			_ = closeDatabase(db)
 		}
 	}()
+	// NewApp has no context of its own: the schema is settled before the server
+	// and its workers exist, so there is nothing yet to cancel the work from.
 	if cfg.Features.AutoMigrate {
-		if err = AutoMigrate(db); err != nil {
+		if err = Migrate(context.Background(), db, log); err != nil {
 			return nil, err
 		}
+	} else {
+		WarnPendingMigrations(context.Background(), db, log)
 	}
 	enc, err := platform.NewEncryptor(cfg.Security.EncryptionMasterKeyBase64)
 	if err != nil {
