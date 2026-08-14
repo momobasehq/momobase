@@ -99,8 +99,8 @@ type CreateCredentialRequest struct {
 
 // CreateProviderAccountRequest creates a provider account.
 type CreateProviderAccountRequest struct {
-	ProviderCode string         `json:"provider_code" example:"mtn"`
-	Name         string         `json:"name" example:"MTN Uganda"`
+	ProviderCode string         `json:"provider_code" example:"dummy"`
+	Name         string         `json:"name" example:"Sandbox provider"`
 	Environment  string         `json:"environment" enums:"sandbox,production" example:"sandbox"`
 	Countries    []string       `json:"countries" example:"UG"`
 	Config       map[string]any `json:"config" swaggertype:"object"`
@@ -108,7 +108,7 @@ type CreateProviderAccountRequest struct {
 
 // ProviderRegistry lists the provider codes registered in the running build.
 type ProviderRegistry struct {
-	Providers []string `json:"providers" example:"airtel_money,mtn_momo"`
+	Providers []string `json:"providers" example:"dummy"`
 }
 
 // ProviderRegistryResponse is a swagger-friendly registered-provider response.
@@ -176,7 +176,7 @@ type Worker struct {
 // RuntimeProvider describes an initialized provider runtime.
 type RuntimeProvider struct {
 	ProviderAccountID string                         `json:"provider_account_id" example:"pacc_123"`
-	ProviderCode      string                         `json:"provider_code" example:"mtn"`
+	ProviderCode      string                         `json:"provider_code" example:"dummy"`
 	ConfigVersion     int                            `json:"config_version" example:"1"`
 	Active            bool                           `json:"active" example:"true"`
 	Initialized       bool                           `json:"initialized" example:"true"`

@@ -78,10 +78,10 @@ definitions:
         example: sandbox
         type: string
       name:
-        example: MTN Uganda
+        example: Sandbox provider
         type: string
       provider_code:
-        example: mtn
+        example: dummy
         type: string
     type: object
   apidoc.CreateRouteRequest:
@@ -134,8 +134,7 @@ definitions:
     properties:
       providers:
         example:
-        - airtel_money
-        - mtn_momo
+        - dummy
         items:
           type: string
         type: array
@@ -318,7 +317,7 @@ definitions:
     type: object
 info:
   contact: {}
-  description: Mobile-money orchestration API for application payments and administrative
+  description: Payment orchestration API for application payments and administrative
     operations.
   title: Momobase API
   version: "1.0"

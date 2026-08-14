@@ -120,8 +120,8 @@ func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 		return errors.New("description must not exceed 255 characters")
 	case req.Momo == nil || strings.TrimSpace(req.Momo.Phone) == "":
 		return errors.New("momo.phone is required")
-	case req.Momo.Network != "" && req.Momo.Network != "mtn" && req.Momo.Network != "airtel" && req.Momo.Network != "unknown":
-		return errors.New("momo.network must be mtn, airtel, or unknown")
+	case !validNetwork(req.Momo.Network):
+		return errors.New("momo.network may contain only letters, digits, and _-. and must not exceed 64 characters")
 	}
 	party := paymentParty(service, req)
 	if party == nil || strings.TrimSpace(party.Phone) == "" {
@@ -292,6 +292,23 @@ func replay(tx *domain.Transaction, hash, _ string, _ *CreatePaymentRequest) (*C
 		ProviderReference: tx.ProviderReference,
 		Message:           "idempotent replay",
 	}, nil
+}
+
+// validNetwork reports whether a network identifier is safely comparable. The
+// value names a provider-specific scheme rather than a fixed set, so it is
+// checked structurally instead of against a list of known networks.
+func validNetwork(network string) bool {
+	if len(network) > 64 {
+		return false
+	}
+	for _, r := range network {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-', r == '.':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // PaymentRequestHash returns the canonical SHA-256 request hash used for idempotency checks.
