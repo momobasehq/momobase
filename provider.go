@@ -11,7 +11,7 @@ import (
 // The provider contract. These are aliases of the internal definitions, so a
 // type implementing momobase.PaymentProvider satisfies the engine directly.
 type (
-	// PaymentProvider defines the operations implemented by a mobile-money provider.
+	// PaymentProvider defines the operations implemented by a payment provider.
 	// Implement this interface to add a provider, then supply it to New with
 	// WithProvider.
 	PaymentProvider = providers.PaymentProvider
@@ -124,6 +124,16 @@ func ConfigPath(values map[string]any, path string) string {
 // First returns the first nonblank value after trimming surrounding whitespace.
 func First(values ...string) string {
 	return providers.First(values...)
+}
+
+// Slash ensures value begins with a forward slash, for joining configured API paths.
+func Slash(value string) string {
+	return providers.Slash(value)
+}
+
+// FirstError returns primary when it is non-nil and fallback otherwise.
+func FirstError(primary, fallback error) error {
+	return providers.FirstError(primary, fallback)
 }
 
 // PaymentStatus maps a provider status string onto a normalized Tx status.

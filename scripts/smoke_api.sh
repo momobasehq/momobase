@@ -54,7 +54,7 @@ app_client_flow() {
   # If a momo route exists, exercise a real collection request end to end.
   route_count=$(api GET /api/admin/routes "$AT" | jq '[.data.items[] | select(.active and .payment_method=="momo")] | length')
   if (( route_count )); then
-    body=$(jq -nc --arg ref "SMOKE-COLL-$NONCE" '{payment_method:"momo",amount:5000,currency:"UGX",country:"UG",reference:$ref,customer:{name:"Smoke",phone:"256771111111"},momo:{phone:"256771111111",network:"airtel"}}')
+    body=$(jq -nc --arg ref "SMOKE-COLL-$NONCE" '{payment_method:"momo",amount:5000,currency:"UGX",country:"UG",reference:$ref,customer:{name:"Smoke",phone:"256771111111"},momo:{phone:"256771111111"}}')
     create() {
       curl -fsS -X POST "$BASE_URL/api/v1/collections" \
         -H "Authorization: Bearer $PT" \

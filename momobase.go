@@ -74,10 +74,9 @@ func WithLogger(log *slog.Logger) Option {
 // select when creating a provider account through the Admin API.
 //
 // Momobase registers no providers of its own, so at least one is required. The
-// adapters in providers/mtn and providers/airtel are registered the same way as
-// any other:
+// reference adapter in providers/dummy is registered the same way as any other:
 //
-//	momobase.New(momobase.WithProvider("mtn_momo", mtn.New))
+//	momobase.New(momobase.WithProvider("acme_pay", acme.New))
 func WithProvider(code string, factory ProviderFactory) Option {
 	return with(bootstrap.WithProvider(code, factory))
 }

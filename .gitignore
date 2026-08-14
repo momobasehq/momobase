@@ -40,3 +40,7 @@ dist
 *.tsbuildinfo
 bin
 data/momobase*
+
+.agents
+skills-lock*
+.claude

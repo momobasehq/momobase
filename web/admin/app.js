@@ -2,17 +2,13 @@ import { MomobaseAdminClient, MomobaseClient } from './sdk.js'
 
 const countries = ['UG', 'KE', 'TZ', 'RW', 'ET', 'GH', 'NG']
 
-// Configuration starting points for the adapters shipped in this repository.
-// The selectable provider codes come from the server registry, so a code that
-// is missing here is still offered and starts from the generic template below.
+// Provider codes come from the server registry, so any registered provider is
+// offered. Configuration is provider-specific, so every code starts from the
+// same generic template rather than a hardcoded per-adapter preset.
 const providerPresets = {
-  mtn_momo: {
-    name: 'MTN Main',
-    config: '{\n  "base_url": "https://sandbox.momodeveloper.mtn.com",\n  "target_environment": "sandbox",\n  "currency": "UGX",\n  "callback_url": "https://example.com/webhooks/mtn",\n  "webhook_secret": "replace-with-provider-webhook-secret",\n  "collection_subscription_key": "",\n  "collection_api_user": "",\n  "collection_api_key": "",\n  "disbursement_subscription_key": "",\n  "disbursement_api_user": "",\n  "disbursement_api_key": ""\n}'
-  },
-  airtel_money: {
-    name: 'Airtel Main',
-    config: '{\n  "base_url": "https://openapiuat.airtel.africa",\n  "client_id": "",\n  "client_secret": "",\n  "currency": "UGX",\n  "webhook_secret": "replace-with-provider-webhook-secret",\n  "collection_enabled": true,\n  "disbursement_enabled": true\n}'
+  dummy: {
+    name: 'Sandbox provider',
+    config: '{\n  "currency": "UGX",\n  "webhook_secret": "replace-with-provider-webhook-secret",\n  "outcome": "succeed"\n}'
   }
 }
 const genericProviderConfig = '{\n  "currency": "UGX",\n  "webhook_secret": "replace-with-provider-webhook-secret"\n}'
@@ -66,8 +62,8 @@ window.adminApp = function () {
       credential: { name: 'SDK Client', scopes: 'collections:create disbursements:create transactions:read', expires_at: '' },
       provider: { provider_code: '', name: '', environment: 'sandbox', countryList: 'UG', config: genericProviderConfig },
       route: { service_type: 'collection', payment_method: 'momo', provider_account_id: '', priority: 1, active: true },
-      collection: { amount: 5000, reference: nowRef('COLL'), country: 'UG', phone: '256771111111', network: 'airtel' },
-      disbursement: { amount: 2500, reference: nowRef('DISB'), country: 'UG', phone: '256772222222', network: 'airtel' },
+      collection: { amount: 5000, reference: nowRef('COLL'), country: 'UG', phone: '256771111111', network: '' },
+      disbursement: { amount: 2500, reference: nowRef('DISB'), country: 'UG', phone: '256772222222', network: '' },
       lookup: { id: '', reference: '' }
     },
     data: {
