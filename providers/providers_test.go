@@ -62,10 +62,12 @@ func TestAmountConversion(t *testing.T) {
 func TestPaymentStatusMappings(t *testing.T) {
 	tests := map[string]string{
 		" successful ": "succeeded",
-		"TF":           "failed",
+		"DECLINED":     "failed",
 		"pending":      "processing",
 		"":             "processing",
 		"unexpected":   "unknown",
+		"CANCELED":     "cancelled",
+		"timed_out":    "expired",
 	}
 	for input, want := range tests {
 		if got := PaymentStatus(input); got != want {
@@ -74,9 +76,21 @@ func TestPaymentStatusMappings(t *testing.T) {
 	}
 }
 
+// TestPaymentStatusIsIdempotent guards the property the provider contract relies
+// on: adapters report normalized statuses, and the reconciliation and webhook
+// paths normalize again. A status that did not map to itself would be silently
+// rewritten, which is how a settled payment can end up reported as unknown.
+func TestPaymentStatusIsIdempotent(t *testing.T) {
+	for _, status := range []string{"succeeded", "failed", "processing", "unknown", "cancelled", "expired"} {
+		if got := PaymentStatus(status); got != status {
+			t.Fatalf("PaymentStatus(%q) = %q, want the same status", status, got)
+		}
+	}
+}
+
 func TestConfigHelpers(t *testing.T) {
 	config := ProviderConfig{
-		"name":    "  Airtel  ",
+		"name":    "  Acme  ",
 		"enabled": "TRUE",
 		"one":     1,
 		"count":   "42",
@@ -84,7 +98,7 @@ func TestConfigHelpers(t *testing.T) {
 			"value": " result ",
 		},
 	}
-	if String(config, "name") != "Airtel" || !Bool(config, "enabled") || !Bool(config, "one") {
+	if String(config, "name") != "Acme" || !Bool(config, "enabled") || !Bool(config, "one") {
 		t.Fatalf("string/bool helpers returned unexpected values")
 	}
 	if Bool(config, "missing") || Int(config, "count") != 42 || Int(config, "bad") != 0 {

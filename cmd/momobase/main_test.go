@@ -1,9 +1,51 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// TestProviderFactoriesAreRegistered guards the binary against shipping with an
+// empty registry, which momobase.New rejects at startup.
+func TestProviderFactoriesAreRegistered(t *testing.T) {
+	factories := providerFactories()
+	if len(factories) == 0 {
+		t.Fatal("providerFactories() is empty; every command would fail at startup")
+	}
+	for code, factory := range factories {
+		if factory == nil {
+			t.Errorf("provider %q has a nil factory", code)
+		}
+	}
+	if _, ok := factories["dummy"]; !ok {
+		t.Error("the dummy provider must stay registered so a fresh deployment can be exercised")
+	}
+}
+
+// TestLoadInstanceBuildsAServableInstance exercises the path every command
+// shares. It is the only test that proves the registered providers actually
+// initialize; the command tests below never reach it.
+func TestLoadInstanceBuildsAServableInstance(t *testing.T) {
+	t.Setenv("DB_TYPE", "sqlite")
+	t.Setenv("DB_PATH", filepath.Join(t.TempDir(), "momobase.db"))
+	t.Setenv("ADMIN_OAUTH_SECRET", strings.Repeat("a", 32))
+	t.Setenv("APP_OAUTH_SECRET", strings.Repeat("b", 32))
+	t.Setenv("WORKERS_ENABLED", "false")
+
+	instance, err := loadInstance()
+	if err != nil {
+		t.Fatalf("loadInstance() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := instance.Close(); closeErr != nil {
+			t.Errorf("Close() error = %v", closeErr)
+		}
+	})
+	if instance.Handler() == nil {
+		t.Error("Handler() = nil, want the configured HTTP handler")
+	}
+}
 
 func TestVersionCommandReportsBuildInformation(t *testing.T) {
 	cmd := newVersionCommand()

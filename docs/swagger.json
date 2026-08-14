@@ -5,7 +5,7 @@
     ],
     "swagger": "2.0",
     "info": {
-        "description": "Mobile-money orchestration API for application payments and administrative operations.",
+        "description": "Payment orchestration API for application payments and administrative operations.",
         "title": "Momobase API",
         "contact": {},
         "version": "1.0"
@@ -2936,11 +2936,11 @@
                 },
                 "name": {
                     "type": "string",
-                    "example": "MTN Uganda"
+                    "example": "Sandbox provider"
                 },
                 "provider_code": {
                     "type": "string",
-                    "example": "mtn"
+                    "example": "dummy"
                 }
             }
         },
@@ -3018,8 +3018,7 @@
                         "type": "string"
                     },
                     "example": [
-                        "airtel_money",
-                        "mtn_momo"
+                        "dummy"
                     ]
                 }
             }

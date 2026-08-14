@@ -6,7 +6,7 @@ The backend is a modular monolith with six main areas:
 
 - `internal/http`: standard-library routing, middleware, public/admin/webhook handlers.
 - `internal/services`: authentication, payments, routing, provider runtime, health, webhooks, reconciliation, and auditing.
-- `providers`: the public provider contract and shared adapter helpers, plus the MTN and Airtel adapters in `providers/mtn` and `providers/airtel`. Nothing here is registered automatically; a build chooses its providers through `momobase.WithProvider`.
+- `providers`: the public provider contract and shared adapter helpers, plus the in-tree reference adapter in `providers/dummy`. Nothing here is registered automatically; a build chooses its providers through `momobase.WithProvider`.
 - `internal/store`: database helpers and transaction boundaries.
 - `internal/workers`: bounded health, reconciliation, and session-cleanup loops.
 - `internal/bootstrap`: configuration, database initialization, dependency wiring, migration, and process lifecycle.
@@ -29,7 +29,7 @@ Important runtime guarantees:
 3. Momobase validates the request and claims the idempotency key.
 4. A transaction and provider attempt are persisted.
 5. Routing selects the highest-priority active provider account whose explicit `countries` list contains the request country.
-6. The provider executor checks runtime health and calls the selected MTN or Airtel adapter with a bounded context.
+6. The provider executor checks runtime health and calls the selected adapter with a bounded context.
 7. The normalized provider result is persisted through the transaction state machine.
 8. The application reads the transaction by Momobase ID or its own reference.
 
@@ -74,7 +74,7 @@ Reconciliation is intentionally sequential by default to keep provider pressure 
 
 ## Provider administration workflow
 
-1. A super administrator creates an MTN or Airtel provider account.
+1. A super administrator creates a provider account for a registered provider code.
 2. Provider credentials and settings are encrypted before persistence.
 3. Testing builds a temporary provider instance and performs a health check without changing the active runtime.
 4. Activation validates configuration, builds the runtime, verifies health, commits the active state, and installs it in memory.
@@ -221,8 +221,8 @@ Create a provider account with explicit countries:
 
 ```json
 {
-  "provider_code": "airtel_money",
-  "name": "Airtel East Africa",
+  "provider_code": "dummy",
+  "name": "Sandbox provider",
   "environment": "production",
   "countries": ["UG", "RW"],
   "config": {

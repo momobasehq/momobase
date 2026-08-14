@@ -14,7 +14,22 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/providers"
+	"github.com/momobasehq/momobase/providers/dummy"
 )
+
+// dummyConfig builds a dummy provider configuration, merging overrides over the
+// minimum viable settings. Every call site states the behavior it depends on
+// rather than relying on the adapter's defaults.
+func dummyConfig(overrides map[string]any) map[string]any {
+	config := map[string]any{
+		"webhook_secret": "test-webhook-signing-credential",
+		"outcome":        dummy.OutcomeSucceed,
+	}
+	for key, value := range overrides {
+		config[key] = value
+	}
+	return config
+}
 
 type testStack struct {
 	db            *gorm.DB
@@ -58,7 +73,7 @@ func stack(t *testing.T) *testStack {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	enc := must(platform.NewEncryptor("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="))
 	registry := providers.NewRegistry()
-	registry.Register("test_provider", func(*slog.Logger) providers.PaymentProvider { return &fakeProvider{} })
+	registry.Register("test_provider", dummy.New)
 	runtime, audit := NewProviderRuntimeManager(db, registry, enc, log), NewAuditService(db, log)
 	tokens := must(platform.NewTokenManager("test-app-token-secret-must-be-long-1234567890"))
 	auth := NewAppAuthService(db, "app_test", "secret_test", 30*time.Minute, 24*time.Hour, tokens)
@@ -85,7 +100,7 @@ func (s *testStack) app(t *testing.T) (*domain.App, *domain.AppCredential, strin
 	created := must(s.apps.CreateCredential(context.Background(), s.actor, app.ID, "Default", defaultScopes, nil))
 	return app, &created.Credential, created.ClientSecret
 }
-func (s *testStack) provider(t *testing.T, mode string, countries ...string) *domain.ProviderAccount {
+func (s *testStack) provider(t *testing.T, config map[string]any, countries ...string) *domain.ProviderAccount {
 	account := must(s.providerAdmin.CreateAccount(
 		context.Background(),
 		s.actor,
@@ -93,7 +108,7 @@ func (s *testStack) provider(t *testing.T, mode string, countries ...string) *do
 		"Test",
 		"sandbox",
 		countries,
-		map[string]any{"mode": mode, "webhook_secret": "secret"},
+		config,
 	))
 	noError(s.providerAdmin.Activate(context.Background(), s.actor, account.ID))
 	return account
@@ -118,7 +133,7 @@ func TestCoreFlows(t *testing.T) {
 	})
 	t.Run("idempotency", func(t *testing.T) {
 		s := stack(t)
-		account := s.provider(t, "success", "UG")
+		account := s.provider(t, dummyConfig(nil), "UG")
 		s.route(t, account.ID, 1)
 		app, _, _ := s.app(t)
 		req := &CreatePaymentRequest{
@@ -141,12 +156,54 @@ func TestCoreFlows(t *testing.T) {
 			t.Fatalf("attempts=%d", attempts)
 		}
 	})
+	t.Run("reconciliation settles a processing payment", func(t *testing.T) {
+		s := stack(t)
+		account := s.provider(t, dummyConfig(map[string]any{"settle_after": 2}), "UG")
+		s.route(t, account.ID, 1)
+		app, _, _ := s.app(t)
+		created := must(s.payments.Create(context.Background(), app.ID, domain.ServiceCollection, "idem-recon", &CreatePaymentRequest{
+			PaymentMethod: domain.PaymentMethodMomo,
+			Amount:        1500,
+			Currency:      "UGX",
+			Country:       "UG",
+			Reference:     "ORDER-RECON",
+			Customer:      &PartyPayload{Phone: "256770000000"},
+			Momo:          &PartyPayload{Phone: "256770000000"},
+		}))
+		if created.Status != domain.TxProcessing {
+			t.Fatalf("Create() status = %q, want %q", created.Status, domain.TxProcessing)
+		}
+
+		log := slog.New(slog.NewTextHandler(io.Discard, nil))
+		recon := NewReconciliationService(s.db, s.runtime, NewWebhookService(s.db, s.runtime), log)
+		// The orchestrator schedules the next attempt a minute out, so each pass
+		// clears the backoff to make the run deterministic.
+		for pass := range 2 {
+			noError(s.db.Model(&domain.Transaction{}).Where("id = ?", created.TransactionID).Update("next_reconcile_at", nil).Error)
+			noError(recon.RunOnce(context.Background(), 10))
+			var tx domain.Transaction
+			noError(s.db.First(&tx, "id = ?", created.TransactionID).Error)
+			want := domain.TxProcessing
+			if pass == 1 {
+				want = domain.TxSucceeded
+			}
+			if tx.Status != want {
+				t.Fatalf("status after pass %d = %q, want %q", pass+1, tx.Status, want)
+			}
+		}
+
+		var attempt domain.TransactionAttempt
+		noError(s.db.First(&attempt, "transaction_id = ?", created.TransactionID).Error)
+		if attempt.Status != domain.TxSucceeded || attempt.CompletedAt == nil {
+			t.Fatalf("attempt = %q completed=%v, want a completed successful attempt", attempt.Status, attempt.CompletedAt)
+		}
+	})
 	t.Run("country routing and health fallback", func(t *testing.T) {
 		s := stack(t)
 		primary, backup, kenya :=
-			s.provider(t, "success", "UG", "RW"),
-			s.provider(t, "success", "UG"),
-			s.provider(t, "success", "KE")
+			s.provider(t, dummyConfig(nil), "UG", "RW"),
+			s.provider(t, dummyConfig(nil), "UG"),
+			s.provider(t, dummyConfig(nil), "KE")
 		s.route(t, primary.ID, 1)
 		s.route(t, backup.ID, 2)
 		s.route(t, kenya.ID, 0)
@@ -174,13 +231,13 @@ func TestCoreFlows(t *testing.T) {
 	})
 	t.Run("failed reload keeps runtime", func(t *testing.T) {
 		s := stack(t)
-		account := s.provider(t, "success", "UG")
+		account := s.provider(t, dummyConfig(nil), "UG")
 		before, _ := s.runtime.Get(account.ID)
 		if err := s.providerAdmin.UpdateConfig(
 			context.Background(),
 			s.actor,
 			account.ID,
-			map[string]any{"mode": "init_error", "webhook_secret": "secret"},
+			dummyConfig(map[string]any{"fail_init": true}),
 		); err == nil {
 			t.Fatal("bad config accepted")
 		}
@@ -214,47 +271,4 @@ func TestServiceQueriesHonorCanceledContext(t *testing.T) {
 	if _, err := s.apps.GetApp(ctx, "missing"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("GetApp() error = %v, want context canceled", err)
 	}
-}
-
-type fakeProvider struct{ mode string }
-
-func (*fakeProvider) Capabilities() []providers.Capability {
-	return []providers.Capability{
-		{ServiceType: domain.ServiceCollection, PaymentMethod: domain.PaymentMethodMomo},
-		{ServiceType: domain.ServiceDisbursement, PaymentMethod: domain.PaymentMethodMomo},
-	}
-}
-func (p *fakeProvider) Init(_ context.Context, config providers.ProviderConfig) error {
-	p.mode, _ = config["mode"].(string)
-	if p.mode == "init_error" {
-		return errors.New("init")
-	}
-	return nil
-}
-func (p *fakeProvider) HealthCheck(context.Context) error {
-	if p.mode == "down" {
-		return errors.New("down")
-	}
-	return nil
-}
-func (p *fakeProvider) Collect(_ context.Context, request providers.PaymentRequest) (*providers.ProviderPaymentResponse, error) {
-	return p.pay(request.Reference)
-}
-func (p *fakeProvider) Disburse(_ context.Context, request providers.PaymentRequest) (*providers.ProviderPaymentResponse, error) {
-	return p.pay(request.Reference)
-}
-func (*fakeProvider) QueryTransaction(_ context.Context, ref, _ string) (*providers.ProviderTransactionStatus, error) {
-	return &providers.ProviderTransactionStatus{ProviderReference: ref, Status: domain.TxSucceeded}, nil
-}
-func (*fakeProvider) QueryBalance(context.Context, string) (*providers.ProviderBalance, error) {
-	return &providers.ProviderBalance{Currency: "UGX", Available: 100000, Ledger: 100000}, nil
-}
-func (*fakeProvider) VerifyWebhook(context.Context, []byte, map[string]string) (*providers.ProviderWebhookEvent, error) {
-	return &providers.ProviderWebhookEvent{ProviderReference: "test", Status: domain.TxSucceeded, EventType: "updated"}, nil
-}
-func (p *fakeProvider) pay(ref string) (*providers.ProviderPaymentResponse, error) {
-	if p.mode == "error" {
-		return nil, errors.New("provider")
-	}
-	return &providers.ProviderPaymentResponse{ProviderReference: "test_" + ref, Status: domain.TxSucceeded}, nil
 }
