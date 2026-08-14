@@ -10,6 +10,27 @@ The backend is a modular monolith with six main areas:
 - `internal/store`: database helpers and transaction boundaries.
 - `internal/workers`: bounded health, reconciliation, and session-cleanup loops.
 - `internal/bootstrap`: configuration, database initialization, dependency wiring, migration, and process lifecycle.
+- `internal/migrations`: ordered schema changes that `AutoMigrate` cannot express, and the ledger recording which have been applied.
+
+## Schema migrations
+
+Momobase settles its schema in two steps, both idempotent and both run by `momobase migrate` and by start-up when `AUTO_MIGRATE=true`:
+
+1. **Versioned migrations** in `internal/migrations` apply ordered changes that `AutoMigrate` cannot — renames, drops, and backfills. Each is recorded in a `schema_migrations` table.
+2. **`AutoMigrate`** then converges the schema with the current models, creating tables, adding columns, and widening types.
+
+Every migration is written to be a no-op when its change is already present. That is what lets a database created by an earlier release — which has tables but no ledger — be adopted without a separate baselining step.
+
+A migration that fails leaves its ledger row marked dirty, and the next start refuses rather than running against a half-changed schema. Recovery is deliberate and manual: verify the schema, then delete that row from `schema_migrations`.
+
+**More than one replica:** run migrations as a pre-deploy step and disable them in the serving processes, so replicas do not race to apply the same change.
+
+```sh
+momobase migrate                 # pre-deploy, once
+AUTO_MIGRATE=false momobase serve # every replica
+```
+
+With `AUTO_MIGRATE=false`, a process that finds pending migrations logs a warning naming them and still serves; refusing to start would turn a correct deployment strategy into an outage.
 
 Important runtime guarantees:
 
@@ -294,5 +315,5 @@ The payment part of the smoke test runs only when an active MoMo route exists.
 - Use HTTPS at the reverse proxy or load balancer.
 - Never deploy the example encryption or OAuth secrets.
 - Keep provider secrets out of source control and application logs.
-- `AUTO_MIGRATE=true` is suitable for initial staging; controlled migrations are safer for production.
+- `AUTO_MIGRATE=true` is suitable for a single instance; run migrations as a pre-deploy step for anything larger (see below).
 - Admin UI access tokens are kept in browser memory rather than persistent browser storage.
