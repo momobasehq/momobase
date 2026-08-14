@@ -46,6 +46,8 @@ export interface ProviderAccount {
   id: string; provider_code: string; name: string; environment: string
   countries: string[]; active: boolean; config_version: number; created_at: string; updated_at: string
 }
+/** Provider codes registered in the running server, including custom providers. */
+export interface ProviderRegistry { providers: string[] }
 export interface PaymentRoute {
   id: string; service_type: ServiceType; payment_method: "momo"; provider_account_id: string
   priority: number; active: boolean; created_at: string; updated_at: string
