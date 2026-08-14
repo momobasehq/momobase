@@ -153,10 +153,11 @@ func (i *Instance) Close() error {
 	return i.app.Close()
 }
 
-// Migrate applies the database schema migrations. It runs automatically during
-// New unless the AutoMigrate feature is disabled.
-func (i *Instance) Migrate() error {
-	return bootstrap.AutoMigrate(i.app.DB)
+// Migrate applies pending schema migrations and converges the schema with the
+// current models. It runs automatically during New unless the AutoMigrate
+// feature is disabled, and is safe to call more than once.
+func (i *Instance) Migrate(ctx context.Context) error {
+	return bootstrap.Migrate(ctx, i.app.DB, i.app.Logger)
 }
 
 // SeedAdmin creates a super administrator with the supplied credentials.
