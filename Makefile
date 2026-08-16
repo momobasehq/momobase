@@ -2,6 +2,7 @@ APP=momobase
 GOFILES=$$(find . -name '*.go' -not -path './vendor/*')
 GOLANGCI_LINT?=golangci-lint
 GORELEASER?=goreleaser
+PNPM?=pnpm
 
 run:
 	go run ./cmd/$(APP) serve
@@ -53,8 +54,16 @@ smoke:
 smoke-api:
 	scripts/smoke_api.sh
 
-sdk-build:
-	cd packages/sdk && npm install && npm run build
+# Install the web workspace without touching the lockfile. Every front-end target
+# depends on this, so a stale lockfile fails here rather than halfway through a build.
+web-install:
+	$(PNPM) -C web install --frozen-lockfile
+
+web-typecheck: web-install
+	$(PNPM) -C web run typecheck
+
+sdk-build: web-install
+	$(PNPM) -C web --filter @momobase/sdk run build
 
 docs:
 	swag init -g ./cmd/momobase/main.go --parseDependency --parseInternal --output docs --outputTypes json,yaml
@@ -63,4 +72,4 @@ docs:
 	# $ go install github.com/swaggo/swag/cmd/swag@latest
 
 # tell make that these targets are not files
-.PHONY: docs run build test tidy fmt fmt-check vet lint lint-fix lint-format quality release-check snapshot seed-admin smoke smoke-api sdk-build docs
+.PHONY: docs run build test tidy fmt fmt-check vet lint lint-fix lint-format quality release-check snapshot seed-admin smoke smoke-api web-install web-typecheck sdk-build docs

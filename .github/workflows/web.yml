@@ -1,0 +1,57 @@
+name: Web
+
+# The Go jobs never touch Node, so without this workflow the SDK and the dashboard
+# can break without anything failing until someone builds them by hand.
+on:
+  push:
+    paths:
+      - "web/**"
+      - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/web.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  build:
+    name: Typecheck and build the web workspace
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4.2.0
+        with:
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v6.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      # --frozen-lockfile fails rather than resolving, so a package.json edited
+      # without regenerating the lockfile is caught here instead of drifting.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -r run typecheck
+
+      - name: Build
+        run: pnpm -r run build
