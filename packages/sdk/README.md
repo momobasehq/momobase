@@ -40,22 +40,34 @@ The SDK uses the global `fetch()` directly. There is no `fetchImpl` option.
 
 Both clients cache access tokens and call the refresh endpoint when a `refresh_token` is available. If no refresh token exists, the app client requests a new `client_credentials` token and the admin client falls back to password grant when email/password are configured.
 
-## Explicit country routing
+## Accounts are opaque
 
-Collection and disbursement payloads include `country` as a two-letter ISO code, for example `UG`. Provider accounts expose `countries: string[]`, and Momobase routes only to active accounts whose list contains the transaction country. Route priority decides among eligible providers; no global fallback exists.
+Every payment carries an `account`, and the engine treats it as an opaque string:
 
-Phone/MSISDN values may be local or international. The backend validates them against the transaction country using libphonenumber metadata and normalizes them to E.164 digits.
+```ts
+await app.collections.create({
+  payment_method: "momo",
+  amount: 50000,
+  currency: "UGX",
+  country: "UG",
+  reference: "ORDER-1",
+  account: { account: "256770000000", scheme: "mtn" },
+  customer: { name: "Ada Lovelace" },
+}, { idempotencyKey: "order-1" })
+```
 
-## Current MVP limits
+`account.account` may be a mobile number, a bank account, a card token, or a wallet address. What counts as valid is the provider's to decide: an adapter that needs an MSISDN validates and canonicalizes it when the request is routed, and the normalized value is what the transaction records. `account.scheme` optionally names the network, bank, or card brand, and `account.metadata` passes provider-specific details through without being persisted.
 
-This SDK now matches the latest backend contract:
+## Country routing
 
-- `payment_method` is **only** `momo`.
-- Collection requests require `customer` and `momo`.
-- Disbursement requests require `recipient` and `momo`.
-- Card, bank, and wallet payloads are intentionally not exposed yet.
-- Provider account creation requires a non-empty `countries` array such as `["UG", "RW"]`.
-- Supported countries can be changed with `admin.providers.updateCountries(id, countries)`.
-- `admin.providers.balance(id, country)` requires `country` for a multi-country provider; it may be omitted for a single-country provider.
+`country` is an optional two-letter ISO code. Provider accounts expose `countries: string[]`: an account that lists countries serves only requests naming one of them, and an account with an empty list is unrestricted, which is how a rail with no country notion is modelled. Route priority decides among eligible providers; there is no global fallback country.
+
+## Contract notes
+
+- `payment_method` is free-form and must match an active payment route. `momo` is a convention, not an enum.
+- `account` is required. `customer` and `recipient` are optional context, and carry a name and email only.
+- Supported countries can be changed with `admin.providers.updateCountries(id, countries)`; an empty array leaves the account unrestricted.
+- `admin.providers.balance(id, country)` requires `country` only for a provider that declares more than one.
 - Provider configs should include `webhook_secret`; country eligibility is not stored in provider credential config.
-- Provider balances use `{ currency, available, ledger }`; active balance queries return one `{ provider_account_id, provider_code, country, status, balance?, error? }` item per supported country.
+- Provider balances use `{ currency, available, ledger }`; active balance queries return one `{ provider_account_id, provider_code, country, status, balance?, error? }` item per supported country, or one item with an empty `country` for an unrestricted provider.
+- Provider capabilities report the service only — `{ service_type }`. Which rails reach an account is decided by its routes.

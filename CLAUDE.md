@@ -42,7 +42,7 @@ Layers, outermost first:
 - `internal/http` — `NewRouter` wires every route with an explicit middleware chain (`chain`/`route` helpers). Route groups: `public` (app-token payments), `admin` (bearer + role), `webhooks` (body-capped), plus the optional embedded panel from `web/admin`.
 - `internal/services` — all business logic: auth, payment orchestration, routing, provider runtime/admin, webhooks, reconciliation, health, audit.
 - `providers` — the public adapter contract plus shared helpers (`DoJSON`, `TokenCache`, `Redact`, config accessors, amount/status normalization). `providers/dummy` is the in-tree reference adapter: it simulates payments in memory, so it is registered like any third-party one and needs no credentials.
-- `internal/domain` — GORM models and the shared status/circuit constants.
+- `internal/domain` — GORM models and the shared service/status/circuit constants.
 - `internal/store` — the only transaction boundary (`Within`) and write-result helper (`Affected`).
 - `internal/platform` — AES-256-GCM encryptor, HMAC token manager, bcrypt, IDs, JSON request decoding, the `{success,data,error}` response envelope, pagination.
 - `internal/workers` — one `Manager` owning all background goroutines (`health`, `reconciliation`, `cleanup`), stopped by context cancellation.
@@ -50,9 +50,13 @@ Layers, outermost first:
 
 ### Payment path
 
-`POST /api/v1/collections` → app-bearer + scope middleware → `PaymentOrchestrator.Create` → validate & normalize (country, currency, MSISDN via libphonenumber) → idempotency lookup by `(app_id, idempotency_key)` → `RouteEngine.SelectProvider` → persist `Transaction` + `TransactionAttempt` → `RuntimeProviderExecutor.Collect` (timeout + circuit breaker + structured logging) → `persist` applies the state machine.
+`POST /api/v1/collections` → app-bearer + scope middleware → `PaymentOrchestrator.Create` → validate & normalize (country, currency, payment method, account shape) → idempotency lookup by `(app_id, idempotency_key)` → `RouteEngine.SelectProvider` → `RuntimeProviderExecutor.ValidateRequest` (the provider's optional `providers.RequestValidator`) → persist `Transaction` + `TransactionAttempt` → `RuntimeProviderExecutor.Collect` (timeout + circuit breaker + structured logging) → `persist` applies the state machine.
 
-`RouteEngine` picks the lowest-`priority` active route whose provider account is active, whose **explicit `countries` list contains the request country**, whose runtime capabilities match, and whose circuit and health snapshot are not open/down. There is no global or fallback country.
+**Accounts are opaque.** A payment carries an `account` (mobile number, bank account, card token, wallet address); the engine only checks its shape. A provider that needs a particular kind of identifier implements `providers.RequestValidator`, which runs after routing and before any row is written, may rewrite `Account`/`Scheme` only, and whose rejection is a client error that never trips the circuit breaker. The engine carries no account-format logic of its own — no phone, IBAN, or card validation — so an adapter that needs a format brings its own. `payment_method` is free-form and only ever compared against a route — there are no payment-method constants.
+
+`RouteEngine` picks the lowest-`priority` active route whose provider account is active, which declares a capability for the service, which is eligible for the request country, and whose circuit and health snapshot are not open/down. Country eligibility (`countryEligible`): an account that declares `countries` requires a request country it lists; an account that declares none is unrestricted. There is no fallback among country-scoped accounts.
+
+**Capabilities name the service only** (`Capability{ServiceType}`). Which rails reach an account is decided by its routes, so `providers.Supports(caps, service)` is the only capability question.
 
 ### Provider runtime
 
@@ -69,13 +73,13 @@ These are load-bearing; breaking one is a silent correctness bug.
 - Zero-row writes are errors: wrap updates in `store.Affected` so they become `gorm.ErrRecordNotFound`.
 - Anything derived from a provider — errors, raw payloads — passes through `providers.Redact` / `redactRawMap` before it is logged or persisted.
 - Request handlers launch no detached goroutines. Background work belongs to `workers.Manager` and stops on context cancellation.
-- Idempotency is `(app_id, idempotency_key)` unique index **plus** `RequestHash` comparison; a reused key with a different body is an error, not a replay.
-- Webhooks authenticate with a constant-time compare of `X-Webhook-Secret` against the account's decrypted `webhook_secret`, dedupe on `(provider_account_id, payload_hash)` via `ON CONFLICT DO NOTHING`, and are validated field-by-field against the target transaction before being applied.
+- Idempotency is `(app_id, idempotency_key)` unique index **plus** `RequestHash` comparison; a reused key with a different body is an error, not a replay. The hash is taken before provider normalization, so two spellings of one account are two different requests.
+- Webhooks authenticate with a constant-time compare of `X-Webhook-Secret` against the account's decrypted `webhook_secret`, dedupe on `(provider_account_id, payload_hash)` via `ON CONFLICT DO NOTHING`, and are validated field-by-field against the target transaction before being applied. `ProviderWebhookEvent.Account` is compared **exactly** against `Transaction.CustomerAccount`, so an adapter that normalizes in `ValidateRequest` must report the same form here.
 - Secrets are never stored in plaintext: provider configs are AES-GCM encrypted, passwords and client secrets are bcrypt/SHA-256 hashed, and models mark them `json:"-"`.
 
 ## Making changes
 
-**Adding a provider.** Implement the eight-method `providers.PaymentProvider` interface and a `func(*slog.Logger) providers.PaymentProvider` factory; register with `WithProvider(code, factory)`. Bundled adapters may import `internal/domain` for constants; out-of-tree providers use the root package's re-exports (`momobase.ServiceCollection`, `momobase.PaymentStatus`, …). `examples/customprovider/main.go` is a complete reference implementation. Config always arrives as `ProviderConfig` and must include `webhook_secret`.
+**Adding a provider.** Implement the eight-method `providers.PaymentProvider` interface and a `func(*slog.Logger) providers.PaymentProvider` factory; register with `WithProvider(code, factory)`. Implement `providers.RequestValidator` too when the rail constrains what an account may be. Bundled adapters may import `internal/domain` for constants; out-of-tree providers use the root package's re-exports (`momobase.ServiceCollection`, `momobase.PaymentStatus`, …). `examples/customprovider/main.go` is a complete reference implementation. Config always arrives as `ProviderConfig` and must include `webhook_secret`.
 
 **Exposing a new helper to third-party providers.** Add it to `providers/`, then re-export it from the root `provider.go` — the root package is the documented surface, and `momobase_test.go` compiles a stub provider from exported types only, so it fails if that surface regresses.
 

@@ -51,10 +51,12 @@ app_client_flow() {
   PT=$(jq -r .access_token <<<"$APP")
   [[ -n $PT && $PT != null ]]
 
-  # If a momo route exists, exercise a real collection request end to end.
-  route_count=$(api GET /api/admin/routes "$AT" | jq '[.data.items[] | select(.active and .payment_method=="momo")] | length')
-  if (( route_count )); then
-    body=$(jq -nc --arg ref "SMOKE-COLL-$NONCE" '{payment_method:"momo",amount:5000,currency:"UGX",country:"UG",reference:$ref,customer:{name:"Smoke",phone:"256771111111"},momo:{phone:"256771111111"}}')
+  # If a collection route exists, exercise a real payment request end to end. Payment
+  # methods are free-form, so the method comes from the route rather than a literal.
+  route=$(api GET /api/admin/routes "$AT" | jq -c 'first(.data.items[] | select(.active and .service_type=="collection")) // empty')
+  if [[ -n $route ]]; then
+    method=$(jq -r .payment_method <<<"$route")
+    body=$(jq -nc --arg ref "SMOKE-COLL-$NONCE" --arg method "$method" '{payment_method:$method,amount:5000,currency:"UGX",country:"UG",reference:$ref,account:{account:"256771111111"},customer:{name:"Smoke"}}')
     create() {
       curl -fsS -X POST "$BASE_URL/api/v1/collections" \
         -H "Authorization: Bearer $PT" \
@@ -68,7 +70,7 @@ app_client_flow() {
     api GET "/api/v1/transactions/$id" "$PT" | jq -e . >/dev/null
     api GET "/api/v1/transactions/by-reference/SMOKE-COLL-$NONCE" "$PT" | jq -e . >/dev/null
   else
-    echo 'no active momo route; payment call skipped'
+    echo 'no active collection route; payment call skipped'
   fi
 }
 

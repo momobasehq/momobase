@@ -1,4 +1,6 @@
-export type PaymentMethod = "momo"
+/** A payment rail, matched against the payment routes an operator created. It is
+ * free-form: "momo" is a convention, not the only value a server accepts. */
+export type PaymentMethod = string
 export type ServiceType = "collection" | "disbursement"
 export type TransactionStatus = "pending" | "processing" | "succeeded" | "failed" | "unknown" | "cancelled" | "expired"
 
@@ -8,23 +10,26 @@ export interface PaginatedData<T> { page: number; total: number; items: T[]; cou
 export interface ListOptions { page?: number; perPage?: number; signal?: AbortSignal }
 export interface RequestOptions { idempotencyKey?: string; signal?: AbortSignal }
 
-export interface PartyPayload { name?: string; email?: string; phone: string }
-export interface MomoPayload { phone: string; network?: string }
+export interface PartyPayload { name?: string; email?: string }
+/** The account a payment moves funds from or to. `account` is provider-specific —
+ * a mobile number, bank account, card token, or wallet address — and is validated
+ * by the provider the request routes to, not by the engine. */
+export interface AccountPayload { account: string; scheme?: string; metadata?: Record<string, unknown> }
 interface PaymentRequest {
-  payment_method: "momo"; amount: number; currency: string; country: string
-  reference: string; description?: string; momo: MomoPayload
+  payment_method: PaymentMethod; amount: number; currency: string; country?: string
+  reference: string; description?: string; account: AccountPayload
 }
-export interface CreateCollectionRequest extends PaymentRequest { customer: PartyPayload }
-export interface CreateDisbursementRequest extends PaymentRequest { recipient: PartyPayload }
+export interface CreateCollectionRequest extends PaymentRequest { customer?: PartyPayload }
+export interface CreateDisbursementRequest extends PaymentRequest { recipient?: PartyPayload }
 export interface CreatePaymentResponse {
   transaction_id: string; reference: string; service_type: ServiceType; payment_method: PaymentMethod
   status: TransactionStatus; selected_provider: string; provider_reference: string; message: string
 }
 export interface Transaction {
-  id: string; app_id: string; service_type: ServiceType; payment_method: "momo"; amount: number
-  currency: string; country: string; reference: string; idempotency_key: string; status: TransactionStatus
+  id: string; app_id: string; service_type: ServiceType; payment_method: PaymentMethod; amount: number
+  currency: string; country?: string; reference: string; idempotency_key: string; status: TransactionStatus
   selected_route_id?: string; selected_provider_account_id?: string; provider_reference?: string
-  customer_phone?: string; customer_email?: string; customer_name?: string; description?: string
+  customer_account?: string; customer_email?: string; customer_name?: string; description?: string
   created_at: string; updated_at: string
 }
 export interface OAuthTokenResponse {
@@ -49,7 +54,7 @@ export interface ProviderAccount {
 /** Provider codes registered in the running server, including custom providers. */
 export interface ProviderRegistry { providers: string[] }
 export interface PaymentRoute {
-  id: string; service_type: ServiceType; payment_method: "momo"; provider_account_id: string
+  id: string; service_type: ServiceType; payment_method: PaymentMethod; provider_account_id: string
   priority: number; active: boolean; created_at: string; updated_at: string
 }
 export interface ProviderHealthSnapshot {

@@ -34,10 +34,12 @@ async function unwrap<T>(r: Response): Promise<T> {
 function cached(t: OAuthTokenResponse, skew: number): CachedToken {
   return { accessToken: t.access_token, refreshToken: t.refresh_token, expiresAt: Date.now() + Math.max(t.expires_in - skew, 1) * 1000 }
 }
-function validatePayment(kind: "collection" | "disbursement", p: CreateCollectionRequest | CreateDisbursementRequest) {
-  if (p.payment_method !== "momo" || !p.momo?.phone) throw new Error("payment_method=momo and momo.phone are required")
-  if (p.country.length !== 2) throw new Error("country must be a 2-letter ISO code")
-  if (kind === "collection" ? !(p as CreateCollectionRequest).customer?.phone : !(p as CreateDisbursementRequest).recipient?.phone) throw new Error(`${kind} party phone is required`)
+function validatePayment(_kind: "collection" | "disbursement", p: CreateCollectionRequest | CreateDisbursementRequest) {
+  // The account stays opaque here: what a valid one looks like is the provider's to
+  // decide, so the client only checks what the API requires of every payment.
+  if (!p.payment_method) throw new Error("payment_method is required")
+  if (!p.account?.account) throw new Error("account.account is required")
+  if (p.country !== undefined && p.country.length !== 2) throw new Error("country must be a 2-letter ISO code")
 }
 
 abstract class SessionClient {
