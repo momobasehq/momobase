@@ -1,0 +1,60 @@
+//go:build dashboard
+
+package dashboard
+
+import (
+	"io/fs"
+	"regexp"
+	"strings"
+	"testing"
+	"testing/fstest"
+)
+
+// assetReference matches the URLs Vite writes into the built index.html.
+var assetReference = regexp.MustCompile(`/dashboard/assets/[A-Za-z0-9._@-]+`)
+
+func indexHTML(t *testing.T) string {
+	t.Helper()
+	if err := fstest.TestFS(FS(), "index.html"); err != nil {
+		t.Fatalf("embedded dashboard filesystem: %v", err)
+	}
+	index, err := fs.ReadFile(FS(), "index.html")
+	if err != nil {
+		t.Fatalf("read embedded index: %v", err)
+	}
+	return string(index)
+}
+
+// TestFSContainsTheAppShell asserts the markers the HTTP layer and the container
+// smoke test key off. Both survive a Vite build, unlike anything Vite generates.
+func TestFSContainsTheAppShell(t *testing.T) {
+	if !Available() {
+		t.Fatal("Available() = false in a tagged build")
+	}
+	index := indexHTML(t)
+	for _, marker := range []string{"<title>Momobase Dashboard</title>", `id="root"`} {
+		if !strings.Contains(index, marker) {
+			t.Errorf("embedded index is missing %q", marker)
+		}
+	}
+}
+
+// TestEveryReferencedAssetIsEmbedded catches a bundle that shipped incomplete.
+//
+// Vite writes hashed asset names into index.html, and `all:` is what keeps the
+// underscore-prefixed chunks among them from being skipped. Without this test a
+// dropped chunk produces a served page whose script tags 404 — a white screen with
+// no build error anywhere. It only runs in a tagged build, which is the only build
+// that has assets to check.
+func TestEveryReferencedAssetIsEmbedded(t *testing.T) {
+	references := assetReference.FindAllString(indexHTML(t), -1)
+	if len(references) == 0 {
+		t.Fatal("built index.html references no assets, so the bundle is not what was embedded")
+	}
+	for _, reference := range references {
+		name := strings.TrimPrefix(reference, "/dashboard/")
+		if _, err := fs.Stat(FS(), name); err != nil {
+			t.Errorf("index.html references %s, which is not embedded: %v", reference, err)
+		}
+	}
+}

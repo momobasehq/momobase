@@ -55,3 +55,15 @@ jobs:
 
       - name: Build
         run: pnpm -r run build
+
+      # The embed and its asset-resolution guard only exist in a tagged build, and
+      # this is the only job with a bundle for them to check.
+      - name: Set up Go
+        uses: actions/setup-go@v6.4.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Verify the dashboard embeds its bundle
+        working-directory: .
+        run: go test -tags dashboard ./web/dashboard/...
