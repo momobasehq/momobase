@@ -9,7 +9,7 @@ make run                 # go run ./cmd/momobase serve
 make build               # binary in bin/
 make quality             # fmt-check + vet + test + lint (run before pushing)
 make docs                # regenerate docs/swagger.{json,yaml} from swag annotations
-make sdk-build           # cd packages/sdk && npm install && npm run build
+make sdk-build           # pnpm -C web build of @momobase/sdk (pnpm, not npm)
 make seed-admin          # requires ADMIN_PASSWORD in the environment
 make smoke-api           # scripts/smoke_api.sh against a running server
 make snapshot            # local GoReleaser build (needs gcc-aarch64-linux-gnu)
@@ -83,7 +83,7 @@ These are load-bearing; breaking one is a silent correctness bug.
 
 **Exposing a new helper to third-party providers.** Add it to `providers/`, then re-export it from the root `provider.go` — the root package is the documented surface, and `momobase_test.go` compiles a stub provider from exported types only, so it fails if that surface regresses.
 
-**Adding an HTTP endpoint.** Handler in the matching `internal/http/*` package with swag annotations → register in `internal/http/router.go` with its middleware (role/scope, `JSONOnly`, `NoCache`) → `make docs` → mirror in `packages/sdk/src/client.ts` (+`types.ts`) and, for admin endpoints, `web/admin/sdk.js` and `web/admin/app.js`. The browser SDK is a hand-maintained JS twin of the TypeScript one, not a build output.
+**Adding an HTTP endpoint.** Handler in the matching `internal/http/*` package with swag annotations → register in `internal/http/router.go` with its middleware (role/scope, `JSONOnly`, `NoCache`) → `make docs` → mirror in `web/sdk/src/client.ts` (+`types.ts`) and, for admin endpoints, `web/admin/sdk.js` and `web/admin/app.js`. The browser SDK is a hand-maintained JS twin of the TypeScript one, not a build output.
 
 **Adding a config value.** `internal/bootstrap/config.go` (`env`/`boolean`/`duration`/`list`), a rule in `Config.Validate` if it is unsafe by default in staging/production, then `.env.example`, `.env.docker.example`, and `docker-compose.yml`.
 

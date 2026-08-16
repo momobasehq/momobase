@@ -137,7 +137,7 @@ On `SIGINT` or `SIGTERM`, the root context is cancelled, the HTTP server perform
 ## Requirements
 
 - Go 1.23 or later
-- Node.js 20 or later for the TypeScript SDK
+- Node.js 22 or later and pnpm for the web workspace (`web/`)
 - SQLite, PostgreSQL, or MySQL
 - `curl` and `jq` for the smoke script
 
@@ -293,15 +293,17 @@ A balance lookup may include `?country=UG`; it is required only when an account 
 
 ## TypeScript SDK and admin panel
 
-The SDK is in `packages/sdk` and supports token management plus the public and admin API surfaces.
+Everything Momobase ships to a browser lives under `web/`, which is a **pnpm workspace** — `web/sdk` is the TypeScript SDK, and `web/admin` is the legacy panel. pnpm is used directly; corepack is not involved.
+
+The SDK supports token management plus the public and admin API surfaces.
 
 ```bash
-cd packages/sdk
-npm install
-npm run build
+make sdk-build      # or: pnpm -C web install --frozen-lockfile && pnpm -C web --filter @momobase/sdk run build
 ```
 
-The minimal browser admin panel is in `web/admin` and is served by the Go binary when `ADMIN_FRONTEND_ENABLED=true`.
+`--frozen-lockfile` is deliberate: it fails on a `package.json` edited without regenerating `web/pnpm-lock.yaml` rather than silently resolving something new.
+
+The minimal browser admin panel is in `web/admin` and is served by the Go binary when `ADMIN_FRONTEND_ENABLED=true`. It is not a workspace member — it is a hand-maintained JS twin of the SDK, embedded directly by Go.
 
 ## Local verification
 
@@ -319,12 +321,11 @@ bash -n scripts/smoke_api.sh
 bash -n scripts/smoke_backend.sh
 ```
 
-Build the SDK separately:
+Build and typecheck the web workspace separately:
 
 ```bash
-cd packages/sdk
-npm install
-npm run build
+make web-typecheck
+make sdk-build
 ```
 
 Run the API smoke workflow against a running service:
