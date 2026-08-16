@@ -2918,6 +2918,7 @@
                     "type": "object"
                 },
                 "countries": {
+                    "description": "Countries restricts the account to the listed ISO 3166-1 alpha-2 countries. An\nempty list leaves it unrestricted, which suits a rail with no country notion.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -2953,9 +2954,6 @@
                 },
                 "payment_method": {
                     "type": "string",
-                    "enum": [
-                        "momo"
-                    ],
                     "example": "momo"
                 },
                 "priority": {
@@ -3207,15 +3205,41 @@
                 }
             }
         },
+        "services.AccountPayload": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "description": "Account is the provider-specific account identifier, such as a mobile number,\nbank account, card token, or wallet address. Momobase treats it as opaque and\nleaves its validation to the selected provider.",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Metadata optionally carries provider-specific account details, such as a bank\nbranch code. It is passed to the selected provider and is never persisted.",
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "scheme": {
+                    "description": "Scheme optionally names the account's provider-specific scheme, such as a\nmobile network, bank, or card brand.",
+                    "type": "string"
+                }
+            }
+        },
         "services.CreatePaymentRequest": {
             "type": "object",
             "properties": {
+                "account": {
+                    "description": "Account identifies the account the payment is collected from or disbursed to.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.AccountPayload"
+                        }
+                    ]
+                },
                 "amount": {
                     "description": "Amount is the payment amount in the currency's minor unit.",
                     "type": "integer"
                 },
                 "country": {
-                    "description": "Country is the ISO 3166-1 alpha-2 transaction country.",
+                    "description": "Country is the optional ISO 3166-1 alpha-2 transaction country. Providers that\ndeclare supported countries are only eligible when it is present and matches.",
                     "type": "string"
                 },
                 "currency": {
@@ -3223,7 +3247,7 @@
                     "type": "string"
                 },
                 "customer": {
-                    "description": "Customer identifies the collection customer.",
+                    "description": "Customer optionally identifies the collection customer.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/services.PartyPayload"
@@ -3234,20 +3258,12 @@
                     "description": "Description is optional payment context shown to downstream systems.",
                     "type": "string"
                 },
-                "momo": {
-                    "description": "Momo contains the mobile-money account details used for the provider request.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/services.PartyPayload"
-                        }
-                    ]
-                },
                 "payment_method": {
-                    "description": "PaymentMethod identifies the requested payment rail.",
+                    "description": "PaymentMethod identifies the requested payment rail. It is free-form and must\nmatch an active payment route.",
                     "type": "string"
                 },
                 "recipient": {
-                    "description": "Recipient identifies the disbursement recipient.",
+                    "description": "Recipient optionally identifies the disbursement recipient.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/services.PartyPayload"
@@ -3269,14 +3285,6 @@
                 },
                 "name": {
                     "description": "Name is the party's display name.",
-                    "type": "string"
-                },
-                "network": {
-                    "description": "Network optionally identifies the party's mobile-money network.",
-                    "type": "string"
-                },
-                "phone": {
-                    "description": "Phone is the party's mobile telephone number.",
                     "type": "string"
                 }
             }

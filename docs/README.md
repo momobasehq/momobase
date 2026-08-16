@@ -47,12 +47,13 @@ Important runtime guarantees:
 
 1. An application exchanges its client ID and secret for an access token.
 2. The application creates a collection or disbursement with an `Idempotency-Key`.
-3. Momobase validates the request and claims the idempotency key.
-4. A transaction and provider attempt are persisted.
-5. Routing selects the highest-priority active provider account whose explicit `countries` list contains the request country.
-6. The provider executor checks runtime health and calls the selected adapter with a bounded context.
-7. The normalized provider result is persisted through the transaction state machine.
-8. The application reads the transaction by Momobase ID or its own reference.
+3. Momobase validates the request for shape and claims the idempotency key.
+4. Routing selects the highest-priority active provider account eligible for the request country.
+5. The selected provider validates and normalizes the account, if it implements `providers.RequestValidator`; a rejection ends the request before anything is persisted.
+6. A transaction and provider attempt are persisted, recording the normalized account.
+7. The provider executor checks runtime health and calls the selected adapter with a bounded context.
+8. The normalized provider result is persisted through the transaction state machine.
+9. The application reads the transaction by Momobase ID or its own reference.
 
 Public payment routes:
 
@@ -101,9 +102,11 @@ Reconciliation is intentionally sequential by default to keep provider pressure 
 4. Activation validates configuration, builds the runtime, verifies health, commits the active state, and installs it in memory.
 5. Configuration changes reload the active runtime synchronously after commit.
 6. Deactivation commits the inactive state and removes the runtime immediately.
-7. Routes connect provider accounts to collection or disbursement traffic by payment method and priority; each provider account’s explicit country list determines where that route is eligible.
+7. Routes connect provider accounts to collection or disbursement traffic by payment method and priority; each provider account’s country list determines where that route is eligible.
 
-A provider is routable only when its account and route are active, its capabilities match the request, its `countries` list contains the transaction country, and a healthy runtime exists.
+A provider is routable only when its account and route are active, it declares a capability for the requested service, it is eligible for the transaction country, and a healthy runtime exists.
+
+Capabilities name the service only — `{"service_type": "collection"}`. Which payment rails reach an account is decided by the routes an operator creates for it, not by the adapter.
 
 ## Authentication workflow
 
@@ -232,13 +235,40 @@ curl -X POST http://localhost:9090/api/v1/token/refresh \
   --data-urlencode 'refresh_token=<refresh_token>'
 ```
 
-## Explicit country routing and phone normalization
+## Payment accounts
 
-Each provider account has a non-empty `countries` array of ISO 3166-1 alpha-2 codes, for example `["UG", "RW"]`. Collection and disbursement requests require one country code, and Momobase considers only active routed providers whose array contains that country. There is no universal or global fallback.
+Every payment carries an `account`, and the engine treats it as an opaque identifier:
 
-Phone numbers are parsed with the Go port of Google’s libphonenumber metadata, validated against the transaction country, required to be mobile-capable, and stored as E.164 digits without the leading `+`. Local, international, and bare international-digit input are accepted when valid.
+```json
+{
+  "payment_method": "momo",
+  "amount": 50000,
+  "currency": "UGX",
+  "country": "UG",
+  "reference": "ORDER-1",
+  "account": { "account": "256770000000", "scheme": "mtn" },
+  "customer": { "name": "Ada Lovelace", "email": "ada@example.com" }
+}
+```
 
-Create a provider account with explicit countries:
+`account.account` may be a mobile number, a bank account, a card token, or a wallet address. Momobase validates only its shape: at most 255 characters and no control characters. What counts as a usable account belongs to the provider, which implements the optional `providers.RequestValidator` interface:
+
+- `ValidateRequest` runs after a route is chosen and before any row is written, so a rejection leaves no transaction behind.
+- It may rewrite `Account` and `Scheme` in place. The normalized value is what the transaction records and what webhook matching later compares against, exactly.
+- Rewriting anything else — amount, currency, country, reference, payment method, transaction ID — is rejected as a provider error.
+- A rejection does not count against the provider's circuit breaker: malformed input is a client error, not an outage.
+
+The engine ships no account-format logic of its own — an adapter that needs mobile numbers, IBANs, or card tokens carries its own rules, so the formats Momobase supports are never bounded by the ones it happens to know about. `examples/customprovider/main.go` shows the whole pattern for a mobile-money API.
+
+`account.scheme` optionally names a provider-specific network, bank, or card brand. `account.metadata` passes provider-specific details through to the adapter and is never persisted. `customer` and `recipient` are optional context carrying a name and email.
+
+`payment_method` is free-form: it must match an active route, and Momobase only ever compares it. There are no built-in payment-method constants.
+
+## Country routing
+
+`country` is optional on a payment. A provider account that lists `countries` — ISO 3166-1 alpha-2 codes, for example `["UG", "RW"]` — serves only requests naming one of them. An account with an empty list is unrestricted and is eligible for any request, including one that carries no country, which is how a rail with no country notion is modelled. There is no global fallback among country-scoped accounts.
+
+Create a country-scoped provider account:
 
 ```json
 {
@@ -252,14 +282,14 @@ Create a provider account with explicit countries:
 }
 ```
 
-Update its supported countries independently of credentials:
+Update its supported countries independently of credentials, passing an empty array to leave the account unrestricted:
 
 ```text
 PATCH /api/admin/providers/accounts/{id}/countries
 { "countries": ["UG", "RW"] }
 ```
 
-A balance lookup may include `?country=UG`; it is required when an account supports more than one country. Active-balance queries return one result per provider and supported country.
+A balance lookup may include `?country=UG`; it is required only when an account declares more than one country. Active-balance queries return one result per provider and supported country, or one result with an empty country for an unrestricted provider.
 
 ## TypeScript SDK and admin panel
 
