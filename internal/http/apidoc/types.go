@@ -99,11 +99,13 @@ type CreateCredentialRequest struct {
 
 // CreateProviderAccountRequest creates a provider account.
 type CreateProviderAccountRequest struct {
-	ProviderCode string         `json:"provider_code" example:"dummy"`
-	Name         string         `json:"name" example:"Sandbox provider"`
-	Environment  string         `json:"environment" enums:"sandbox,production" example:"sandbox"`
-	Countries    []string       `json:"countries" example:"UG"`
-	Config       map[string]any `json:"config" swaggertype:"object"`
+	ProviderCode string `json:"provider_code" example:"dummy"`
+	Name         string `json:"name" example:"Sandbox provider"`
+	Environment  string `json:"environment" enums:"sandbox,production" example:"sandbox"`
+	// Countries restricts the account to the listed ISO 3166-1 alpha-2 countries. An
+	// empty list leaves it unrestricted, which suits a rail with no country notion.
+	Countries []string       `json:"countries" example:"UG"`
+	Config    map[string]any `json:"config" swaggertype:"object"`
 }
 
 // ProviderRegistry lists the provider codes registered in the running build.
@@ -119,7 +121,8 @@ type ProviderRegistryResponse struct {
 	Message string             `json:"message,omitempty"`
 }
 
-// UpdateCountriesRequest replaces a provider account's countries.
+// UpdateCountriesRequest replaces a provider account's countries. An empty list
+// leaves the account unrestricted by country.
 type UpdateCountriesRequest struct {
 	Countries []string `json:"countries" example:"UG,RW"`
 }
@@ -132,7 +135,7 @@ type UpdateProviderConfigRequest struct {
 // CreateRouteRequest creates a payment route.
 type CreateRouteRequest struct {
 	ServiceType       string `json:"service_type" enums:"collection,disbursement" example:"collection"`
-	PaymentMethod     string `json:"payment_method" enums:"momo" example:"momo"`
+	PaymentMethod     string `json:"payment_method" example:"momo"`
 	ProviderAccountID string `json:"provider_account_id" example:"pacc_123"`
 	Priority          int    `json:"priority" minimum:"1" example:"1"`
 	Active            bool   `json:"active" example:"true"`

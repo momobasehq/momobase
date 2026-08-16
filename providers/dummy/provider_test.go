@@ -44,7 +44,7 @@ func request(id string, amount int64) providers.PaymentRequest {
 		Currency:      "UGX",
 		Country:       "UG",
 		Reference:     "ref-" + id,
-		Phone:         "256770000000",
+		Account:       "256770000000",
 	}
 }
 
@@ -59,20 +59,16 @@ func TestParseConfigDefaultsAndOverrides(t *testing.T) {
 	if got := provider.cfg.Balance; got != defaultBalance {
 		t.Errorf("Balance = %d, want %d", got, defaultBalance)
 	}
-	if got := provider.cfg.PaymentMethod; got != domain.PaymentMethodMomo {
-		t.Errorf("PaymentMethod = %q, want %q", got, domain.PaymentMethodMomo)
-	}
 	if got := len(provider.cfg.Services); got != 2 {
 		t.Errorf("Services = %v, want both services", provider.cfg.Services)
 	}
 
 	provider = newProvider(t, providers.ProviderConfig{
-		"outcome":        " FAIL ",
-		"currency":       "kes",
-		"balance":        "250",
-		"payment_method": "BANK",
-		"services":       " collection , ",
-		"settle_after":   "3",
+		"outcome":      " FAIL ",
+		"currency":     "kes",
+		"balance":      "250",
+		"services":     " collection , ",
+		"settle_after": "3",
 	})
 	if got := provider.cfg.Outcome; got != OutcomeFail {
 		t.Errorf("Outcome = %q, want %q", got, OutcomeFail)
@@ -82,9 +78,6 @@ func TestParseConfigDefaultsAndOverrides(t *testing.T) {
 	}
 	if got := provider.cfg.Balance; got != 250 {
 		t.Errorf("Balance = %d, want 250", got)
-	}
-	if got := provider.cfg.PaymentMethod; got != "bank" {
-		t.Errorf("PaymentMethod = %q, want bank", got)
 	}
 	if got := provider.cfg.Services; len(got) != 1 || got[0] != domain.ServiceCollection {
 		t.Errorf("Services = %v, want [collection]", got)
@@ -129,13 +122,13 @@ func TestInitFailureAndCapabilities(t *testing.T) {
 		t.Fatal("Init(fail_init) error = nil, want an error")
 	}
 
-	provider = newProvider(t, providers.ProviderConfig{"services": "disbursement", "payment_method": "bank"})
+	provider = newProvider(t, providers.ProviderConfig{"services": "disbursement"})
 	caps := provider.Capabilities()
-	if len(caps) != 1 || caps[0].ServiceType != domain.ServiceDisbursement || caps[0].PaymentMethod != "bank" {
-		t.Fatalf("Capabilities() = %v, want one disbursement/bank capability", caps)
+	if len(caps) != 1 || caps[0].ServiceType != domain.ServiceDisbursement {
+		t.Fatalf("Capabilities() = %v, want one disbursement capability", caps)
 	}
-	if !providers.Supports(caps, domain.ServiceDisbursement, "bank") {
-		t.Error("Supports(disbursement/bank) = false, want true")
+	if !providers.Supports(caps, domain.ServiceDisbursement) || providers.Supports(caps, domain.ServiceCollection) {
+		t.Error("Supports() did not report a disbursement-only account")
 	}
 	if _, err = provider.Collect(context.Background(), request("txn_1", 100)); err == nil {
 		t.Error("Collect() on a disbursement-only account = nil, want an error")

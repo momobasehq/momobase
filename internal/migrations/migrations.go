@@ -48,6 +48,7 @@ func (schemaMigration) TableName() string {
 func All() []Migration {
 	return []Migration{
 		{Version: "0001", Name: "baseline", Up: upBaseline},
+		{Version: "0002", Name: "customer_account", Up: upCustomerAccount},
 	}
 }
 

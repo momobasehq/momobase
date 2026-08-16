@@ -248,11 +248,16 @@ type ProviderBalanceResult struct {
 	Error string `json:"error,omitempty"`
 }
 
-// QueryActiveBalances queries every loaded provider for each of its configured countries.
+// QueryActiveBalances queries every loaded provider for each of its configured
+// countries, and once without a country for a provider that declares none.
 func (m *ProviderRuntimeManager) QueryActiveBalances(ctx context.Context) ([]ProviderBalanceResult, error) {
 	var out []ProviderBalanceResult
 	for _, runtime := range m.List() {
-		for _, country := range runtime.Countries {
+		countries := runtime.Countries
+		if len(countries) == 0 {
+			countries = []string{""}
+		}
+		for _, country := range countries {
 			item := ProviderBalanceResult{
 				ProviderAccountID: runtime.AccountID,
 				ProviderCode:      runtime.ProviderCode,

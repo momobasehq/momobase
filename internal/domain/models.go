@@ -138,14 +138,14 @@ type Transaction struct {
 	PaymentMethod             string     `gorm:"size:64;index;not null" json:"payment_method"`
 	Amount                    int64      `gorm:"not null" json:"amount"`
 	Currency                  string     `gorm:"size:3;index;not null" json:"currency"`
-	Country                   string     `gorm:"size:2;index;not null" json:"country"`
+	Country                   string     `gorm:"size:2;index;not null" json:"country,omitempty"`
 	Reference                 string     `gorm:"size:128;uniqueIndex:idx_tx_app_reference;not null" json:"reference"`
 	IdempotencyKey            string     `gorm:"size:255;uniqueIndex:idx_tx_app_idempotency;not null" json:"idempotency_key"`
 	Status                    string     `gorm:"size:64;index;not null" json:"status"`
 	SelectedRouteID           string     `gorm:"size:40;index" json:"selected_route_id"`
 	SelectedProviderAccountID string     `gorm:"size:40;index" json:"selected_provider_account_id"`
 	ProviderReference         string     `gorm:"size:255;index" json:"provider_reference"`
-	CustomerPhone             string     `gorm:"size:64" json:"customer_phone"`
+	CustomerAccount           string     `gorm:"size:255" json:"customer_account"`
 	CustomerEmail             string     `gorm:"size:255" json:"customer_email"`
 	CustomerName              string     `gorm:"size:255" json:"customer_name"`
 	Description               string     `gorm:"type:text" json:"description"`

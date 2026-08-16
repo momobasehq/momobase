@@ -17,6 +17,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/momobasehq/momobase"
@@ -50,18 +51,71 @@ func (p *acmeProvider) Init(_ context.Context, cfg momobase.ProviderConfig) erro
 	return nil
 }
 
-// Capabilities reports the operations this configuration can perform. Momobase
-// only routes payments to a provider that reports a matching capability.
+// Capabilities reports the services this configuration can perform. Momobase only
+// routes a payment to a provider that reports a capability for its service; which
+// rails reach this account is decided by the payment routes created for it.
 func (p *acmeProvider) Capabilities() []momobase.Capability {
 	return []momobase.Capability{
-		{ServiceType: momobase.ServiceCollection, PaymentMethod: momobase.PaymentMethodMomo},
-		{ServiceType: momobase.ServiceDisbursement, PaymentMethod: momobase.PaymentMethodMomo},
+		{ServiceType: momobase.ServiceCollection},
+		{ServiceType: momobase.ServiceDisbursement},
 	}
 }
 
 // HealthCheck verifies that the configured credentials still authenticate.
 func (p *acmeProvider) HealthCheck(ctx context.Context) error {
 	return momobase.DoJSON(ctx, p.client, http.MethodGet, p.baseURL+"/v1/ping", p.headers(), nil, nil)
+}
+
+// acmeDiallingCodes maps the countries Acme Pay settles in to their E.164 calling
+// code. The engine holds no dialling rules of its own — an account is opaque to it —
+// so a provider that needs mobile numbers carries the table it validates against.
+var acmeDiallingCodes = map[string]string{"UG": "256", "KE": "254", "TZ": "255"}
+
+// acmeSubscriberDigits is the national number length shared by Acme Pay's markets.
+const acmeSubscriberDigits = 9
+
+// ValidateRequest implements the optional momobase.RequestValidator interface.
+//
+// Momobase treats an account as opaque, so a provider that needs a particular kind
+// of identifier enforces it here, before a transaction row exists. Acme Pay is a
+// mobile-money API, so the account must be a reachable mobile number; rewriting it
+// in place canonicalizes what Momobase records and what its webhooks are matched
+// against. Only Account and Scheme may be rewritten.
+func (p *acmeProvider) ValidateRequest(_ context.Context, req *momobase.PaymentRequest) error {
+	code, ok := acmeDiallingCodes[strings.ToUpper(strings.TrimSpace(req.Country))]
+	if !ok {
+		return fmt.Errorf("acme_pay: no mobile-money coverage in country %q", req.Country)
+	}
+	account, err := acmeMSISDN(req.Account, code)
+	if err != nil {
+		return fmt.Errorf("acme_pay: %w", err)
+	}
+	req.Account = account
+	return nil
+}
+
+// acmeMSISDN reduces the local, international, and punctuated spellings of a mobile
+// number to E.164 digits without the leading plus sign.
+func acmeMSISDN(account, code string) (string, error) {
+	digits := strings.Map(func(r rune) rune {
+		if strings.ContainsRune(" \t-()+.", r) {
+			return -1
+		}
+		return r
+	}, account)
+	if strings.IndexFunc(digits, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
+		return "", errors.New("account must be a mobile number")
+	}
+	switch {
+	case strings.HasPrefix(digits, code):
+		digits = digits[len(code):]
+	case strings.HasPrefix(digits, "0"):
+		digits = digits[1:]
+	}
+	if len(digits) != acmeSubscriberDigits {
+		return "", errors.New("account must be a mobile number valid for the payment country")
+	}
+	return code + digits, nil
 }
 
 // Collect requests a payment from a customer.
@@ -91,7 +145,7 @@ func (p *acmeProvider) pay(
 		"amount":    momobase.FormatAmountMinor(req.Amount, req.Currency),
 		"currency":  req.Currency,
 		"country":   req.Country,
-		"msisdn":    req.Phone,
+		"msisdn":    req.Account,
 		"narration": req.Description,
 	}
 	var out struct {
@@ -199,7 +253,7 @@ func (p *acmeProvider) VerifyWebhook(
 		Amount:            amount,
 		Currency:          body.Currency,
 		Country:           body.Country,
-		Phone:             body.MSISDN,
+		Account:           body.MSISDN,
 		Raw:               raw,
 	}, nil
 }

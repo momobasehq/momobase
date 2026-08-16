@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
-	"github.com/nyaruka/phonenumbers"
 	"gorm.io/gorm"
 
 	"github.com/momobasehq/momobase/internal/domain"
@@ -19,38 +17,50 @@ import (
 	"github.com/momobasehq/momobase/providers"
 )
 
-// PartyPayload contains identifying and mobile-money details for a payment party.
+// AccountPayload identifies the account a payment moves funds from or to.
+type AccountPayload struct {
+	// Account is the provider-specific account identifier, such as a mobile number,
+	// bank account, card token, or wallet address. Momobase treats it as opaque and
+	// leaves its validation to the selected provider.
+	Account string `json:"account"`
+	// Scheme optionally names the account's provider-specific scheme, such as a
+	// mobile network, bank, or card brand.
+	Scheme string `json:"scheme,omitempty"`
+	// Metadata optionally carries provider-specific account details, such as a bank
+	// branch code. It is passed to the selected provider and is never persisted.
+	Metadata map[string]any `json:"metadata,omitempty"`
+}
+
+// PartyPayload contains the identifying details of a payment party.
 type PartyPayload struct {
 	// Name is the party's display name.
 	Name string `json:"name"`
 	// Email is the party's email address.
 	Email string `json:"email"`
-	// Phone is the party's mobile telephone number.
-	Phone string `json:"phone"`
-	// Network optionally identifies the party's mobile-money network.
-	Network string `json:"network,omitempty"`
 }
 
 // CreatePaymentRequest contains the common fields used to initiate a collection or disbursement.
 type CreatePaymentRequest struct {
-	// PaymentMethod identifies the requested payment rail.
+	// PaymentMethod identifies the requested payment rail. It is free-form and must
+	// match an active payment route.
 	PaymentMethod string `json:"payment_method"`
 	// Amount is the payment amount in the currency's minor unit.
 	Amount int64 `json:"amount"`
 	// Currency is the three-letter currency code.
 	Currency string `json:"currency"`
-	// Country is the ISO 3166-1 alpha-2 transaction country.
-	Country string `json:"country"`
+	// Country is the optional ISO 3166-1 alpha-2 transaction country. Providers that
+	// declare supported countries are only eligible when it is present and matches.
+	Country string `json:"country,omitempty"`
 	// Reference is the application's unique business reference.
 	Reference string `json:"reference"`
 	// Description is optional payment context shown to downstream systems.
 	Description string `json:"description"`
-	// Customer identifies the collection customer.
+	// Account identifies the account the payment is collected from or disbursed to.
+	Account *AccountPayload `json:"account"`
+	// Customer optionally identifies the collection customer.
 	Customer *PartyPayload `json:"customer,omitempty"`
-	// Recipient identifies the disbursement recipient.
+	// Recipient optionally identifies the disbursement recipient.
 	Recipient *PartyPayload `json:"recipient,omitempty"`
-	// Momo contains the mobile-money account details used for the provider request.
-	Momo *PartyPayload `json:"momo,omitempty"`
 }
 
 // CreatePaymentResponse describes the transaction created for a payment request.
@@ -91,12 +101,17 @@ func paymentParty(service string, req *CreatePaymentRequest) *PartyPayload {
 	return req.Customer
 }
 
-// ValidatePaymentPayload validates a payment request and normalizes its country, currency, method, network, and phone fields.
+// ValidatePaymentPayload validates a payment request and normalizes its country,
+// currency, payment method, account, and scheme.
+//
+// The account is only checked for shape. What a usable account looks like is the
+// selected provider's to decide, through providers.RequestValidator, so a request
+// that is structurally sound here can still be rejected once a route is chosen.
 func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 	if req == nil {
 		return errors.New("payment request is required")
 	}
-	country, err := NormalizeTransactionCountry(req.Country)
+	country, err := NormalizeOptionalCountry(req.Country)
 	if err != nil {
 		return err
 	}
@@ -104,12 +119,14 @@ func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 		country,
 		strings.ToUpper(strings.TrimSpace(req.Currency)),
 		strings.ToLower(strings.TrimSpace(req.PaymentMethod))
-	if req.Momo != nil {
-		req.Momo.Network = strings.ToLower(strings.TrimSpace(req.Momo.Network))
+	if req.Account != nil {
+		req.Account.Account, req.Account.Scheme =
+			strings.TrimSpace(req.Account.Account),
+			strings.ToLower(strings.TrimSpace(req.Account.Scheme))
 	}
 	switch {
-	case req.PaymentMethod != domain.PaymentMethodMomo:
-		return errors.New("only payment_method=momo is implemented")
+	case req.PaymentMethod == "" || !validIdentifier(req.PaymentMethod):
+		return errors.New("payment_method is required and may contain only letters, digits, and _-. and must not exceed 64 characters")
 	case req.Amount <= 0:
 		return errors.New("amount must be greater than zero")
 	case len(req.Currency) != 3:
@@ -118,20 +135,27 @@ func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 		return errors.New("reference is required and must not exceed 128 characters")
 	case len(req.Description) > 255:
 		return errors.New("description must not exceed 255 characters")
-	case req.Momo == nil || strings.TrimSpace(req.Momo.Phone) == "":
-		return errors.New("momo.phone is required")
-	case !validNetwork(req.Momo.Network):
-		return errors.New("momo.network may contain only letters, digits, and _-. and must not exceed 64 characters")
+	case req.Account == nil || req.Account.Account == "":
+		return errors.New("account.account is required")
+	case !validAccount(req.Account.Account):
+		return errors.New("account.account must not exceed 255 characters or contain control characters")
+	case !validIdentifier(req.Account.Scheme):
+		return errors.New("account.scheme may contain only letters, digits, and _-. and must not exceed 64 characters")
 	}
-	party := paymentParty(service, req)
-	if party == nil || strings.TrimSpace(party.Phone) == "" {
-		return errors.New("customer or recipient with phone is required")
+	return validateParty(paymentParty(service, req))
+}
+
+// validateParty normalizes the optional party details. A party is contextual: the
+// account is what a payment needs to move money, so a request may omit one.
+func validateParty(party *PartyPayload) error {
+	if party == nil {
+		return nil
 	}
-	phone, err := NormalizeMSISDN(req.Momo.Phone, country)
-	if err == nil {
-		req.Momo.Phone, party.Phone = phone, phone
+	party.Name, party.Email = strings.TrimSpace(party.Name), strings.TrimSpace(party.Email)
+	if len(party.Name) > 255 || len(party.Email) > 255 {
+		return errors.New("customer or recipient name and email must not exceed 255 characters")
 	}
-	return err
+	return nil
 }
 
 // Create idempotently creates, routes, executes, and records a collection or disbursement.
@@ -158,9 +182,33 @@ func (o *PaymentOrchestrator) Create(
 	if err != nil {
 		return nil, err
 	}
-	party := paymentParty(service, req)
+	var name, email string
+	if party := paymentParty(service, req); party != nil {
+		name, email = party.Name, party.Email
+	}
+	// The provider request is assembled before the transaction row so that the
+	// selected provider can validate and normalize the account first: a rejection
+	// must leave no transaction behind, and the account it normalizes to is what
+	// gets persisted and what webhook matching later compares against.
+	call := providers.PaymentRequest{
+		TransactionID: platform.NewID("txn"),
+		PaymentMethod: req.PaymentMethod,
+		Currency:      req.Currency,
+		Country:       req.Country,
+		Reference:     req.Reference,
+		Account:       req.Account.Account,
+		Scheme:        req.Account.Scheme,
+		Metadata:      req.Account.Metadata,
+		Name:          name,
+		Email:         email,
+		Description:   req.Description,
+		Amount:        req.Amount,
+	}
+	if err = o.executor.ValidateRequest(ctx, selected.Account.ID, &call); err != nil {
+		return nil, err
+	}
 	tx := &domain.Transaction{
-		BaseModel:                 domain.BaseModel{ID: platform.NewID("txn")},
+		BaseModel:                 domain.BaseModel{ID: call.TransactionID},
 		AppID:                     appID,
 		ServiceType:               service,
 		PaymentMethod:             req.PaymentMethod,
@@ -172,9 +220,9 @@ func (o *PaymentOrchestrator) Create(
 		Status:                    domain.TxProcessing,
 		SelectedRouteID:           selected.Route.ID,
 		SelectedProviderAccountID: selected.Account.ID,
-		CustomerPhone:             party.Phone,
-		CustomerEmail:             party.Email,
-		CustomerName:              party.Name,
+		CustomerAccount:           call.Account,
+		CustomerEmail:             email,
+		CustomerName:              name,
 		Description:               req.Description,
 		RequestHash:               hash,
 	}
@@ -197,16 +245,6 @@ func (o *PaymentOrchestrator) Create(
 			return replay(existing, hash, service, req)
 		}
 		return nil, err
-	}
-	call := providers.PaymentRequest{
-		TransactionID: tx.ID,
-		Amount:        req.Amount,
-		Currency:      req.Currency,
-		Country:       req.Country,
-		Reference:     req.Reference,
-		Phone:         req.Momo.Phone,
-		Network:       req.Momo.Network,
-		Description:   req.Description,
 	}
 	var result *providers.ProviderPaymentResponse
 	if service == domain.ServiceCollection {
@@ -294,14 +332,15 @@ func replay(tx *domain.Transaction, hash, _ string, _ *CreatePaymentRequest) (*C
 	}, nil
 }
 
-// validNetwork reports whether a network identifier is safely comparable. The
-// value names a provider-specific scheme rather than a fixed set, so it is
-// checked structurally instead of against a list of known networks.
-func validNetwork(network string) bool {
-	if len(network) > 64 {
+// validIdentifier reports whether a rail identifier — a payment method or an
+// account scheme — is safely comparable. Both name provider-specific values rather
+// than a fixed set, so they are checked structurally instead of against a list of
+// known ones. The empty string is valid; callers that require a value check it.
+func validIdentifier(value string) bool {
+	if len(value) > 64 {
 		return false
 	}
-	for _, r := range network {
+	for _, r := range value {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-', r == '.':
 		default:
@@ -311,6 +350,12 @@ func validNetwork(network string) bool {
 	return true
 }
 
+// validAccount reports whether an account identifier fits the column it is stored
+// in and is safe to log and compare. Its meaning stays opaque to the engine.
+func validAccount(account string) bool {
+	return len(account) <= 255 && strings.IndexFunc(account, unicode.IsControl) < 0
+}
+
 // PaymentRequestHash returns the canonical SHA-256 request hash used for idempotency checks.
 func PaymentRequestHash(service string, req *CreatePaymentRequest) string {
 	data, _ := json.Marshal(struct {
@@ -318,32 +363,6 @@ func PaymentRequestHash(service string, req *CreatePaymentRequest) string {
 		Request *CreatePaymentRequest
 	}{service, req})
 	return platform.SHA256Hex(string(data))
-}
-
-// NormalizeMSISDN validates a mobile number for a country and returns E.164 digits without the leading plus sign.
-func NormalizeMSISDN(phone, country string) (string, error) {
-	country, err := NormalizeTransactionCountry(country)
-	if err != nil {
-		return "", err
-	}
-	raw := strings.TrimSpace(phone)
-	if raw == "" || strings.IndexFunc(raw, unicode.IsLetter) >= 0 {
-		return "", errors.New("momo phone must contain only digits and phone punctuation")
-	}
-	digits := phonenumbers.NormalizeDigitsOnly(raw)
-	callingCode := strconv.Itoa(phonenumbers.GetCountryCodeForRegion(country))
-	if !strings.HasPrefix(raw, "+") && strings.HasPrefix(digits, callingCode) {
-		raw = "+" + digits
-	}
-	number, err := phonenumbers.Parse(raw, country)
-	if err != nil || !phonenumbers.IsValidNumberForRegion(number, country) {
-		return "", errors.New("momo phone must be valid for the transaction country")
-	}
-	typeOfNumber := phonenumbers.GetNumberType(number)
-	if typeOfNumber != phonenumbers.MOBILE && typeOfNumber != phonenumbers.FIXED_LINE_OR_MOBILE {
-		return "", errors.New("momo phone must be a mobile number")
-	}
-	return strings.TrimPrefix(phonenumbers.Format(number, phonenumbers.E164), "+"), nil
 }
 
 func redactRawMap(raw map[string]any) map[string]any {

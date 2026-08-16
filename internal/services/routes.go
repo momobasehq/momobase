@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -40,8 +41,12 @@ func (s *RouteAdminService) Create(
 	if service != domain.ServiceCollection && service != domain.ServiceDisbursement {
 		return nil, errors.New("invalid service_type")
 	}
-	if method != domain.PaymentMethodMomo {
-		return nil, errors.New("only payment_method=momo is implemented")
+	// The payment method is free-form: it names the rail this route serves, which
+	// the engine only ever compares against a request, so it is checked for shape
+	// rather than against a fixed set.
+	method = strings.ToLower(strings.TrimSpace(method))
+	if method == "" || !validIdentifier(method) {
+		return nil, errors.New("payment_method is required and may contain only letters, digits, and _-. and must not exceed 64 characters")
 	}
 	var count int64
 	db := s.db.WithContext(ctx)
@@ -113,9 +118,11 @@ func NewRouteEngine(db *gorm.DB, runtime *ProviderRuntimeManager) *RouteEngine {
 	return &RouteEngine{db, runtime}
 }
 
-// SelectProvider returns the highest-priority active provider that supports the requested service, method, and country.
+// SelectProvider returns the highest-priority active provider that supports the
+// requested service, method, and country. The country may be empty, which only
+// provider accounts that declare no countries of their own can serve.
 func (e *RouteEngine) SelectProvider(ctx context.Context, service, method, country string) (*SelectedProvider, error) {
-	country, err := NormalizeTransactionCountry(country)
+	country, err := NormalizeOptionalCountry(country)
 	if err != nil {
 		return nil, err
 	}
@@ -132,21 +139,21 @@ func (e *RouteEngine) SelectProvider(ctx context.Context, service, method, count
 		return nil, err
 	}
 	for _, route := range routes {
-		if candidate, ok := e.candidate(ctx, route, service, method, country); ok {
+		if candidate, ok := e.candidate(ctx, route, service, country); ok {
 			return candidate, nil
 		}
 	}
 	return nil, ErrNoRouteAvailable
 }
-func (e *RouteEngine) candidate(ctx context.Context, route domain.PaymentRoute, service, method, country string) (*SelectedProvider, bool) {
+func (e *RouteEngine) candidate(ctx context.Context, route domain.PaymentRoute, service, country string) (*SelectedProvider, bool) {
 	var account domain.ProviderAccount
 	if e.db.WithContext(ctx).
 		Where("id = ? AND active = ?", route.ProviderAccountID, true).
-		First(&account).Error != nil || !slices.Contains(account.Countries, country) {
+		First(&account).Error != nil || !countryEligible(account.Countries, country) {
 		return nil, false
 	}
 	rp, ok := e.runtime.Get(account.ID)
-	if !ok || !providers.Supports(rp.Capabilities, service, method) || e.runtime.CircuitState(account.ID) == domain.CircuitOpen {
+	if !ok || !providers.Supports(rp.Capabilities, service) || e.runtime.CircuitState(account.ID) == domain.CircuitOpen {
 		return nil, false
 	}
 	var health domain.ProviderHealthSnapshot
@@ -161,4 +168,15 @@ func (e *RouteEngine) candidate(ctx context.Context, route domain.PaymentRoute, 
 		return nil, false
 	}
 	return &SelectedProvider{route, account, rp}, true
+}
+
+// countryEligible reports whether a provider account may serve a request country.
+// An account that declares no countries is unrestricted, which is how a rail with
+// no country notion is modelled; an account that declares them requires a request
+// country it lists, so there is still no global or fallback country.
+func countryEligible(countries []string, country string) bool {
+	if len(countries) == 0 {
+		return true
+	}
+	return country != "" && slices.Contains(countries, country)
 }

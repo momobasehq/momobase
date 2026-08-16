@@ -20,7 +20,7 @@ type (
 	// logger is never nil and is already tagged with the provider code.
 	ProviderFactory = providers.Factory
 
-	// Capability identifies a service and payment-method combination supported by a provider.
+	// Capability identifies a payment service supported by a provider.
 	Capability = providers.Capability
 
 	// ProviderConfig contains the provider-specific values used during initialization.
@@ -42,21 +42,23 @@ type (
 	// ProviderWebhookEvent contains normalized data extracted from a provider webhook.
 	ProviderWebhookEvent = providers.ProviderWebhookEvent
 
+	// RequestValidator is the optional interface a provider implements to validate
+	// and normalize a payment request before Momobase persists a transaction.
+	// Account validation belongs here: the engine treats an account as opaque.
+	RequestValidator = providers.RequestValidator
+
 	// TokenCache serializes token loading and reuses tokens until shortly before expiry.
 	// The zero value is ready for use.
 	TokenCache = providers.TokenCache
 )
 
-// Service types, payment methods, and transaction statuses. A provider must
-// report one of the Tx values as the normalized status of an operation.
+// Service types and transaction statuses. A provider must report one of the Tx
+// values as the normalized status of an operation.
 const (
 	// ServiceCollection identifies an incoming payment collection.
 	ServiceCollection = domain.ServiceCollection
 	// ServiceDisbursement identifies an outgoing payment disbursement.
 	ServiceDisbursement = domain.ServiceDisbursement
-
-	// PaymentMethodMomo identifies mobile money as the payment method.
-	PaymentMethodMomo = domain.PaymentMethodMomo
 
 	// TxPending indicates that a transaction is waiting to be processed.
 	TxPending = domain.TxPending
@@ -77,9 +79,9 @@ const (
 // ErrCircuitOpen indicates that a provider request was rejected by an open circuit breaker.
 var ErrCircuitOpen = providers.ErrCircuitOpen
 
-// Supports reports whether caps contains the requested service and payment method.
-func Supports(caps []Capability, service, method string) bool {
-	return providers.Supports(caps, service, method)
+// Supports reports whether caps contains the requested service.
+func Supports(caps []Capability, service string) bool {
+	return providers.Supports(caps, service)
 }
 
 // DoJSON sends an HTTP request with an optional JSON body and decodes a successful

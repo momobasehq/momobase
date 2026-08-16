@@ -63,9 +63,6 @@ type Config struct {
 	// comma-separated list of collection and disbursement. It defaults to both and
 	// is read from "services".
 	Services []string
-	// PaymentMethod is the payment method reported in the provider's capabilities.
-	// It defaults to momo and is read from "payment_method".
-	PaymentMethod string
 	// Currency is the currency reported by balance queries. It defaults to UGX and
 	// is read from "currency".
 	Currency string
@@ -119,13 +116,13 @@ func Sign(credential string, payload []byte) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// Capabilities returns the configured service and payment-method combinations.
+// Capabilities returns the configured services.
 func (p *Provider) Capabilities() []providers.Capability {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	out := make([]providers.Capability, 0, len(p.cfg.Services))
 	for _, service := range p.cfg.Services {
-		out = append(out, providers.Capability{ServiceType: service, PaymentMethod: p.cfg.PaymentMethod})
+		out = append(out, providers.Capability{ServiceType: service})
 	}
 	return out
 }
@@ -258,6 +255,7 @@ type webhookPayload struct {
 	Currency          string `json:"currency"`
 	Country           string `json:"country"`
 	ExternalReference string `json:"external_reference"`
+	Account           string `json:"account"`
 }
 
 // VerifyWebhook authenticates a webhook payload against the configured signing
@@ -289,9 +287,10 @@ func (p *Provider) VerifyWebhook(_ context.Context, payload []byte, headers map[
 		return nil, errors.New("dummy: webhook payload has an unreadable amount")
 	}
 	p.settleFromWebhook(body.Reference, status)
-	// Account is deliberately left unset: the engine still validates this field as
-	// an MSISDN, which a rail-agnostic identifier would fail. It is populated once
-	// that check becomes an exact comparison.
+	// The account is passed through as the payload spells it. The dummy provider
+	// normalizes nothing, so an account it reports matches the transaction only when
+	// the caller sends the same value it paid with, which is what makes the engine's
+	// match check testable from a webhook body.
 	return &providers.ProviderWebhookEvent{
 		ProviderReference: body.Reference,
 		Status:            status,
@@ -300,6 +299,7 @@ func (p *Provider) VerifyWebhook(_ context.Context, payload []byte, headers map[
 		Amount:            amount,
 		Currency:          body.Currency,
 		Country:           body.Country,
+		Account:           strings.TrimSpace(body.Account),
 		Raw:               map[string]any{"simulated": true, "reference": body.Reference, "status": status},
 	}, nil
 }
@@ -402,7 +402,6 @@ func parseConfig(raw providers.ProviderConfig) (Config, error) {
 		FailInit:      providers.Bool(raw, "fail_init"),
 		FailHealth:    providers.Bool(raw, "fail_health"),
 		Services:      parseServices(providers.String(raw, "services")),
-		PaymentMethod: strings.ToLower(providers.First(providers.String(raw, "payment_method"), domain.PaymentMethodMomo)),
 		Currency:      strings.ToUpper(providers.First(providers.String(raw, "currency"), defaultCurrency)),
 		Balance:       defaultBalance,
 		WebhookSecret: providers.String(raw, "webhook_secret"),
