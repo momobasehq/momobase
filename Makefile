@@ -65,6 +65,16 @@ web-typecheck: web-install
 sdk-build: web-install
 	$(PNPM) -C web --filter @momobase/sdk run build
 
+# Builds the dashboard bundle. Nothing under web/dashboard/dist is committed, so the
+# Go embed is behind a build tag: compile with `-tags dashboard` to include it.
+dashboard: web-install
+	$(PNPM) -C web --filter @momobase/dashboard run build
+
+# The binary with the dashboard embedded. Plain `make build` deliberately omits it,
+# so a Go-only checkout still builds.
+build-dashboard: dashboard
+	go build -tags dashboard -o bin/$(APP) ./cmd/$(APP)
+
 docs:
 	swag init -g ./cmd/momobase/main.go --parseDependency --parseInternal --output docs --outputTypes json,yaml
 	# rm -f docs/docs.go
@@ -72,4 +82,4 @@ docs:
 	# $ go install github.com/swaggo/swag/cmd/swag@latest
 
 # tell make that these targets are not files
-.PHONY: docs run build test tidy fmt fmt-check vet lint lint-fix lint-format quality release-check snapshot seed-admin smoke smoke-api web-install web-typecheck sdk-build docs
+.PHONY: docs run build test tidy fmt fmt-check vet lint lint-fix lint-format quality release-check snapshot seed-admin smoke smoke-api web-install web-typecheck sdk-build dashboard build-dashboard docs

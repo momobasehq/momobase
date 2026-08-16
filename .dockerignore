@@ -3,5 +3,7 @@ bin
 data
 *.db
 **/node_modules
+# Built in the image's Node stage, so a stale local build never leaks into it.
+web/dashboard/dist
 coverage
 .env
