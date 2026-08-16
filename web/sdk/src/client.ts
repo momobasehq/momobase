@@ -11,9 +11,15 @@ export interface MomobaseClientOptions { baseUrl: string; clientId: string; clie
 export interface AdminClientOptions {
   baseUrl: string; email?: string; password?: string; accessToken?: string
   refreshToken?: string; tokenSkewSeconds?: number
+  /** Called whenever the session's tokens change, including on refresh. A browser
+   * client uses it to persist the refresh token so a page reload does not log the
+   * user out; passing undefined signals that the session was cleared. */
+  onTokenChange?: (token: TokenSnapshot | undefined) => void
 }
+/** The current session tokens and the epoch milliseconds at which they expire. */
+export interface TokenSnapshot { accessToken: string; refreshToken?: string; expiresAt: number }
 type Method = "GET" | "POST" | "PATCH"
-type CachedToken = { accessToken: string; refreshToken?: string; expiresAt: number }
+type CachedToken = TokenSnapshot
 
 const query = (o?: ListOptions) => {
   const q = new URLSearchParams()
@@ -46,11 +52,14 @@ abstract class SessionClient {
   protected readonly baseUrl: string
   protected readonly skew: number
   protected token?: CachedToken
+  protected onTokenChange?: (token: TokenSnapshot | undefined) => void
   constructor(baseUrl: string, skew = 30) { this.baseUrl = baseUrl.replace(/\/$/, ""); this.skew = skew }
   protected abstract authenticate(signal?: AbortSignal): Promise<OAuthTokenResponse>
   protected abstract refresh(signal?: AbortSignal): Promise<OAuthTokenResponse>
-  clearToken() { this.token = undefined }
-  protected setToken(t: OAuthTokenResponse) { this.token = cached(t, this.skew); return t }
+  clearToken() { this.token = undefined; this.onTokenChange?.(undefined) }
+  /** Returns the current session tokens, or undefined when there is no session. */
+  getToken(): TokenSnapshot | undefined { return this.token ? { ...this.token } : undefined }
+  protected setToken(t: OAuthTokenResponse) { this.token = cached(t, this.skew); this.onTokenChange?.({ ...this.token }); return t }
   protected async bearer(signal?: AbortSignal) {
     if (!this.token) await this.authenticate(signal)
     else if (this.token.expiresAt <= Date.now()) await this.refresh(signal)
@@ -93,10 +102,18 @@ export class MomobaseAdminClient extends SessionClient {
   private password?: string
   constructor(o: AdminClientOptions) {
     super(o.baseUrl, o.tokenSkewSeconds); this.email = o.email; this.password = o.password
-    if (o.accessToken) this.token = { accessToken: o.accessToken, refreshToken: o.refreshToken, expiresAt: Number.MAX_SAFE_INTEGER }
+    this.onTokenChange = o.onTokenChange
+    if (o.accessToken) this.setAccessToken(o.accessToken, o.refreshToken)
   }
   setCredentials(email: string, password: string) { this.email = email; this.password = password; this.clearToken() }
-  setAccessToken(accessToken: string, refreshToken?: string) { this.token = { accessToken, refreshToken, expiresAt: Number.MAX_SAFE_INTEGER } }
+  /** Installs tokens obtained elsewhere, such as from a restored browser session.
+   * Without expiresInSeconds the access token is treated as already expired, so the
+   * next request refreshes it rather than spending a round trip discovering a 401. */
+  setAccessToken(accessToken: string, refreshToken?: string, expiresInSeconds?: number) {
+    const ttl = expiresInSeconds === undefined ? 0 : Math.max(expiresInSeconds - this.skew, 1) * 1000
+    this.token = { accessToken, refreshToken, expiresAt: Date.now() + ttl }
+    this.onTokenChange?.({ ...this.token })
+  }
   authenticate(signal?: AbortSignal) {
     if (!this.email || !this.password) return Promise.reject(new Error("Admin email and password are required"))
     return this.form("/api/admin/token", { grant_type: "password", username: this.email, password: this.password }, signal)
