@@ -262,8 +262,8 @@ func TestRegistryCapabilitiesAndReferences(t *testing.T) {
 	if _, err := registry.Create("missing", nil); err == nil {
 		t.Fatal("Registry.Create() accepted an unregistered provider")
 	}
-	caps := []Capability{{ServiceType: "collection", PaymentMethod: "momo"}}
-	if !Supports(caps, "collection", "momo") || Supports(caps, "disbursement", "momo") {
+	caps := []Capability{{ServiceType: "collection"}}
+	if !Supports(caps, "collection") || Supports(caps, "disbursement") {
 		t.Fatal("Supports() returned an unexpected result")
 	}
 

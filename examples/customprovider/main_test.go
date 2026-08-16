@@ -88,7 +88,7 @@ func TestCapabilitiesCoverBothServices(t *testing.T) {
 	server, _ := acmeServer(t)
 	caps := newTestProvider(t, server.URL).Capabilities()
 	for _, service := range []string{momobase.ServiceCollection, momobase.ServiceDisbursement} {
-		if !momobase.Supports(caps, service, momobase.PaymentMethodMomo) {
+		if !momobase.Supports(caps, service) {
 			t.Errorf("Supports(%s) = false, want true", service)
 		}
 	}
@@ -119,7 +119,7 @@ func TestCollectAndDisburseFormatTheRequest(t *testing.T) {
 		Currency:      "UGX",
 		Country:       "UG",
 		Reference:     "ORDER-1",
-		Phone:         "256770000000",
+		Account:       "256770000000",
 		Description:   "test payment",
 	}
 
@@ -144,7 +144,7 @@ func TestCollectAndDisburseFormatTheRequest(t *testing.T) {
 				t.Errorf("amount sent = %v, want the zero-decimal formatting", got)
 			}
 			if got := (*received)["msisdn"]; got != "256770000000" {
-				t.Errorf("msisdn sent = %v, want the request phone", got)
+				t.Errorf("msisdn sent = %v, want the request account", got)
 			}
 		})
 	}
@@ -197,7 +197,7 @@ func TestVerifyWebhook(t *testing.T) {
 	if event.Amount == nil || *event.Amount != 2500 {
 		t.Fatalf("VerifyWebhook() amount = %v, want 2500", event.Amount)
 	}
-	if event.ExternalReference != "ORDER-1" || event.Phone != "256770000000" {
+	if event.ExternalReference != "ORDER-1" || event.Account != "256770000000" {
 		t.Errorf("VerifyWebhook() = %+v, want the reference and msisdn carried through", event)
 	}
 
@@ -219,5 +219,36 @@ func TestVerifyWebhook(t *testing.T) {
 	}
 	if _, err = unsigned.VerifyWebhook(context.Background(), payload, signed(payload)); err == nil {
 		t.Error("VerifyWebhook() without a configured credential = nil, want an error")
+	}
+}
+
+func TestValidateRequestNormalizesTheAccount(t *testing.T) {
+	server, _ := acmeServer(t)
+	provider := newTestProvider(t, server.URL)
+	validator, ok := provider.(momobase.RequestValidator)
+	if !ok {
+		t.Fatal("the provider does not implement momobase.RequestValidator")
+	}
+	for _, account := range []string{"0770000000", "+256770000000", "256770000000", " 077 000 0000 ", "770000000"} {
+		req := momobase.PaymentRequest{Country: "UG", Account: account}
+		if err := validator.ValidateRequest(context.Background(), &req); err != nil {
+			t.Fatalf("ValidateRequest(%q) error = %v", account, err)
+		}
+		if req.Account != "256770000000" {
+			t.Errorf("ValidateRequest(%q) account = %q, want the canonical E.164 digits", account, req.Account)
+		}
+	}
+
+	for name, req := range map[string]momobase.PaymentRequest{
+		"letters":         {Country: "UG", Account: "not-a-number"},
+		"too short":       {Country: "UG", Account: "0770000"},
+		"too long":        {Country: "UG", Account: "07700000001234"},
+		"blank account":   {Country: "UG", Account: "   "},
+		"uncovered":       {Country: "GB", Account: "0770000000"},
+		"country missing": {Account: "0770000000"},
+	} {
+		if err := validator.ValidateRequest(context.Background(), &req); err == nil {
+			t.Errorf("ValidateRequest(%s) = nil, want an unusable account rejected", name)
+		}
 	}
 }

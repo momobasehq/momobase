@@ -245,3 +245,48 @@ func TestAllIsAValidMigrationList(t *testing.T) {
 		}
 	}
 }
+
+// legacyTransaction models the pre-rename transactions table, so the shipped
+// migration is exercised against the column it actually renames.
+type legacyTransaction struct {
+	ID            string `gorm:"primaryKey"`
+	CustomerPhone string `gorm:"size:64"`
+}
+
+// TableName returns the table the migration targets.
+func (legacyTransaction) TableName() string { return "transactions" }
+
+func TestUpCustomerAccountRenamesTheColumn(t *testing.T) {
+	db := testDatabase(t)
+	if err := db.AutoMigrate(&legacyTransaction{}); err != nil {
+		t.Fatalf("prepare legacy schema: %v", err)
+	}
+	if err := db.Create(&legacyTransaction{ID: "txn_1", CustomerPhone: "256770000000"}).Error; err != nil {
+		t.Fatalf("seed legacy row: %v", err)
+	}
+	if err := upCustomerAccount(db); err != nil {
+		t.Fatalf("upCustomerAccount() error = %v", err)
+	}
+	migrator := db.Migrator()
+	if !migrator.HasColumn("transactions", "customer_account") || migrator.HasColumn("transactions", "customer_phone") {
+		t.Fatal("upCustomerAccount() did not rename customer_phone to customer_account")
+	}
+	var account string
+	if err := db.Table("transactions").Select("customer_account").Where("id = ?", "txn_1").Scan(&account).Error; err != nil {
+		t.Fatalf("read renamed column: %v", err)
+	}
+	if account != "256770000000" {
+		t.Errorf("customer_account = %q, want the value carried over by the rename", account)
+	}
+	// Running it again must not fail: the guards make an upgrade and a fresh install
+	// share one code path.
+	if err := upCustomerAccount(db); err != nil {
+		t.Fatalf("upCustomerAccount() on an already-renamed table error = %v", err)
+	}
+}
+
+func TestUpCustomerAccountSkipsADatabaseWithoutTheColumn(t *testing.T) {
+	if err := upCustomerAccount(testDatabase(t)); err != nil {
+		t.Fatalf("upCustomerAccount() with no transactions table error = %v", err)
+	}
+}

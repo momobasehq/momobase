@@ -73,7 +73,7 @@ func TestGetTransactionByIDAndReference(t *testing.T) {
 		BaseModel:      domain.BaseModel{ID: "txn-1"},
 		AppID:          "app-1",
 		ServiceType:    domain.ServiceCollection,
-		PaymentMethod:  domain.PaymentMethodMomo,
+		PaymentMethod:  "momo",
 		Amount:         1000,
 		Currency:       "UGX",
 		Country:        "UG",

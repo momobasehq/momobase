@@ -24,7 +24,7 @@ func (p *stubProvider) HealthCheck(context.Context) error                   { re
 
 func (p *stubProvider) Capabilities() []momobase.Capability {
 	return []momobase.Capability{
-		{ServiceType: momobase.ServiceCollection, PaymentMethod: momobase.PaymentMethodMomo},
+		{ServiceType: momobase.ServiceCollection},
 	}
 }
 
@@ -172,11 +172,11 @@ func TestServeReturnsNilWhenContextIsCancelled(t *testing.T) {
 // helper that stops being reachable from outside the module breaks this test
 // rather than silently regressing a documented part of the public surface.
 func TestExportedProviderHelpers(t *testing.T) {
-	caps := []momobase.Capability{{ServiceType: momobase.ServiceCollection, PaymentMethod: momobase.PaymentMethodMomo}}
-	if !momobase.Supports(caps, momobase.ServiceCollection, momobase.PaymentMethodMomo) {
+	caps := []momobase.Capability{{ServiceType: momobase.ServiceCollection}}
+	if !momobase.Supports(caps, momobase.ServiceCollection) {
 		t.Error("Supports() = false, want true for a declared capability")
 	}
-	if momobase.Supports(caps, momobase.ServiceDisbursement, momobase.PaymentMethodMomo) {
+	if momobase.Supports(caps, momobase.ServiceDisbursement) {
 		t.Error("Supports() = true, want false for an undeclared capability")
 	}
 

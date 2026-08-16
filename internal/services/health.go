@@ -74,8 +74,8 @@ func (s *HealthService) save(ctx context.Context, id string, latency time.Durati
 		}
 	}
 	if rp, ok := s.runtime.Get(id); ok {
-		snap.CollectionsAvailable = providers.Supports(rp.Capabilities, domain.ServiceCollection, domain.PaymentMethodMomo)
-		snap.DisbursementsAvailable = providers.Supports(rp.Capabilities, domain.ServiceDisbursement, domain.PaymentMethodMomo)
+		snap.CollectionsAvailable = providers.Supports(rp.Capabilities, domain.ServiceCollection)
+		snap.DisbursementsAvailable = providers.Supports(rp.Capabilities, domain.ServiceDisbursement)
 		snap.BalanceQueryAvailable = snap.CollectionsAvailable || snap.DisbursementsAvailable
 	}
 	return s.db.WithContext(ctx).Save(&snap).Error

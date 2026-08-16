@@ -6,9 +6,6 @@ const (
 	// ServiceDisbursement identifies an outgoing payment disbursement.
 	ServiceDisbursement = "disbursement"
 
-	// PaymentMethodMomo identifies mobile money as the payment method.
-	PaymentMethodMomo = "momo"
-
 	// TxPending indicates that a transaction is waiting to be processed.
 	TxPending = "pending"
 	// TxProcessing indicates that transaction processing has started.

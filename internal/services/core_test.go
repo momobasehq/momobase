@@ -17,6 +17,11 @@ import (
 	"github.com/momobasehq/momobase/providers/dummy"
 )
 
+// testMethod is the payment method the fixtures route on. Momobase ships no
+// payment-method constants: a method is a free-form label an operator picks when
+// creating a route, and the engine only ever compares it.
+const testMethod = "momo"
+
 // dummyConfig builds a dummy provider configuration, merging overrides over the
 // minimum viable settings. Every call site states the behavior it depends on
 // rather than relying on the adapter's defaults.
@@ -40,6 +45,7 @@ type testStack struct {
 	routes        *RouteAdminService
 	routing       *RouteEngine
 	payments      *PaymentOrchestrator
+	registry      providers.Registry
 	actor         *domain.AdminUser
 }
 
@@ -88,6 +94,7 @@ func stack(t *testing.T) *testStack {
 		routes,
 		routing,
 		NewPaymentOrchestrator(db, routing, NewProviderExecutor(runtime)),
+		registry,
 		&domain.AdminUser{
 			BaseModel: domain.BaseModel{ID: "admin"},
 			Role:      "super_admin",
@@ -101,10 +108,22 @@ func (s *testStack) app(t *testing.T) (*domain.App, *domain.AppCredential, strin
 	return app, &created.Credential, created.ClientSecret
 }
 func (s *testStack) provider(t *testing.T, config map[string]any, countries ...string) *domain.ProviderAccount {
+	return s.providerFor(t, "test_provider", config, countries...)
+}
+
+// providerFor creates and activates an account for a registered provider code,
+// which lets a test install its own adapter and route payments through it.
+func (s *testStack) providerFor(
+	t *testing.T,
+	code string,
+	config map[string]any,
+	countries ...string,
+) *domain.ProviderAccount {
+	t.Helper()
 	account := must(s.providerAdmin.CreateAccount(
 		context.Background(),
 		s.actor,
-		"test_provider",
+		code,
 		"Test",
 		"sandbox",
 		countries,
@@ -114,7 +133,7 @@ func (s *testStack) provider(t *testing.T, config map[string]any, countries ...s
 	return account
 }
 func (s *testStack) route(t *testing.T, id string, priority int) {
-	must(s.routes.Create(context.Background(), s.actor, domain.ServiceCollection, domain.PaymentMethodMomo, id, priority, true))
+	must(s.routes.Create(context.Background(), s.actor, domain.ServiceCollection, testMethod, id, priority, true))
 }
 
 func TestCoreFlows(t *testing.T) {
@@ -137,13 +156,13 @@ func TestCoreFlows(t *testing.T) {
 		s.route(t, account.ID, 1)
 		app, _, _ := s.app(t)
 		req := &CreatePaymentRequest{
-			PaymentMethod: domain.PaymentMethodMomo,
+			PaymentMethod: testMethod,
 			Amount:        50000,
 			Currency:      "UGX",
 			Country:       "UG",
 			Reference:     "ORDER-1",
-			Customer:      &PartyPayload{Phone: "256770000000"},
-			Momo:          &PartyPayload{Phone: "256770000000"},
+			Account:       &AccountPayload{Account: "256770000000"},
+			Customer:      &PartyPayload{Name: "Test Customer"},
 		}
 		first := must(s.payments.Create(context.Background(), app.ID, domain.ServiceCollection, "idem", req))
 		second := must(s.payments.Create(context.Background(), app.ID, domain.ServiceCollection, "idem", req))
@@ -162,13 +181,13 @@ func TestCoreFlows(t *testing.T) {
 		s.route(t, account.ID, 1)
 		app, _, _ := s.app(t)
 		created := must(s.payments.Create(context.Background(), app.ID, domain.ServiceCollection, "idem-recon", &CreatePaymentRequest{
-			PaymentMethod: domain.PaymentMethodMomo,
+			PaymentMethod: testMethod,
 			Amount:        1500,
 			Currency:      "UGX",
 			Country:       "UG",
 			Reference:     "ORDER-RECON",
-			Customer:      &PartyPayload{Phone: "256770000000"},
-			Momo:          &PartyPayload{Phone: "256770000000"},
+			Account:       &AccountPayload{Account: "256770000000"},
+			Customer:      &PartyPayload{Name: "Test Customer"},
 		}))
 		if created.Status != domain.TxProcessing {
 			t.Fatalf("Create() status = %q, want %q", created.Status, domain.TxProcessing)
@@ -207,7 +226,7 @@ func TestCoreFlows(t *testing.T) {
 		s.route(t, primary.ID, 1)
 		s.route(t, backup.ID, 2)
 		s.route(t, kenya.ID, 0)
-		selected := must(s.routing.SelectProvider(context.Background(), domain.ServiceCollection, domain.PaymentMethodMomo, "UG"))
+		selected := must(s.routing.SelectProvider(context.Background(), domain.ServiceCollection, testMethod, "UG"))
 		if selected.Account.ID != primary.ID {
 			t.Fatal("highest-priority provider supporting UG was not selected")
 		}
@@ -216,14 +235,14 @@ func TestCoreFlows(t *testing.T) {
 			Status:            domain.ProviderDown,
 			CircuitState:      domain.CircuitOpen,
 		}).Error)
-		selected = must(s.routing.SelectProvider(context.Background(), domain.ServiceCollection, domain.PaymentMethodMomo, "UG"))
+		selected = must(s.routing.SelectProvider(context.Background(), domain.ServiceCollection, testMethod, "UG"))
 		if selected.Account.ID != backup.ID {
 			t.Fatal("healthy UG backup was not selected")
 		}
 		if _, err := s.routing.SelectProvider(
 			context.Background(),
 			domain.ServiceCollection,
-			domain.PaymentMethodMomo,
+			testMethod,
 			"TZ",
 		); !errors.Is(err, ErrNoRouteAvailable) {
 			t.Fatalf("unexpected fallback for unsupported country: %v", err)
@@ -248,19 +267,37 @@ func TestCoreFlows(t *testing.T) {
 	})
 }
 
-func TestCountryAndPhoneNormalization(t *testing.T) {
+func TestCountryNormalization(t *testing.T) {
 	countries, err := NormalizeProviderCountries([]string{" ug ", "RW", "UG"})
 	if err != nil || len(countries) != 2 || countries[0] != "UG" || countries[1] != "RW" {
 		t.Fatalf("countries=%v err=%v", countries, err)
 	}
-	for _, phone := range []string{"0770000000", "+256770000000", "256770000000"} {
-		got, err := NormalizeMSISDN(phone, "UG")
-		if err != nil || got != "256770000000" {
-			t.Fatalf("NormalizeMSISDN(%q)=%q, %v", phone, got, err)
+	if countries, err = NormalizeProviderCountries(nil); err != nil || countries != nil {
+		t.Fatalf("NormalizeProviderCountries(nil) = %v, %v, want an unrestricted account", countries, err)
+	}
+	if country, err := NormalizeOptionalCountry("  "); err != nil || country != "" {
+		t.Fatalf("NormalizeOptionalCountry(blank) = %q, %v, want an empty country", country, err)
+	}
+	if country, err := NormalizeOptionalCountry(" ug "); err != nil || country != "UG" {
+		t.Fatalf("NormalizeOptionalCountry(%q) = %q, %v", " ug ", country, err)
+	}
+
+	// language.ParseRegion is deliberately not trusted on its own: it accepts the
+	// reserved and grouping regions, and rewrites alpha-3 input into alpha-2 rather
+	// than rejecting it, so "USA" would otherwise be stored as "US".
+	for _, country := range []string{"XX", "ZZ", "QO", "EU", "419", "USA", "U", "UGX"} {
+		if got, err := NormalizeTransactionCountry(country); err == nil {
+			t.Errorf("NormalizeTransactionCountry(%q) = %q, want an error", country, got)
 		}
 	}
-	if _, err := NormalizeMSISDN("+254712123456", "UG"); err == nil {
-		t.Fatal("accepted a phone number from a different country")
+	if _, err := NormalizeTransactionCountry(""); err == nil {
+		t.Error("NormalizeTransactionCountry(\"\") = nil, want an error for a required country")
+	}
+	// UK is exceptionally reserved for GB rather than assigned, and ParseRegion
+	// resolves it. Storing the caller's own input keeps it out of the canonical
+	// rewrite path, so what round-trips is exactly what was sent.
+	if country, err := NormalizeTransactionCountry("uk"); err != nil || country != "UK" {
+		t.Errorf("NormalizeTransactionCountry(%q) = %q, %v, want the input uppercased", "uk", country, err)
 	}
 }
 

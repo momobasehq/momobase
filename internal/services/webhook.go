@@ -194,16 +194,14 @@ func CanonicalWebhookHash(event *VerifiedWebhook) string {
 	}, "|"))
 }
 func validateWebhook(event *VerifiedWebhook, tx *domain.Transaction) error {
-	phoneMatches := true
-	if event.Phone != "" {
-		phone, err := NormalizeMSISDN(event.Phone, tx.Country)
-		phoneMatches = err == nil && phone == tx.CustomerPhone
-	}
+	// The account is compared exactly: the provider reports the form it normalized
+	// the request to, which is the form the transaction recorded. An event that
+	// carries no account skips the check.
 	if event.Amount != nil && *event.Amount != tx.Amount ||
 		event.Currency != "" && !strings.EqualFold(event.Currency, tx.Currency) ||
 		event.Country != "" && !strings.EqualFold(event.Country, tx.Country) ||
 		event.ExternalReference != "" && event.ExternalReference != tx.Reference ||
-		!phoneMatches {
+		event.Account != "" && event.Account != tx.CustomerAccount {
 		return fmt.Errorf("webhook payload does not match transaction")
 	}
 	return nil

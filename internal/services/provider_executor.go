@@ -23,6 +23,49 @@ func NewProviderExecutor(runtime *ProviderRuntimeManager) *RuntimeProviderExecut
 	return &RuntimeProviderExecutor{runtime, 45 * time.Second}
 }
 
+// ValidateRequest lets the selected provider validate and normalize a payment
+// request before Momobase persists it. Providers that do not implement
+// providers.RequestValidator are skipped.
+//
+// A rejection is a client error rather than a provider outage, so it deliberately
+// bypasses the circuit breaker: a stream of malformed accounts must not take a
+// healthy provider out of rotation.
+func (e *RuntimeProviderExecutor) ValidateRequest(ctx context.Context, id string, req *providers.PaymentRequest) error {
+	p, err := e.ready(id, "", req.Country)
+	if err != nil {
+		return err
+	}
+	validator, ok := p.Adapter.(providers.RequestValidator)
+	if !ok {
+		return nil
+	}
+	before := *req
+	c, cancel := context.WithTimeout(ctx, e.timeout)
+	defer cancel()
+	if err = validator.ValidateRequest(c, req); err != nil {
+		return fmt.Errorf("provider rejected the payment request: %s", providers.Redact(err.Error()))
+	}
+	return guardValidatedRequest(before, req)
+}
+
+// guardValidatedRequest rejects a provider that rewrote a field it does not own.
+// Only the account and its scheme are the provider's to normalize; the rest is
+// already hashed for idempotency and about to be persisted as the caller sent it.
+func guardValidatedRequest(before providers.PaymentRequest, after *providers.PaymentRequest) error {
+	if before.TransactionID != after.TransactionID ||
+		before.PaymentMethod != after.PaymentMethod ||
+		before.Amount != after.Amount ||
+		before.Currency != after.Currency ||
+		before.Country != after.Country ||
+		before.Reference != after.Reference {
+		return errors.New("provider modified a payment request field it does not own")
+	}
+	if after.Account == "" || !validAccount(after.Account) {
+		return errors.New("provider normalized the account to an unusable value")
+	}
+	return nil
+}
+
 // Collect executes a collection through a ready provider that supports the request country.
 func (e *RuntimeProviderExecutor) Collect(
 	ctx context.Context,
@@ -69,17 +112,21 @@ func (e *RuntimeProviderExecutor) QueryTransaction(
 	})
 }
 
-// QueryBalance retrieves a provider balance for a country, inferring the country for single-country providers.
+// QueryBalance retrieves a provider balance for a country, inferring the country
+// for single-country providers and querying without one for a provider that
+// declares no countries.
 func (e *RuntimeProviderExecutor) QueryBalance(ctx context.Context, id, country string) (*providers.ProviderBalance, error) {
 	p, err := e.ready(id, "", country)
 	if err != nil {
 		return nil, err
 	}
 	if country == "" {
-		if len(p.Countries) != 1 {
-			return nil, errors.New("country is required for a multi-country provider")
+		if len(p.Countries) > 1 {
+			return nil, errors.New("country is required for a provider that declares more than one")
 		}
-		country = p.Countries[0]
+		if len(p.Countries) == 1 {
+			country = p.Countries[0]
+		}
 	}
 	return execute(ctx, e, p, "balance", func(c context.Context) (*providers.ProviderBalance, error) {
 		return p.Adapter.QueryBalance(c, country)
@@ -114,19 +161,19 @@ func (e *RuntimeProviderExecutor) VerifyWebhook(
 	return p.Adapter.VerifyWebhook(c, payload, headers)
 }
 
+// ready returns a loaded runtime that can serve the requested operation. A country
+// is checked only against a provider that declares one: an account with no declared
+// countries is unrestricted, which is what a rail without a country notion needs.
 func (e *RuntimeProviderExecutor) ready(id, service, country string) (*RuntimeProvider, error) {
 	p, ok := e.runtime.Get(id)
 	if !ok || p.Adapter == nil {
 		return nil, errors.New("provider not initialized")
 	}
-	if service != "" && !providers.Supports(p.Capabilities, service, domain.PaymentMethodMomo) {
-		return nil, fmt.Errorf("provider does not support %s/momo", service)
+	if service != "" && !providers.Supports(p.Capabilities, service) {
+		return nil, fmt.Errorf("provider does not support %s", service)
 	}
-	if country != "" && !slices.Contains(p.Countries, country) {
+	if country != "" && len(p.Countries) > 0 && !slices.Contains(p.Countries, country) {
 		return nil, fmt.Errorf("provider does not support country %s", country)
-	}
-	if len(p.Countries) == 0 {
-		return nil, errors.New("provider has no supported countries")
 	}
 	return p, nil
 }
