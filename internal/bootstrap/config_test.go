@@ -35,7 +35,7 @@ func TestLoadConfigDefaultsAndOverrides(t *testing.T) {
 	t.Setenv("CORS_ALLOWED_ORIGINS", " https://one.example, ,https://two.example ")
 	t.Setenv("ADMIN_ACCESS_TTL_MINUTES", "7")
 	t.Setenv("HEALTH_CHECK_INTERVAL_SECONDS", "9")
-	t.Setenv("ADMIN_FRONTEND_ENABLED", "true")
+	t.Setenv("DASHBOARD_ENABLED", "true")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -50,7 +50,7 @@ func TestLoadConfigDefaultsAndOverrides(t *testing.T) {
 	if cfg.Security.AdminAccessTTL != 7*time.Minute {
 		t.Fatalf("AdminAccessTTL = %v", cfg.Security.AdminAccessTTL)
 	}
-	if cfg.Workers.HealthInterval != 9*time.Second || !cfg.Features.AdminFrontendEnabled {
+	if cfg.Workers.HealthInterval != 9*time.Second || !cfg.Features.DashboardEnabled {
 		t.Fatalf("unexpected worker/features config: %+v %+v", cfg.Workers, cfg.Features)
 	}
 }
@@ -166,7 +166,7 @@ func setValidParsingEnvironment(t *testing.T) {
 		"HEALTH_CHECK_INTERVAL_SECONDS":   "30",
 		"RECONCILIATION_INTERVAL_SECONDS": "60",
 		"CLEANUP_INTERVAL_SECONDS":        "300",
-		"ADMIN_FRONTEND_ENABLED":          "false",
+		"DASHBOARD_ENABLED":               "false",
 		"AUTO_MIGRATE":                    "true",
 	}
 	for key, value := range values {

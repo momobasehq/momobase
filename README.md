@@ -1,7 +1,7 @@
 # Momobase
 
 Momobase is a compact, single-instance payment orchestration service.
-It exposes a unified API for applications, routes payments to providers you supply, and includes an Admin API, TypeScript SDK, and minimal browser admin panel.
+It exposes a unified API for applications, routes payments to providers you supply, and includes an Admin API, TypeScript SDK, and an embedded administration dashboard.
 
 It runs as a standalone service (`cmd/momobase`) and as a Go package that applications embed and extend with their own payment providers.
 
@@ -55,7 +55,7 @@ Register a factory for it under a provider code, then create, configure, and act
 { "success": true, "data": { "providers": ["acme_bank", "acme_pay", "dummy"] } }
 ```
 
-The TypeScript SDK exposes it as `client.providers.registry()`, and the bundled admin panel builds its provider dropdown from it.
+The TypeScript SDK exposes it as `client.providers.registry()`, and the dashboard builds its provider dropdown from it, so an out-of-tree adapter appears without a client release.
 
 The package also exports the helpers the bundled adapters use, so a third-party provider does not have to reimplement them: `DoJSON`, `Redact`, `TokenCache`, `ConfigString`/`ConfigBool`/`ConfigInt`/`ConfigPath`, `ParseAmountToMinor`, `FormatAmountMinor`, `PaymentStatus`, and the `Service*`, `PaymentMethod*`, and `Tx*` constants. They are also importable directly from `github.com/momobasehq/momobase/providers`, which is the package the bundled adapters use.
 

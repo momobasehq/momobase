@@ -164,17 +164,27 @@ go run ./cmd/momobase seed-admin \
 go run ./cmd/momobase serve
 ```
 
-Enable the browser admin panel:
+Enable the administration dashboard:
 
 ```env
-ADMIN_FRONTEND_ENABLED=true
+DASHBOARD_ENABLED=true
+```
+
+The dashboard is embedded behind a build tag, because nothing under
+`web/dashboard/dist` is committed. A plain `go build` carries no bundle and serves
+nothing at `/dashboard/` whatever the flag says; build it with:
+
+```sh
+make build-dashboard      # pnpm build, then go build -tags dashboard
 ```
 
 Then open:
 
 ```text
-http://localhost:9090/admin/
+http://localhost:9090/dashboard/
 ```
+
+The retired `/admin/` panel now redirects here.
 
 ## Docker Compose
 
@@ -291,9 +301,9 @@ PATCH /api/admin/providers/accounts/{id}/countries
 
 A balance lookup may include `?country=UG`; it is required only when an account declares more than one country. Active-balance queries return one result per provider and supported country, or one result with an empty country for an unrestricted provider.
 
-## TypeScript SDK and admin panel
+## TypeScript SDK and dashboard
 
-Everything Momobase ships to a browser lives under `web/`, which is a **pnpm workspace** — `web/sdk` is the TypeScript SDK, and `web/admin` is the legacy panel. pnpm is used directly; corepack is not involved.
+Everything Momobase ships to a browser lives under `web/`, which is a **pnpm workspace** — `web/sdk` is the TypeScript SDK and `web/dashboard` is the administration console. pnpm is used directly; corepack is not involved.
 
 The SDK supports token management plus the public and admin API surfaces.
 
@@ -303,7 +313,12 @@ make sdk-build      # or: pnpm -C web install --frozen-lockfile && pnpm -C web -
 
 `--frozen-lockfile` is deliberate: it fails on a `package.json` edited without regenerating `web/pnpm-lock.yaml` rather than silently resolving something new.
 
-The minimal browser admin panel is in `web/admin` and is served by the Go binary when `ADMIN_FRONTEND_ENABLED=true`. It is not a workspace member — it is a hand-maintained JS twin of the SDK, embedded directly by Go.
+The dashboard is a Vite/React application that consumes the SDK through the workspace, so there is one client for the Admin API rather than a hand-maintained twin. It routes on the URL hash, which means a deep link is only ever a request for `/dashboard/` and needs no server-side fallback.
+
+```bash
+make dashboard          # build the bundle
+make build-dashboard    # bundle + binary with it embedded
+```
 
 ## Local verification
 
@@ -315,8 +330,7 @@ go vet ./...
 go test ./...
 go test -race ./...
 go build ./cmd/momobase
-node --check web/admin/app.js
-node --check web/admin/sdk.js
+make web-typecheck
 bash -n scripts/smoke_api.sh
 bash -n scripts/smoke_backend.sh
 ```

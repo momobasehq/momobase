@@ -138,14 +138,14 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		info,
 	)
 	router := httpx.NewRouter(httpx.RouterDeps{
-		Logger:               log,
-		AdminAuth:            adminAuth,
-		AppAuth:              appAuth,
-		AdminFrontendEnabled: cfg.Features.AdminFrontendEnabled,
-		CORSAllowedOrigins:   cfg.App.CORSAllowedOrigins,
-		Public:               publicHandler,
-		Admin:                adminHandler,
-		Webhooks:             webhookh.NewHandler(webhooks),
+		Logger:             log,
+		AdminAuth:          adminAuth,
+		AppAuth:            appAuth,
+		DashboardEnabled:   cfg.Features.DashboardEnabled,
+		CORSAllowedOrigins: cfg.App.CORSAllowedOrigins,
+		Public:             publicHandler,
+		Admin:              adminHandler,
+		Webhooks:           webhookh.NewHandler(webhooks),
 	})
 
 	app := &App{

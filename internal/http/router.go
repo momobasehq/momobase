@@ -10,20 +10,23 @@ import (
 	publich "github.com/momobasehq/momobase/internal/http/public"
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
 	"github.com/momobasehq/momobase/internal/services"
-	adminweb "github.com/momobasehq/momobase/web/admin"
+	dashboardweb "github.com/momobasehq/momobase/web/dashboard"
 )
 
 // RouterDeps contains the services, handlers, and settings required to build
 // the application HTTP router.
 type RouterDeps struct {
-	Logger               *slog.Logger
-	AdminAuth            *services.AdminAuthService
-	AppAuth              *services.AppAuthService
-	AdminFrontendEnabled bool
-	CORSAllowedOrigins   []string
-	Public               *publich.Handler
-	Admin                *adminh.Handler
-	Webhooks             *webhookh.Handler
+	Logger    *slog.Logger
+	AdminAuth *services.AdminAuthService
+	AppAuth   *services.AppAuthService
+	// DashboardEnabled serves the administration dashboard at /dashboard/. It only
+	// takes effect in a binary built with the dashboard tag, which is what carries
+	// the assets; see web/dashboard.
+	DashboardEnabled   bool
+	CORSAllowedOrigins []string
+	Public             *publich.Handler
+	Admin              *adminh.Handler
+	Webhooks           *webhookh.Handler
 }
 
 type middleware = middlewarex.Middleware
@@ -39,14 +42,25 @@ func route(mux *http.ServeMux, pattern string, h http.HandlerFunc, middlewares .
 }
 
 // NewRouter constructs the complete application HTTP handler, including
-// public, administrative, webhook, health, and optional admin frontend routes.
+// public, administrative, webhook, health, and optional dashboard routes.
 func NewRouter(d RouterDeps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ping", publich.Ping)
 	mux.HandleFunc("GET /healthz", publich.Health)
-	if d.AdminFrontendEnabled {
-		mux.Handle("GET /admin/", http.StripPrefix("/admin", http.FileServer(http.FS(adminweb.FS()))))
-		mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/admin/", http.StatusFound) })
+	// Available is false unless this binary was built with the dashboard tag, so a
+	// deployment that sets the flag against an untagged build serves nothing here
+	// rather than an empty shell whose scripts 404.
+	if d.DashboardEnabled && dashboardweb.Available() {
+		mux.Handle("GET /dashboard/", http.StripPrefix("/dashboard/", newDashboardHandler(dashboardweb.FS())))
+		mux.HandleFunc("GET /dashboard", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/dashboard/", http.StatusFound) })
+		// The panel that lived here was replaced by the dashboard. Redirecting
+		// permanently keeps existing bookmarks and runbooks working instead of
+		// answering them with a bare 404.
+		movedToDashboard := func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/dashboard/", http.StatusMovedPermanently)
+		}
+		mux.HandleFunc("GET /admin/", movedToDashboard)
+		mux.HandleFunc("GET /admin", movedToDashboard)
 	}
 	tokens := middlewarex.RateLimitByIP(20, time.Minute)
 	publicLimit := middlewarex.RateLimitByIP(120, time.Minute)

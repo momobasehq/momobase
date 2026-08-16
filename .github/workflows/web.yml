@@ -64,6 +64,6 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
-      - name: Verify the dashboard embeds its bundle
+      - name: Verify the dashboard embeds and serves its bundle
         working-directory: .
-        run: go test -tags dashboard ./web/dashboard/...
+        run: go test -tags dashboard ./...

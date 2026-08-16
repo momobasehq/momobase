@@ -61,11 +61,9 @@ type WorkersConfig struct {
 
 // FeaturesConfig controls optional application behavior.
 type FeaturesConfig struct {
-	AdminFrontendEnabled bool
-	// DashboardEnabled serves the React dashboard at /dashboard/. It is separate from
-	// AdminFrontendEnabled because one flag cannot express both "new UI only" and
-	// "legacy only", and changing the meaning of the existing flag would silently
-	// alter what deployments already running it serve.
+	// DashboardEnabled serves the administration dashboard at /dashboard/, and
+	// redirects the retired /admin/ panel there. It only takes effect in a binary
+	// built with the dashboard tag; see web/dashboard.
 	DashboardEnabled bool
 	AutoMigrate      bool
 }
@@ -154,10 +152,6 @@ func LoadConfig() (Config, error) {
 		return Config{}, err
 	}
 	// features
-	c.Features.AdminFrontendEnabled, err = boolean("ADMIN_FRONTEND_ENABLED", false)
-	if err != nil {
-		return Config{}, err
-	}
 	c.Features.DashboardEnabled, err = boolean("DASHBOARD_ENABLED", false)
 	if err != nil {
 		return Config{}, err
