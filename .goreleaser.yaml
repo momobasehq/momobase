@@ -19,10 +19,15 @@ version: 2
 
 project_name: momobase
 
+# Hooks are argv, not shell commands: no &&, no globs, one command per entry. The
+# dashboard bundle is not committed, so it is built here and embedded by the
+# dashboard build tag below.
 before:
   hooks:
     - go mod download
     - go mod verify
+    - pnpm -C web install --frozen-lockfile
+    - pnpm -C web --recursive run build
 
 # One build per architecture, each with a complete env. Build overrides would
 # express this in fewer lines, but they restate the whole build-details block
@@ -45,6 +50,9 @@ builds:
       - osusergo
       - netgo
       - sqlite_omit_load_extension
+      # Embeds the bundle the before-hook just built. Dropping it produces a binary
+      # that silently serves no dashboard however DASHBOARD_ENABLED is set.
+      - dashboard
     ldflags: &build_ldflags
       - -s -w
       - -extldflags "-static"

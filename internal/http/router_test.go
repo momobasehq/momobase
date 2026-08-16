@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 
@@ -18,71 +17,18 @@ import (
 )
 
 func testRouter() http.Handler {
-	return testRouterWithAdminFrontend(false)
+	return testRouterWith(false)
 }
 
-func testRouterWithAdminFrontend(enabled bool) http.Handler {
+func testRouterWith(dashboard bool) http.Handler {
 	return NewRouter(RouterDeps{
-		Logger:               slog.New(slog.NewTextHandler(io.Discard, nil)),
-		AdminFrontendEnabled: enabled,
-		CORSAllowedOrigins:   []string{"https://console.example.com"},
-		Public:               publich.NewHandler(nil, nil),
-		Admin:                adminh.NewHandler(nil, nil, nil, nil, nil, nil, nil, nil, adminh.SystemInfo{}),
-		Webhooks:             webhookh.NewHandler(nil),
+		Logger:             slog.New(slog.NewTextHandler(io.Discard, nil)),
+		DashboardEnabled:   dashboard,
+		CORSAllowedOrigins: []string{"https://console.example.com"},
+		Public:             publich.NewHandler(nil, nil),
+		Admin:              adminh.NewHandler(nil, nil, nil, nil, nil, nil, nil, nil, adminh.SystemInfo{}),
+		Webhooks:           webhookh.NewHandler(nil),
 	})
-}
-
-func TestRouterServesEmbeddedAdminFrontend(t *testing.T) {
-	workingDirectory, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Getwd() error = %v", err)
-	}
-	if err = os.Chdir(t.TempDir()); err != nil {
-		t.Fatalf("Chdir() error = %v", err)
-	}
-	t.Cleanup(func() {
-		if err := os.Chdir(workingDirectory); err != nil {
-			t.Errorf("restore working directory: %v", err)
-		}
-	})
-
-	router := testRouterWithAdminFrontend(true)
-	tests := []struct {
-		path        string
-		status      int
-		body        string
-		contentType string
-	}{
-		{path: "/admin/", status: http.StatusOK, body: "<title>Momobase Admin</title>", contentType: "text/html"},
-		{path: "/admin/app.js", status: http.StatusOK, body: "window.adminApp", contentType: "javascript"},
-		{path: "/admin/sdk.js", status: http.StatusOK, body: "MomobaseAdminClient", contentType: "javascript"},
-	}
-	for _, test := range tests {
-		t.Run(test.path, func(t *testing.T) {
-			recorder := httptest.NewRecorder()
-			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, test.path, nil))
-			if recorder.Code != test.status || !strings.Contains(recorder.Body.String(), test.body) {
-				t.Fatalf("GET %s response = %d %s", test.path, recorder.Code, recorder.Body.String())
-			}
-			if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, test.contentType) {
-				t.Fatalf("GET %s Content-Type = %q", test.path, contentType)
-			}
-		})
-	}
-
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/admin", nil))
-	if recorder.Code != http.StatusFound || recorder.Header().Get("Location") != "/admin/" {
-		t.Fatalf("GET /admin redirect = %d %q", recorder.Code, recorder.Header().Get("Location"))
-	}
-}
-
-func TestRouterDoesNotServeDisabledAdminFrontend(t *testing.T) {
-	recorder := httptest.NewRecorder()
-	testRouter().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/admin/", nil))
-	if recorder.Code != http.StatusNotFound {
-		t.Fatalf("GET /admin/ status = %d, want %d", recorder.Code, http.StatusNotFound)
-	}
 }
 
 func TestRouterHealthEndpointsAndCORS(t *testing.T) {
