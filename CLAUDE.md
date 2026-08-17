@@ -76,6 +76,7 @@ These are load-bearing; breaking one is a silent correctness bug.
 - Idempotency is `(app_id, idempotency_key)` unique index **plus** `RequestHash` comparison; a reused key with a different body is an error, not a replay. The hash is taken before provider normalization, so two spellings of one account are two different requests.
 - Webhooks authenticate with a constant-time compare of `X-Webhook-Secret` against the account's decrypted `webhook_secret`, dedupe on `(provider_account_id, payload_hash)` via `ON CONFLICT DO NOTHING`, and are validated field-by-field against the target transaction before being applied. `ProviderWebhookEvent.Account` is compared **exactly** against `Transaction.CustomerAccount`, so an adapter that normalizes in `ValidateRequest` must report the same form here.
 - Secrets are never stored in plaintext: provider configs are AES-GCM encrypted, passwords and client secrets are bcrypt/SHA-256 hashed, and models mark them `json:"-"`.
+- **Authorization is data, not literals.** `domain.Permissions` is the only place a permission is defined; `AuthzService.Seed` upserts it on every boot. Every admin route names exactly one permission via `middlewarex.RequirePermission`, and there is no `RequireRole`. Effective permissions are resolved in `activeUser` per request — never from token claims, or revocation would wait for a refresh. `super_admin` holds `*`. System roles are read-only so re-seeding them is safe.
 
 ## Making changes
 

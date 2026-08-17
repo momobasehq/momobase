@@ -19,6 +19,11 @@ export const keys = {
     workers: (page: Page) => [...keys.system.all, "workers", page] as const,
     runtime: (page: Page) => [...keys.system.all, "runtime", page] as const,
   },
+  authz: {
+    all: ["authz"] as const,
+    permissions: (audience?: string) => [...keys.authz.all, "permissions", audience ?? "all"] as const,
+    roles: () => [...keys.authz.all, "roles"] as const,
+  },
   users: {
     all: ["users"] as const,
     list: (page: Page) => [...keys.users.all, "list", page] as const,

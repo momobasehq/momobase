@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import { DataTable, type Column } from "@/components/data-table"
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useAuth, roles } from "@/hooks/use-auth"
+import { useAuth } from "@/hooks/use-auth"
 import { usePagedQuery } from "@/hooks/use-paged-query"
 import { formatDateTime, titleCase } from "@/lib/format"
 import { keys } from "@/lib/query-keys"
@@ -22,14 +22,18 @@ import type { AdminUser } from "@momobase/sdk"
 function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { client } = useAuth()
   const queryClient = useQueryClient()
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "read_only" })
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "" })
+  // Roles come from the server, so a role an operator created is assignable here
+  // without a client release. The old hardcoded list also offered read_only, which
+  // the API rejected.
+  const roles = useQuery({ queryKey: keys.authz.roles(), queryFn: () => client.authz.roles() })
 
   const create = useMutation({
     mutationFn: () => client.users.create(form),
     onSuccess: async (user) => {
       toast.success(`Created ${user.email}`)
       onOpenChange(false)
-      setForm({ name: "", email: "", password: "", role: "read_only" })
+      setForm({ name: "", email: "", password: "", role: "" })
       await queryClient.invalidateQueries({ queryKey: keys.users.all })
     },
     onError: (error: Error) => toast.error(error.message),
@@ -57,14 +61,14 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="user-role">Role</Label>
-            <Select value={form.role} onValueChange={(role) => setForm({ ...form, role: role ?? "read_only" })}>
+            <Select value={form.role} onValueChange={(role) => setForm({ ...form, role: role ?? "" })}>
               <SelectTrigger id="user-role">
-                <SelectValue />
+                <SelectValue placeholder={roles.isPending ? "Loading…" : "Select a role"} />
               </SelectTrigger>
               <SelectContent>
-                {roles.map((role) => (
-                  <SelectItem key={role} value={role}>
-                    {titleCase(role)}
+                {(roles.data?.items ?? []).map((role) => (
+                  <SelectItem key={role.name} value={role.name}>
+                    {titleCase(role.name)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -75,7 +79,7 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !form.email || !form.password}>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !form.email || !form.password || !form.role}>
             Create
           </Button>
         </DialogFooter>
@@ -124,11 +128,11 @@ export function Users() {
       align: "end",
       cell: (user) => (
         <div className="flex justify-end gap-2">
-          <GuardedAction role="super_admin" variant="outline" size="sm" onClick={() => setResetting(user)}>
+          <GuardedAction permission="users:update" variant="outline" size="sm" onClick={() => setResetting(user)}>
             Set password
           </GuardedAction>
           <GuardedAction
-            role="super_admin"
+            permission="users:update"
             variant="outline"
             size="sm"
             disabled={changeStatus.isPending}
@@ -147,7 +151,7 @@ export function Users() {
         <CardTitle>Administrators</CardTitle>
         <CardDescription>Console accounts and the roles that gate what they may change.</CardDescription>
         <div className="ms-auto">
-          <GuardedAction role="super_admin" size="sm" onClick={() => setCreating(true)}>
+          <GuardedAction permission="users:create" size="sm" onClick={() => setCreating(true)}>
             New administrator
           </GuardedAction>
         </div>

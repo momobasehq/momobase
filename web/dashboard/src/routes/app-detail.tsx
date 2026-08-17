@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/hooks/use-auth"
@@ -81,6 +82,15 @@ export function AppDetail() {
   const [name, setName] = useState("")
   const [editing, setEditing] = useState(false)
   const [details, setDetails] = useState({ name: "", description: "" })
+  const [scopes, setScopes] = useState<string[]>([])
+
+  // Scopes come from the server's app-audience catalogue, and the server validates
+  // against the same list — so a scope that cannot work is no longer typeable.
+  const catalogue = useQuery({
+    queryKey: keys.authz.permissions("app"),
+    queryFn: () => client.authz.permissions("app"),
+    enabled: naming,
+  })
 
   const app = useQuery({ queryKey: keys.apps.detail(appId), queryFn: () => client.apps.get(appId), enabled: Boolean(appId) })
   const paged = usePagedQuery(
@@ -103,10 +113,15 @@ export function AppDetail() {
   })
 
   const create = useMutation({
-    mutationFn: () => client.apps.createCredential(appId, { name: name || undefined }),
+    mutationFn: () =>
+      client.apps.createCredential(appId, {
+        name: name || undefined,
+        scopes: scopes.length ? scopes.join(" ") : undefined,
+      }),
     onSuccess: async (result) => {
       setNaming(false)
       setName("")
+      setScopes([])
       setCreated(result)
       await refreshCredentials()
     },
@@ -144,7 +159,7 @@ export function AppDetail() {
       cell: (credential) => (
         <div className="flex justify-end gap-2">
           <GuardedAction
-            role="operations"
+            permission="credentials:update"
             variant="outline"
             size="sm"
             disabled={rotate.isPending || credential.status !== "active"}
@@ -153,7 +168,7 @@ export function AppDetail() {
             Rotate
           </GuardedAction>
           <GuardedAction
-            role="operations"
+            permission="credentials:update"
             variant="destructive"
             size="sm"
             disabled={revoke.isPending || credential.status !== "active"}
@@ -179,7 +194,7 @@ export function AppDetail() {
           <CardDescription>{app.data?.description || "No description."}</CardDescription>
           <div className="ms-auto">
             <GuardedAction
-              role="operations"
+              permission="apps:update"
               variant="outline"
               size="sm"
               onClick={() => {
@@ -212,7 +227,7 @@ export function AppDetail() {
           <CardTitle>Credentials</CardTitle>
           <CardDescription>Client credentials this app uses to obtain access tokens.</CardDescription>
           <div className="ms-auto">
-            <GuardedAction role="operations" size="sm" onClick={() => setNaming(true)}>
+            <GuardedAction permission="credentials:create" size="sm" onClick={() => setNaming(true)}>
               New credential
             </GuardedAction>
           </div>
@@ -245,6 +260,30 @@ export function AppDetail() {
           <div className="flex flex-col gap-2">
             <Label htmlFor="credential-name">Name</Label>
             <Input id="credential-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Checkout service" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label>Scopes</Label>
+            {catalogue.isPending ? (
+              <Skeleton className="h-20 w-full" />
+            ) : (
+              (catalogue.data?.items ?? []).map((permission) => (
+                <label key={permission.id} className="flex items-start gap-2">
+                  <Checkbox
+                    checked={scopes.includes(permission.code)}
+                    onCheckedChange={(checked) =>
+                      setScopes((current) =>
+                        checked === true ? [...current, permission.code] : current.filter((held) => held !== permission.code),
+                      )
+                    }
+                  />
+                  <span>
+                    <code>{permission.code}</code>
+                    <span className="text-muted-foreground"> — {permission.description}</span>
+                  </span>
+                </label>
+              ))
+            )}
+            <p className="text-muted-foreground">Leaving all unselected issues the server's default scopes.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNaming(false)}>

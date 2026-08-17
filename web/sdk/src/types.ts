@@ -45,7 +45,35 @@ export interface OAuthTokenResponse {
   app_id?: string; app_name?: string; credential_id?: string; client_id?: string
 }
 
-export interface AdminUser { id: string; name: string; email: string; role: string; status: string; created_at: string; updated_at: string }
+/** A permission audience. Admin permissions are granted through roles; app
+ * permissions are granted to a credential as a scope. The two are separate
+ * namespaces, so a code may exist in both and mean different things. */
+export type PermissionAudience = "admin" | "app"
+/** One entry of the server's seeded permission catalogue. Never hardcode these —
+ * fetch them, so a permission added by a later release appears without a release
+ * of this client. */
+export interface Permission {
+  id: string; code: string; audience: PermissionAudience; description: string
+  created_at: string; updated_at: string
+}
+export interface PermissionList { items: Permission[]; count: number }
+/** A named set of administrative permissions. `system` roles are seeded and
+ * read-only; only custom roles can be changed or deleted. */
+export interface Role {
+  id: string; name: string; description: string; system: boolean
+  permissions: Permission[]; created_at: string; updated_at: string
+}
+export interface RoleList { items: Role[]; count: number }
+/** Creates or replaces a role. `name` is ignored when updating: the path carries it,
+ * and a role's name is its identity because AdminUser.role refers to it. */
+export interface RoleRequest { name?: string; description?: string; permissions: string[] }
+/** `permissions` is the role's effective set, resolved per request rather than read
+ * from the token, and is present on the signed-in administrator from `me()`. Gate UI
+ * on it rather than on `role`. */
+export interface AdminUser {
+  id: string; name: string; email: string; role: string; status: string
+  permissions?: string[]; created_at: string; updated_at: string
+}
 export interface App {
   id: string; name: string; description: string; status: string; environment: string
   created_by?: string; created_at: string; updated_at: string

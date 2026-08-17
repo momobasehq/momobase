@@ -218,7 +218,7 @@ function ConfigureDialog({ account, onClose }: { account?: ProviderAccount; onCl
               onChange={(event) => setCountries(event.target.value)}
               placeholder="Leave empty for unrestricted"
             />
-            <GuardedAction role="super_admin" variant="outline" disabled={saveCountries.isPending} onClick={() => saveCountries.mutate()}>
+            <GuardedAction permission="providers:update" variant="outline" disabled={saveCountries.isPending} onClick={() => saveCountries.mutate()}>
               Save
             </GuardedAction>
           </div>
@@ -238,7 +238,7 @@ function ConfigureDialog({ account, onClose }: { account?: ProviderAccount; onCl
             The stored configuration is encrypted and never returned. Saving replaces it outright and reloads the adapter.
           </p>
           <GuardedAction
-            role="super_admin"
+            permission="providers:update"
             className="self-start"
             disabled={saveConfig.isPending || !config.trim()}
             onClick={() => saveConfig.mutate()}
@@ -310,14 +310,14 @@ export function Providers() {
       align: "end",
       cell: (account) => (
         <div className="flex justify-end gap-2">
-          <GuardedAction role="operations" variant="outline" size="sm" disabled={test.isPending} onClick={() => test.mutate(account.id)}>
+          <GuardedAction permission="providers:test" variant="outline" size="sm" disabled={test.isPending} onClick={() => test.mutate(account.id)}>
             Test
           </GuardedAction>
-          <GuardedAction role="super_admin" variant="outline" size="sm" onClick={() => setConfiguring(account)}>
+          <GuardedAction permission="providers:update" variant="outline" size="sm" onClick={() => setConfiguring(account)}>
             Configure
           </GuardedAction>
           <GuardedAction
-            role="super_admin"
+            permission="providers:update"
             variant={account.active ? "destructive" : "default"}
             size="sm"
             disabled={toggle.isPending}
@@ -337,7 +337,7 @@ export function Providers() {
           <CardTitle>Provider accounts</CardTitle>
           <CardDescription>Configured adapters and the countries each one serves.</CardDescription>
           <div className="ms-auto">
-            <GuardedAction role="super_admin" size="sm" onClick={() => setCreating(true)}>
+            <GuardedAction permission="providers:create" size="sm" onClick={() => setCreating(true)}>
               New account
             </GuardedAction>
           </div>

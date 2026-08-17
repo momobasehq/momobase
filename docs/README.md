@@ -123,7 +123,43 @@ Capabilities name the service only — `{"service_type": "collection"}`. Which p
 - Admins authenticate with password grant semantics.
 - Refresh-token rotation revokes the old session transactionally.
 - Disabling an admin invalidates their active sessions.
-- Role middleware separates `super_admin` operations from operations/read access.
+- Every administrative endpoint requires one permission, checked by middleware.
+
+## Roles and permissions
+
+A permission is `resource:action` — `transactions:read`, `providers:update` — and
+belongs to one audience: `admin`, granted to administrators through a role, or `app`,
+granted to a credential as a scope. The catalogue is defined in Go and upserted on every
+start, so it always matches what the routes actually require and adding a guarded
+endpoint needs no migration.
+
+```text
+GET    /api/admin/permissions?audience=admin
+GET    /api/admin/roles
+POST   /api/admin/roles
+PATCH  /api/admin/roles/{name}
+DELETE /api/admin/roles/{name}
+```
+
+`super_admin`, `operations`, and `read_only` are seeded as **system roles** and are
+read-only. Their permission sets are re-synchronised on every start, which is what lets
+a permission added by a new release reach `super_admin` without an operator doing
+anything — and is only safe because they cannot be edited. To grant a different set,
+create a role.
+
+`super_admin` holds the wildcard `*`, so it covers permissions that do not exist yet.
+
+An administrator's effective permissions are resolved from their role when a request
+authenticates, not carried in the access token, so removing a permission takes effect on
+the next call rather than the next refresh. `GET /api/admin/me` returns them, which is
+what the dashboard gates its controls on.
+
+An administrator whose role no longer exists resolves to no permissions and is refused
+everything — the safe direction to fail. A role still assigned to an administrator
+cannot be deleted.
+
+Credential scopes are validated against the `app` catalogue when a credential is created,
+so a misspelled scope fails there instead of surfacing as a 403 on the first payment.
 
 ## Worker lifecycle
 

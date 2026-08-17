@@ -156,7 +156,7 @@ export function PaymentRoutes() {
       align: "end",
       cell: (route) => (
         <GuardedAction
-          role="operations"
+          permission="routes:update"
           variant="outline"
           size="sm"
           disabled={update.isPending}
@@ -174,7 +174,7 @@ export function PaymentRoutes() {
         <CardTitle>Routes</CardTitle>
         <CardDescription>Which provider account serves each service and payment method.</CardDescription>
         <div className="ms-auto">
-          <GuardedAction role="operations" size="sm" onClick={() => setCreating(true)}>
+          <GuardedAction permission="routes:create" size="sm" onClick={() => setCreating(true)}>
             New route
           </GuardedAction>
         </div>

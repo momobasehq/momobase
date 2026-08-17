@@ -1,4 +1,4 @@
-import { Activity, AppWindow, ChevronsUpDown, FileClock, LayoutDashboard, LogOut, Plug, Receipt, Route as RouteIcon, TerminalSquare, Users } from "lucide-react"
+import { Activity, AppWindow, ChevronsUpDown, FileClock, LayoutDashboard, LogOut, Plug, Receipt, Route as RouteIcon, ShieldCheck, TerminalSquare, Users } from "lucide-react"
 import { NavLink, Outlet, useLocation } from "react-router"
 
 import { Logo } from "@/components/logo"
@@ -35,6 +35,7 @@ const navigation = [
     label: "Administration",
     items: [
       { to: "/users", label: "Users", icon: Users },
+      { to: "/roles", label: "Roles", icon: ShieldCheck },
       { to: "/operations", label: "Operations", icon: Activity },
       { to: "/audit", label: "Audit log", icon: FileClock },
       { to: "/api-tester", label: "API tester", icon: TerminalSquare },
@@ -50,6 +51,7 @@ const titles: Record<string, string> = {
   providers: "Providers",
   routes: "Routes",
   users: "Users",
+  roles: "Roles",
   operations: "Operations",
   audit: "Audit log",
   "api-tester": "API tester",

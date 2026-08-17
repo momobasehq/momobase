@@ -4,9 +4,9 @@ import { MomobaseAdminClient, type AdminUser } from "@momobase/sdk"
 
 import { clearSession, loadRefreshToken, persistToken } from "@/lib/session"
 
-/** Roles the admin API recognizes, ordered from most to least privileged. */
-export const roles = ["super_admin", "operations", "read_only"] as const
-export type Role = (typeof roles)[number]
+/** The wildcard the super_admin role holds. It grants every permission, including
+ * ones a later release adds, so the client must honour it rather than enumerate. */
+const wildcard = "*"
 
 interface AuthValue {
   client: MomobaseAdminClient
@@ -16,8 +16,8 @@ interface AuthValue {
   signedIn: boolean
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
-  /** Reports whether the signed-in admin may perform a mutating action. */
-  can: (role: Role) => boolean
+  /** Reports whether the signed-in admin holds a permission, by its code. */
+  can: (permission: string) => boolean
 }
 
 const AuthContext = createContext<AuthValue | undefined>(undefined)
@@ -76,11 +76,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear()
   }, [client, queryClient])
 
+  // Gating on permissions rather than on a role name is what lets an operator create
+  // a role the client has never heard of and have the UI reflect it correctly.
   const can = useCallback(
-    (role: Role) => {
-      if (!me) return false
-      if (me.role === "super_admin") return true
-      return me.role === role
+    (permission: string) => {
+      const held = me?.permissions ?? []
+      return held.includes(permission) || held.includes(wildcard)
     },
     [me],
   )

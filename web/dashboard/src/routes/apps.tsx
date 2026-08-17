@@ -127,7 +127,7 @@ export function Apps() {
       align: "end",
       cell: (app) => (
         <GuardedAction
-          role="operations"
+          permission="apps:update"
           variant="outline"
           size="sm"
           disabled={changeStatus.isPending}
@@ -145,7 +145,7 @@ export function Apps() {
         <CardTitle>Apps</CardTitle>
         <CardDescription>Systems that create payments through the public API.</CardDescription>
         <div className="ms-auto">
-          <GuardedAction role="operations" size="sm" onClick={() => setCreating(true)}>
+          <GuardedAction permission="apps:create" size="sm" onClick={() => setCreating(true)}>
             New app
           </GuardedAction>
         </div>

@@ -11,6 +11,7 @@ import { Login } from "@/routes/login"
 import { Operations } from "@/routes/operations"
 import { Overview } from "@/routes/overview"
 import { PaymentRoutes } from "@/routes/payment-routes"
+import { Roles } from "@/routes/roles"
 import { Providers } from "@/routes/providers"
 import { Transactions } from "@/routes/transactions"
 import { Users } from "@/routes/users"
@@ -41,6 +42,7 @@ export function App() {
         <Route path="providers" element={<Providers />} />
         <Route path="routes" element={<PaymentRoutes />} />
         <Route path="users" element={<Users />} />
+        <Route path="roles" element={<Roles />} />
         <Route path="operations" element={<Operations />} />
         <Route path="audit" element={<Audit />} />
         <Route path="api-tester" element={<ApiTester />} />

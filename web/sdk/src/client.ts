@@ -4,6 +4,7 @@ import type {
   CreateDisbursementRequest, CreatePaymentResponse, CreatedCredential, ListOptions,
   AvailablePaymentMethods, OAuthTokenResponse, PaginatedData, PaymentRoute, ProviderAccount, ProviderBalance,
   ProviderBalanceResult, ProviderHealthSnapshot, ProviderRegistry, RequestOptions,
+  PermissionAudience, PermissionList, Role, RoleList, RoleRequest,
   RuntimeProvider, ServiceType, SystemHealth, SystemInfo, Transaction, WorkerState
 } from "./types.js"
 
@@ -18,7 +19,7 @@ export interface AdminClientOptions {
 }
 /** The current session tokens and the epoch milliseconds at which they expire. */
 export interface TokenSnapshot { accessToken: string; refreshToken?: string; expiresAt: number }
-type Method = "GET" | "POST" | "PATCH"
+type Method = "GET" | "POST" | "PATCH" | "DELETE"
 type CachedToken = TokenSnapshot
 
 const query = (o?: ListOptions) => {
@@ -74,6 +75,7 @@ abstract class SessionClient {
   protected get<T>(path: string, options?: RequestOptions) { return this.request<T>("GET", path, undefined, options) }
   protected post<T>(path: string, payload?: unknown, options?: RequestOptions) { return this.request<T>("POST", path, payload, options) }
   protected patch<T>(path: string, payload?: unknown, options?: RequestOptions) { return this.request<T>("PATCH", path, payload, options) }
+  protected delete<T>(path: string, options?: RequestOptions) { return this.request<T>("DELETE", path, undefined, options) }
   protected async form(path: string, values: Record<string, string>, signal?: AbortSignal) {
     const r = await fetch(this.baseUrl + path, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(values), signal })
     if (!r.ok) throw await MomobaseAPIError.fromResponse(r)
@@ -138,6 +140,16 @@ export class MomobaseAdminClient extends SessionClient {
     info: () => this.get<SystemInfo>("/api/admin/system/info"), health: () => this.get<SystemHealth>("/api/admin/system/health"),
     workers: (o?: ListOptions) => this.get<PaginatedData<WorkerState>>(`/api/admin/workers${query(o)}`),
     runtimeProviders: (o?: ListOptions) => this.get<PaginatedData<RuntimeProvider>>(`/api/admin/runtime/providers${query(o)}`)
+  }
+  /** The permission catalogue and the roles built from it. Populate role pickers and
+   * scope pickers from these rather than from a hardcoded list. */
+  readonly authz = {
+    permissions: (audience?: PermissionAudience) =>
+      this.get<PermissionList>(`/api/admin/permissions${audience ? `?audience=${audience}` : ""}`),
+    roles: () => this.get<RoleList>("/api/admin/roles"),
+    createRole: (p: RoleRequest & { name: string }) => this.post<Role>("/api/admin/roles", p),
+    updateRole: (name: string, p: RoleRequest) => this.patch<unknown>(endpoint("/api/admin/roles", name), p),
+    deleteRole: (name: string) => this.delete<unknown>(endpoint("/api/admin/roles", name)),
   }
   readonly users = {
     me: () => this.get<AdminUser>("/api/admin/me"), list: (o?: ListOptions) => this.get<PaginatedData<AdminUser>>(`/api/admin/users${query(o)}`),
