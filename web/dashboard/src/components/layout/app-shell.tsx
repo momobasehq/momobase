@@ -5,7 +5,8 @@ import { Logo } from "@/components/logo"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -90,10 +91,15 @@ export function AppShell() {
                   }
                 />
                 <DropdownMenuContent side="top" align="start" className="min-w-56">
-                  <DropdownMenuLabel>
-                    <p className="truncate font-medium">{me?.name}</p>
-                    <p className="text-muted-foreground truncate font-normal">{me?.email}</p>
-                  </DropdownMenuLabel>
+                  {/* DropdownMenuLabel is Base UI's Menu.GroupLabel, which reads a
+                      context only Menu.Group provides. Used bare it throws
+                      "MenuGroupContext is missing" the moment the menu opens. */}
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>
+                      <p className="truncate font-medium">{me?.name}</p>
+                      <p className="text-muted-foreground truncate font-normal">{me?.email}</p>
+                    </DropdownMenuLabel>
+                  </DropdownMenuGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => void signOut()}>
                     <LogOut />
