@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { ChevronRight } from "lucide-react"
 import { Link } from "react-router"
 import { toast } from "sonner"
 import { AdminPermissions, type App } from "@momobase/sdk"
@@ -94,25 +95,18 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
 /** Apps lists integrating applications and links to their credentials. */
 export function Apps() {
   const { client } = useAuth()
-  const queryClient = useQueryClient()
   const paged = usePagedQuery(keys.apps.list, (page) => client.apps.list(page))
   const [creating, setCreating] = useState(false)
 
-  const changeStatus = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: "active" | "disabled" }) => client.apps.changeStatus(id, status),
-    onSuccess: async () => {
-      toast.success("Status updated")
-      await queryClient.invalidateQueries({ queryKey: keys.apps.all })
-    },
-    onError: (error: Error) => toast.error(error.message),
-  })
 
   const columns: Column<App>[] = [
     {
       key: "name",
       header: "Name",
+      // Underlined unconditionally: with hover-only underline this read as plain text,
+      // so the detail page — and every credential on it — looked like it did not exist.
       cell: (app) => (
-        <Link to={`/apps/${app.id}`} className="font-medium underline-offset-4 hover:underline">
+        <Link to={`/apps/${app.id}`} className="font-medium underline underline-offset-4">
           {app.name}
         </Link>
       ),
@@ -125,16 +119,13 @@ export function Apps() {
       key: "actions",
       header: "",
       align: "end",
+      // Status, credentials, and the tester all live on the detail page, so the list
+      // offers one unambiguous way in rather than a partial set of actions.
       cell: (app) => (
-        <GuardedAction
-          permission={AdminPermissions.appsUpdate}
-          variant="outline"
-          size="sm"
-          disabled={changeStatus.isPending}
-          onClick={() => changeStatus.mutate({ id: app.id, status: app.status === "active" ? "disabled" : "active" })}
-        >
-          {app.status === "active" ? "Disable" : "Enable"}
-        </GuardedAction>
+        <Button variant="outline" size="sm" render={<Link to={`/apps/${app.id}`} />}>
+          Manage
+          <ChevronRight />
+        </Button>
       ),
     },
   ]

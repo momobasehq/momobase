@@ -57,6 +57,7 @@ var Permissions = []PermissionDefinition{
 	{"apps:read", "List and inspect applications", AudienceAdmin},
 	{"apps:create", "Register applications", AudienceAdmin},
 	{"apps:update", "Change an application's details or status", AudienceAdmin},
+	{"apps:test", "Run test payments with an application's own credentials", AudienceAdmin},
 	{"credentials:read", "List application credentials", AudienceAdmin},
 	{"credentials:create", "Issue application credentials", AudienceAdmin},
 	{"credentials:update", "Rotate or revoke application credentials", AudienceAdmin},

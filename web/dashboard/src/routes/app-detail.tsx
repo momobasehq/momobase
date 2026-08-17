@@ -5,6 +5,7 @@ import { ArrowLeft, Copy, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 
 import { DataTable, type Column } from "@/components/data-table"
+import { AppTester } from "@/components/app-tester"
 import { GuardedAction } from "@/components/guarded-action"
 import { PaginationControls } from "@/components/pagination-controls"
 import { StatusBadge } from "@/components/status-badge"
@@ -107,6 +108,15 @@ export function AppDetail() {
   async function refreshCredentials() {
     await queryClient.invalidateQueries({ queryKey: keys.apps.all })
   }
+
+  const changeStatus = useMutation({
+    mutationFn: (status: "active" | "disabled" | "suspended") => client.apps.changeStatus(appId, status),
+    onSuccess: async () => {
+      toast.success("Status updated")
+      await queryClient.invalidateQueries({ queryKey: keys.apps.all })
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
 
   const save = useMutation({
     mutationFn: () => client.apps.update(appId, details),
@@ -212,7 +222,7 @@ export function AppDetail() {
             </GuardedAction>
           </div>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-6">
+        <CardContent className="flex flex-wrap items-end gap-6">
           <div>
             <p className="text-muted-foreground">Environment</p>
             <StatusBadge status={app.data?.environment} />
@@ -224,6 +234,41 @@ export function AppDetail() {
           <div>
             <p className="text-muted-foreground">App ID</p>
             <code>{appId}</code>
+          </div>
+          {/* Suspended is distinct from disabled on the API, so both are offered rather
+              than collapsed into one toggle that cannot express the difference. */}
+          <div className="ms-auto flex gap-2">
+            {app.data?.status === "active" ? (
+              <>
+                <GuardedAction
+                  permission={AdminPermissions.appsUpdate}
+                  variant="outline"
+                  size="sm"
+                  disabled={changeStatus.isPending}
+                  onClick={() => changeStatus.mutate("suspended")}
+                >
+                  Suspend
+                </GuardedAction>
+                <GuardedAction
+                  permission={AdminPermissions.appsUpdate}
+                  variant="destructive"
+                  size="sm"
+                  disabled={changeStatus.isPending}
+                  onClick={() => changeStatus.mutate("disabled")}
+                >
+                  Disable
+                </GuardedAction>
+              </>
+            ) : (
+              <GuardedAction
+                permission={AdminPermissions.appsUpdate}
+                size="sm"
+                disabled={changeStatus.isPending || !app.data}
+                onClick={() => changeStatus.mutate("active")}
+              >
+                Activate
+              </GuardedAction>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -334,6 +379,13 @@ export function AppDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Prefilled from a credential issued above: the secret exists in memory only for
+          that moment, so handing it straight to the tester saves the operator copying it
+          out and back in. */}
+      {can(AdminPermissions.appsTest) && (
+        <AppTester clientId={created?.credential.client_id} clientSecret={created?.client_secret} />
+      )}
 
       <SecretDialog created={created} onClose={() => setCreated(undefined)} />
     </div>

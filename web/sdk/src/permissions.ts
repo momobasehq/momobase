@@ -23,6 +23,7 @@ export const AdminPermissions = {
   appsRead: "apps:read",
   appsCreate: "apps:create",
   appsUpdate: "apps:update",
+  appsTest: "apps:test",
   credentialsRead: "credentials:read",
   credentialsCreate: "credentials:create",
   credentialsUpdate: "credentials:update",
