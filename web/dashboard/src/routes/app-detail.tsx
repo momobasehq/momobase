@@ -17,11 +17,12 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
+import { AdminPermissions, type AppCredential, type CreatedCredential } from "@momobase/sdk"
+
 import { useAuth } from "@/hooks/use-auth"
 import { usePagedQuery } from "@/hooks/use-paged-query"
 import { formatDateTime } from "@/lib/format"
 import { keys } from "@/lib/query-keys"
-import type { AppCredential, CreatedCredential } from "@momobase/sdk"
 
 /**
  * SecretDialog shows a client secret exactly once.
@@ -75,7 +76,7 @@ function SecretDialog({ created, onClose }: { created?: CreatedCredential; onClo
 /** AppDetail shows one app and manages its API credentials. */
 export function AppDetail() {
   const { appId = "" } = useParams()
-  const { client } = useAuth()
+  const { client, can } = useAuth()
   const queryClient = useQueryClient()
   const [created, setCreated] = useState<CreatedCredential>()
   const [naming, setNaming] = useState(false)
@@ -92,10 +93,15 @@ export function AppDetail() {
     enabled: naming,
   })
 
+  // Credentials are their own permission, so the card is hidden for a role that may
+  // read apps but not their credentials.
+  const showCredentials = can(AdminPermissions.credentialsRead)
   const app = useQuery({ queryKey: keys.apps.detail(appId), queryFn: () => client.apps.get(appId), enabled: Boolean(appId) })
   const paged = usePagedQuery(
     (page) => keys.apps.credentials(appId, page),
     (page) => client.apps.credentials(appId, page),
+    20,
+    showCredentials && Boolean(appId),
   )
 
   async function refreshCredentials() {
@@ -159,7 +165,7 @@ export function AppDetail() {
       cell: (credential) => (
         <div className="flex justify-end gap-2">
           <GuardedAction
-            permission="credentials:update"
+            permission={AdminPermissions.credentialsUpdate}
             variant="outline"
             size="sm"
             disabled={rotate.isPending || credential.status !== "active"}
@@ -168,7 +174,7 @@ export function AppDetail() {
             Rotate
           </GuardedAction>
           <GuardedAction
-            permission="credentials:update"
+            permission={AdminPermissions.credentialsUpdate}
             variant="destructive"
             size="sm"
             disabled={revoke.isPending || credential.status !== "active"}
@@ -194,7 +200,7 @@ export function AppDetail() {
           <CardDescription>{app.data?.description || "No description."}</CardDescription>
           <div className="ms-auto">
             <GuardedAction
-              permission="apps:update"
+              permission={AdminPermissions.appsUpdate}
               variant="outline"
               size="sm"
               onClick={() => {
@@ -222,12 +228,13 @@ export function AppDetail() {
         </CardContent>
       </Card>
 
+      {showCredentials && (
       <Card>
         <CardHeader>
           <CardTitle>Credentials</CardTitle>
           <CardDescription>Client credentials this app uses to obtain access tokens.</CardDescription>
           <div className="ms-auto">
-            <GuardedAction permission="credentials:create" size="sm" onClick={() => setNaming(true)}>
+            <GuardedAction permission={AdminPermissions.credentialsCreate} size="sm" onClick={() => setNaming(true)}>
               New credential
             </GuardedAction>
           </div>
@@ -250,6 +257,7 @@ export function AppDetail() {
           />
         </CardContent>
       </Card>
+      )}
 
       <Dialog open={naming} onOpenChange={setNaming}>
         <DialogContent>

@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Link } from "react-router"
 import { toast } from "sonner"
+import { AdminPermissions, type App } from "@momobase/sdk"
 
 import { DataTable, type Column } from "@/components/data-table"
 import { GuardedAction } from "@/components/guarded-action"
@@ -18,7 +19,6 @@ import { useAuth } from "@/hooks/use-auth"
 import { usePagedQuery } from "@/hooks/use-paged-query"
 import { formatDateTime, titleCase } from "@/lib/format"
 import { keys } from "@/lib/query-keys"
-import type { App } from "@momobase/sdk"
 
 const environments = ["sandbox", "production"] as const
 
@@ -127,7 +127,7 @@ export function Apps() {
       align: "end",
       cell: (app) => (
         <GuardedAction
-          permission="apps:update"
+          permission={AdminPermissions.appsUpdate}
           variant="outline"
           size="sm"
           disabled={changeStatus.isPending}
@@ -145,7 +145,7 @@ export function Apps() {
         <CardTitle>Apps</CardTitle>
         <CardDescription>Systems that create payments through the public API.</CardDescription>
         <div className="ms-auto">
-          <GuardedAction permission="apps:create" size="sm" onClick={() => setCreating(true)}>
+          <GuardedAction permission={AdminPermissions.appsCreate} size="sm" onClick={() => setCreating(true)}>
             New app
           </GuardedAction>
         </div>

@@ -1,12 +1,8 @@
 import { createContext, use, useCallback, useMemo, useRef, useState, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { MomobaseAdminClient, type AdminUser } from "@momobase/sdk"
+import { MomobaseAdminClient, permitted, type AdminUser, type PermissionCode } from "@momobase/sdk"
 
 import { clearSession, loadRefreshToken, persistToken } from "@/lib/session"
-
-/** The wildcard the super_admin role holds. It grants every permission, including
- * ones a later release adds, so the client must honour it rather than enumerate. */
-const wildcard = "*"
 
 interface AuthValue {
   client: MomobaseAdminClient
@@ -17,7 +13,7 @@ interface AuthValue {
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   /** Reports whether the signed-in admin holds a permission, by its code. */
-  can: (permission: string) => boolean
+  can: (permission: PermissionCode) => boolean
 }
 
 const AuthContext = createContext<AuthValue | undefined>(undefined)
@@ -77,14 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [client, queryClient])
 
   // Gating on permissions rather than on a role name is what lets an operator create
-  // a role the client has never heard of and have the UI reflect it correctly.
-  const can = useCallback(
-    (permission: string) => {
-      const held = me?.permissions ?? []
-      return held.includes(permission) || held.includes(wildcard)
-    },
-    [me],
-  )
+  // a role the client has never heard of and have the UI reflect it correctly. The
+  // wildcard check lives in the SDK so client gating and server enforcement agree.
+  const can = useCallback((permission: PermissionCode) => permitted(me?.permissions, permission), [me])
 
   const value = useMemo<AuthValue>(
     () => ({ client, me, restoring, signedIn: Boolean(me), signIn, signOut, can }),

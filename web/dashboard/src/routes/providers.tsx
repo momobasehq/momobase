@@ -13,11 +13,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { AdminPermissions, type ProviderAccount } from "@momobase/sdk"
+
 import { useAuth } from "@/hooks/use-auth"
 import { usePagedQuery } from "@/hooks/use-paged-query"
 import { formatAmount, formatDateTime } from "@/lib/format"
 import { keys } from "@/lib/query-keys"
-import type { ProviderAccount } from "@momobase/sdk"
 
 /** Splits a comma-separated country list into the array the API expects. */
 function parseCountries(value: string) {
@@ -218,7 +219,7 @@ function ConfigureDialog({ account, onClose }: { account?: ProviderAccount; onCl
               onChange={(event) => setCountries(event.target.value)}
               placeholder="Leave empty for unrestricted"
             />
-            <GuardedAction permission="providers:update" variant="outline" disabled={saveCountries.isPending} onClick={() => saveCountries.mutate()}>
+            <GuardedAction permission={AdminPermissions.providersUpdate} variant="outline" disabled={saveCountries.isPending} onClick={() => saveCountries.mutate()}>
               Save
             </GuardedAction>
           </div>
@@ -238,7 +239,7 @@ function ConfigureDialog({ account, onClose }: { account?: ProviderAccount; onCl
             The stored configuration is encrypted and never returned. Saving replaces it outright and reloads the adapter.
           </p>
           <GuardedAction
-            permission="providers:update"
+            permission={AdminPermissions.providersUpdate}
             className="self-start"
             disabled={saveConfig.isPending || !config.trim()}
             onClick={() => saveConfig.mutate()}
@@ -264,10 +265,13 @@ function ConfigureDialog({ account, onClose }: { account?: ProviderAccount; onCl
 
 /** Providers manages provider accounts, their activation, and their balances. */
 export function Providers() {
-  const { client } = useAuth()
+  const { client, can } = useAuth()
   const queryClient = useQueryClient()
   const paged = usePagedQuery(keys.providers.list, (page) => client.providers.list(page))
-  const balances = usePagedQuery(keys.providers.balances, (page) => client.providers.activeBalances(page))
+  // Balances are their own permission, which read_only does not hold, so the card is
+  // hidden rather than left to fail — and its query never fires.
+  const showBalances = can(AdminPermissions.balancesRead)
+  const balances = usePagedQuery(keys.providers.balances, (page) => client.providers.activeBalances(page), 20, showBalances)
   const [creating, setCreating] = useState(false)
   const [configuring, setConfiguring] = useState<ProviderAccount>()
 
@@ -310,14 +314,14 @@ export function Providers() {
       align: "end",
       cell: (account) => (
         <div className="flex justify-end gap-2">
-          <GuardedAction permission="providers:test" variant="outline" size="sm" disabled={test.isPending} onClick={() => test.mutate(account.id)}>
+          <GuardedAction permission={AdminPermissions.providersTest} variant="outline" size="sm" disabled={test.isPending} onClick={() => test.mutate(account.id)}>
             Test
           </GuardedAction>
-          <GuardedAction permission="providers:update" variant="outline" size="sm" onClick={() => setConfiguring(account)}>
+          <GuardedAction permission={AdminPermissions.providersUpdate} variant="outline" size="sm" onClick={() => setConfiguring(account)}>
             Configure
           </GuardedAction>
           <GuardedAction
-            permission="providers:update"
+            permission={AdminPermissions.providersUpdate}
             variant={account.active ? "destructive" : "default"}
             size="sm"
             disabled={toggle.isPending}
@@ -337,7 +341,7 @@ export function Providers() {
           <CardTitle>Provider accounts</CardTitle>
           <CardDescription>Configured adapters and the countries each one serves.</CardDescription>
           <div className="ms-auto">
-            <GuardedAction permission="providers:create" size="sm" onClick={() => setCreating(true)}>
+            <GuardedAction permission={AdminPermissions.providersCreate} size="sm" onClick={() => setCreating(true)}>
               New account
             </GuardedAction>
           </div>
@@ -361,6 +365,7 @@ export function Providers() {
         </CardContent>
       </Card>
 
+      {showBalances && (
       <Card>
         <CardHeader>
           <CardTitle>Balances</CardTitle>
@@ -405,6 +410,7 @@ export function Providers() {
           />
         </CardContent>
       </Card>
+      )}
 
       <CreateAccountDialog open={creating} onOpenChange={setCreating} />
       <ConfigureDialog account={configuring} onClose={() => setConfiguring(undefined)} />

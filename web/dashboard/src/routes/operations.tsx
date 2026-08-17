@@ -2,11 +2,12 @@ import { DataTable, type Column } from "@/components/data-table"
 import { PaginationControls } from "@/components/pagination-controls"
 import { StatusBadge } from "@/components/status-badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { AdminPermissions, type ProviderHealthSnapshot, type RuntimeProvider, type WorkerState } from "@momobase/sdk"
+
 import { useAuth } from "@/hooks/use-auth"
 import { usePagedQuery } from "@/hooks/use-paged-query"
 import { formatDateTime, titleCase } from "@/lib/format"
 import { keys } from "@/lib/query-keys"
-import type { ProviderHealthSnapshot, RuntimeProvider, WorkerState } from "@momobase/sdk"
 
 const workerColumns: Column<WorkerState>[] = [
   { key: "name", header: "Worker", cell: (worker) => <span className="font-medium">{titleCase(worker.name)}</span> },
@@ -39,10 +40,13 @@ const runtimeColumns: Column<RuntimeProvider>[] = [
 
 /** Operations shows worker state, provider health, and the loaded runtimes. */
 export function Operations() {
-  const { client } = useAuth()
+  const { client, can } = useAuth()
+  // Reaching this screen needs system:read; the provider sections need their own
+  // permission, so a role with one and not the other sees only what it may.
+  const showProviders = can(AdminPermissions.providersRead)
   const workers = usePagedQuery(keys.system.workers, (page) => client.system.workers(page))
-  const health = usePagedQuery(keys.providers.health, (page) => client.providers.health(page))
-  const runtime = usePagedQuery(keys.system.runtime, (page) => client.system.runtimeProviders(page))
+  const health = usePagedQuery(keys.providers.health, (page) => client.providers.health(page), 20, showProviders)
+  const runtime = usePagedQuery(keys.system.runtime, (page) => client.system.runtimeProviders(page), 20, showProviders)
 
   return (
     <div className="flex flex-col gap-4">
@@ -64,6 +68,7 @@ export function Operations() {
         </CardContent>
       </Card>
 
+      {showProviders && (
       <Card>
         <CardHeader>
           <CardTitle>Provider health</CardTitle>
@@ -87,7 +92,9 @@ export function Operations() {
           />
         </CardContent>
       </Card>
+      )}
 
+      {showProviders && (
       <Card>
         <CardHeader>
           <CardTitle>Runtime providers</CardTitle>
@@ -111,6 +118,7 @@ export function Operations() {
           />
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }

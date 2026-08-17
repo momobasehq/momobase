@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Lock } from "lucide-react"
 import { toast } from "sonner"
+import { AdminPermissions, PermissionWildcard, type Permission, type Role } from "@momobase/sdk"
 
 import { DataTable, type Column } from "@/components/data-table"
 import { GuardedAction } from "@/components/guarded-action"
@@ -16,7 +17,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/hooks/use-auth"
 import { titleCase } from "@/lib/format"
 import { keys } from "@/lib/query-keys"
-import type { Permission, Role } from "@momobase/sdk"
 
 /** Groups permissions by the resource before the colon, which is how operators read them. */
 function byResource(permissions: Permission[]) {
@@ -194,7 +194,7 @@ export function Roles() {
       key: "permissions",
       header: "Permissions",
       cell: (role) =>
-        role.permissions.some((permission) => permission.code === "*") ? (
+        role.permissions.some((permission) => permission.code === PermissionWildcard) ? (
           <span>Everything, including future permissions</span>
         ) : (
           <span>{role.permissions.length}</span>
@@ -207,7 +207,7 @@ export function Roles() {
       cell: (role) => (
         <div className="flex justify-end gap-2">
           <GuardedAction
-            permission="roles:update"
+            permission={AdminPermissions.rolesUpdate}
             variant="outline"
             size="sm"
             disabled={role.system}
@@ -216,7 +216,7 @@ export function Roles() {
             Edit
           </GuardedAction>
           <GuardedAction
-            permission="roles:delete"
+            permission={AdminPermissions.rolesDelete}
             variant="destructive"
             size="sm"
             disabled={role.system || remove.isPending}
@@ -237,7 +237,7 @@ export function Roles() {
           What each role of administrator may do. Seeded roles are read-only; create one to grant a different set.
         </CardDescription>
         <div className="ms-auto">
-          <GuardedAction permission="roles:create" size="sm" onClick={() => setCreating(true)}>
+          <GuardedAction permission={AdminPermissions.rolesCreate} size="sm" onClick={() => setCreating(true)}>
             New role
           </GuardedAction>
         </div>

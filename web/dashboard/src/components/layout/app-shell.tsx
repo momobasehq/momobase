@@ -1,4 +1,4 @@
-import { Activity, AppWindow, ChevronsUpDown, FileClock, LayoutDashboard, LogOut, Plug, Receipt, Route as RouteIcon, ShieldCheck, TerminalSquare, Users } from "lucide-react"
+import { ChevronsUpDown, LogOut } from "lucide-react"
 import { NavLink, Outlet, useLocation } from "react-router"
 
 import { Logo } from "@/components/logo"
@@ -14,55 +14,22 @@ import {
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/hooks/use-auth"
 import { titleCase } from "@/lib/format"
-
-const navigation = [
-  {
-    label: "Overview",
-    items: [
-      { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-      { to: "/transactions", label: "Transactions", icon: Receipt },
-    ],
-  },
-  {
-    label: "Configuration",
-    items: [
-      { to: "/apps", label: "Apps", icon: AppWindow },
-      { to: "/providers", label: "Providers", icon: Plug },
-      { to: "/routes", label: "Routes", icon: RouteIcon },
-    ],
-  },
-  {
-    label: "Administration",
-    items: [
-      { to: "/users", label: "Users", icon: Users },
-      { to: "/roles", label: "Roles", icon: ShieldCheck },
-      { to: "/operations", label: "Operations", icon: Activity },
-      { to: "/audit", label: "Audit log", icon: FileClock },
-      { to: "/api-tester", label: "API tester", icon: TerminalSquare },
-    ],
-  },
-]
-
-/** Titles keyed by the first path segment, for the header. */
-const titles: Record<string, string> = {
-  "": "Dashboard",
-  transactions: "Transactions",
-  apps: "Apps",
-  providers: "Providers",
-  routes: "Routes",
-  users: "Users",
-  roles: "Roles",
-  operations: "Operations",
-  audit: "Audit log",
-  "api-tester": "API tester",
-}
+import { navigation, titles } from "@/lib/navigation"
 
 /** AppShell is the signed-in chrome: sidebar navigation plus a page header. */
 export function AppShell() {
-  const { me, signOut } = useAuth()
+  const { me, signOut, can } = useAuth()
   const location = useLocation()
   const segment = location.pathname.split("/")[1] ?? ""
   const initials = (me?.name ?? me?.email ?? "?").slice(0, 2).toUpperCase()
+
+  // A link to a screen that can only 403 has nothing to offer and no affordance for
+  // asking, so navigation hides rather than disables — unlike an action, which stays
+  // visible with a tooltip naming what it needs. A group whose items all vanish drops
+  // its label too, or the sidebar shows a heading over nothing.
+  const permittedGroups = navigation
+    .map((group) => ({ ...group, items: group.items.filter((item) => can(item.permission)) }))
+    .filter((group) => group.items.length > 0)
 
   return (
     <SidebarProvider style={
@@ -80,7 +47,7 @@ export function AppShell() {
           </div>
         </SidebarHeader>
         <SidebarContent>
-          {navigation.map((group) => (
+          {permittedGroups.map((group) => (
             <SidebarGroup key={group.label}>
               <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
               <SidebarGroupContent>

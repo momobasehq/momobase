@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { AdminPermissions, type PaymentRoute, type ServiceType } from "@momobase/sdk"
 
 import { DataTable, type Column } from "@/components/data-table"
 import { GuardedAction } from "@/components/guarded-action"
@@ -16,7 +17,6 @@ import { useAuth } from "@/hooks/use-auth"
 import { usePagedQuery } from "@/hooks/use-paged-query"
 import { keys } from "@/lib/query-keys"
 import { titleCase } from "@/lib/format"
-import type { PaymentRoute, ServiceType } from "@momobase/sdk"
 
 /** CreateRouteDialog connects a provider account to a service and payment method. */
 function CreateRouteDialog({ open, onOpenChange, methods }: { open: boolean; onOpenChange: (open: boolean) => void; methods: string[] }) {
@@ -156,7 +156,7 @@ export function PaymentRoutes() {
       align: "end",
       cell: (route) => (
         <GuardedAction
-          permission="routes:update"
+          permission={AdminPermissions.routesUpdate}
           variant="outline"
           size="sm"
           disabled={update.isPending}
@@ -174,7 +174,7 @@ export function PaymentRoutes() {
         <CardTitle>Routes</CardTitle>
         <CardDescription>Which provider account serves each service and payment method.</CardDescription>
         <div className="ms-auto">
-          <GuardedAction permission="routes:create" size="sm" onClick={() => setCreating(true)}>
+          <GuardedAction permission={AdminPermissions.routesCreate} size="sm" onClick={() => setCreating(true)}>
             New route
           </GuardedAction>
         </div>

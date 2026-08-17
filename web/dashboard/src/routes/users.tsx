@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { AdminPermissions, type AdminUser } from "@momobase/sdk"
 
 import { DataTable, type Column } from "@/components/data-table"
 import { GuardedAction } from "@/components/guarded-action"
@@ -16,7 +17,6 @@ import { useAuth } from "@/hooks/use-auth"
 import { usePagedQuery } from "@/hooks/use-paged-query"
 import { formatDateTime, titleCase } from "@/lib/format"
 import { keys } from "@/lib/query-keys"
-import type { AdminUser } from "@momobase/sdk"
 
 /** CreateUserDialog collects a new administrator. */
 function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -128,11 +128,11 @@ export function Users() {
       align: "end",
       cell: (user) => (
         <div className="flex justify-end gap-2">
-          <GuardedAction permission="users:update" variant="outline" size="sm" onClick={() => setResetting(user)}>
+          <GuardedAction permission={AdminPermissions.usersUpdate} variant="outline" size="sm" onClick={() => setResetting(user)}>
             Set password
           </GuardedAction>
           <GuardedAction
-            permission="users:update"
+            permission={AdminPermissions.usersUpdate}
             variant="outline"
             size="sm"
             disabled={changeStatus.isPending}
@@ -151,7 +151,7 @@ export function Users() {
         <CardTitle>Administrators</CardTitle>
         <CardDescription>Console accounts and the roles that gate what they may change.</CardDescription>
         <div className="ms-auto">
-          <GuardedAction permission="users:create" size="sm" onClick={() => setCreating(true)}>
+          <GuardedAction permission={AdminPermissions.usersCreate} size="sm" onClick={() => setCreating(true)}>
             New administrator
           </GuardedAction>
         </div>

@@ -2,11 +2,13 @@ import type { ComponentProps, ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import type { PermissionCode } from "@momobase/sdk"
+
 import { useAuth } from "@/hooks/use-auth"
 
 interface GuardedActionProps extends ComponentProps<typeof Button> {
   /** The permission code this action requires; the wildcard always satisfies it. */
-  permission: string
+  permission: PermissionCode
   children: ReactNode
 }
 
