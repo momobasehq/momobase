@@ -44,3 +44,5 @@ data/momobase*
 .agents
 skills-lock*
 .claude
+
+.vite

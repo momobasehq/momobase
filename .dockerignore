@@ -7,3 +7,4 @@ data
 web/dashboard/dist
 coverage
 .env
+.vite
