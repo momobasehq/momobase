@@ -2,9 +2,9 @@ import { MomobaseAPIError } from "./errors.js"
 import type {
   AdminUser, APIEnvelope, App, AppCredential, AuditLog, CreateCollectionRequest,
   CreateDisbursementRequest, CreatePaymentResponse, CreatedCredential, ListOptions,
-  OAuthTokenResponse, PaginatedData, PaymentRoute, ProviderAccount, ProviderBalance,
+  AvailablePaymentMethods, OAuthTokenResponse, PaginatedData, PaymentRoute, ProviderAccount, ProviderBalance,
   ProviderBalanceResult, ProviderHealthSnapshot, ProviderRegistry, RequestOptions,
-  RuntimeProvider, SystemHealth, SystemInfo, Transaction, WorkerState
+  RuntimeProvider, ServiceType, SystemHealth, SystemInfo, Transaction, WorkerState
 } from "./types.js"
 
 export interface MomobaseClientOptions { baseUrl: string; clientId: string; clientSecret: string; tokenSkewSeconds?: number }
@@ -44,7 +44,7 @@ function validatePayment(_kind: "collection" | "disbursement", p: CreateCollecti
   // The account stays opaque here: what a valid one looks like is the provider's to
   // decide, so the client only checks what the API requires of every payment.
   if (!p.payment_method) throw new Error("payment_method is required")
-  if (!p.account?.account) throw new Error("account.account is required")
+  if (!p.account) throw new Error("account is required")
   if (p.country !== undefined && p.country.length !== 2) throw new Error("country must be a 2-letter ISO code")
 }
 
@@ -88,6 +88,16 @@ export class MomobaseClient extends SessionClient {
     if (!this.token?.refreshToken) return this.authenticate(signal)
     try { return await this.form("/api/v1/token/refresh", { grant_type: "refresh_token", refresh_token: this.token.refreshToken }, signal) }
     catch { this.clearToken(); return this.authenticate(signal) }
+  }
+  /** Lists the payment methods this deployment can currently serve. A checkout
+   * screen calls this first, then sends the chosen method back as payment_method. */
+  readonly paymentMethods = {
+    list: (q: { serviceType?: ServiceType; country?: string } = {}, o: RequestOptions = {}) => {
+      const search = new URLSearchParams()
+      if (q.serviceType) search.set("service_type", q.serviceType)
+      if (q.country) search.set("country", q.country)
+      return this.get<AvailablePaymentMethods>(`/api/v1/payment-methods${search.size ? `?${search}` : ""}`, o)
+    },
   }
   readonly collections = { create: (p: CreateCollectionRequest, o: RequestOptions = {}) => { validatePayment("collection", p); return this.post<CreatePaymentResponse>("/api/v1/collections", p, o) } }
   readonly disbursements = { create: (p: CreateDisbursementRequest, o: RequestOptions = {}) => { validatePayment("disbursement", p); return this.post<CreatePaymentResponse>("/api/v1/disbursements", p, o) } }

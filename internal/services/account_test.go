@@ -40,7 +40,7 @@ func accountRequest(reference, country, account string) *CreatePaymentRequest {
 		Currency:      "UGX",
 		Country:       country,
 		Reference:     reference,
-		Account:       &AccountPayload{Account: account},
+		Account:       account,
 	}
 }
 
@@ -52,8 +52,8 @@ func TestValidatePaymentPayload(t *testing.T) {
 			Currency:      " ugx ",
 			Country:       " ug ",
 			Reference:     "ORDER-1",
-			Account:       &AccountPayload{Account: "  256770000000 ", Scheme: " MTN "},
-			Customer:      &PartyPayload{Name: "  Ada  "},
+			Account:       "  256770000000 ", Scheme: " MTN ",
+			Customer: &PartyPayload{Name: "  Ada  "},
 		}
 		if err := ValidatePaymentPayload(domain.ServiceCollection, req); err != nil {
 			t.Fatalf("ValidatePaymentPayload() error = %v", err)
@@ -61,7 +61,7 @@ func TestValidatePaymentPayload(t *testing.T) {
 		if req.PaymentMethod != "momo" || req.Currency != "UGX" || req.Country != "UG" {
 			t.Errorf("normalized request = %+v, want a lowercase method and uppercase currency and country", req)
 		}
-		if req.Account.Account != "256770000000" || req.Account.Scheme != "mtn" {
+		if req.Account != "256770000000" || req.Scheme != "mtn" {
 			t.Errorf("normalized account = %+v, want a trimmed account and a lowercase scheme", req.Account)
 		}
 		if req.Customer.Name != "Ada" {
@@ -86,22 +86,22 @@ func TestValidatePaymentPayload(t *testing.T) {
 			"control account":  accountRequest("R", "", "2567700\x0000"),
 			"oversize account": accountRequest("R", "", strings.Repeat("9", 256)),
 			"unknown country":  accountRequest("R", "XX", "256770000000"),
-			"missing method":   {Amount: 1, Currency: "UGX", Reference: "R", Account: &AccountPayload{Account: "1"}},
+			"missing method":   {Amount: 1, Currency: "UGX", Reference: "R", Account: "1"},
 			"bad method": {
 				PaymentMethod: "bank transfer",
 				Amount:        1,
 				Currency:      "UGX",
 				Reference:     "R",
-				Account:       &AccountPayload{Account: "1"},
+				Account:       "1",
 			},
 			"bad scheme": {
 				PaymentMethod: testMethod,
 				Amount:        1,
 				Currency:      "UGX",
 				Reference:     "R",
-				Account:       &AccountPayload{Account: "1", Scheme: "mtn/ug"},
+				Account:       "1", Scheme: "mtn/ug",
 			},
-			"zero amount": {PaymentMethod: testMethod, Currency: "UGX", Reference: "R", Account: &AccountPayload{Account: "1"}},
+			"zero amount": {PaymentMethod: testMethod, Currency: "UGX", Reference: "R", Account: "1"},
 		}
 		for name, req := range tests {
 			if err := ValidatePaymentPayload(domain.ServiceCollection, req); err == nil {
@@ -271,4 +271,72 @@ func TestWebhookAccountMatching(t *testing.T) {
 	if err := validateWebhook(other, tx); err == nil {
 		t.Fatal("validateWebhook() = nil, want a mismatched account rejected")
 	}
+}
+
+func TestAvailablePaymentMethods(t *testing.T) {
+	t.Run("lists only what would actually route", func(t *testing.T) {
+		s := stack(t)
+		account := s.provider(t, dummyConfig(nil))
+		s.route(t, account.ID, 1)
+
+		methods := must(s.routing.AvailablePaymentMethods(context.Background(), "", ""))
+		if len(methods) != 1 ||
+			methods[0].PaymentMethod != testMethod ||
+			methods[0].ServiceType != domain.ServiceCollection {
+			t.Fatalf("AvailablePaymentMethods() = %+v, want the one routable collection method", methods)
+		}
+	})
+
+	t.Run("a country-scoped provider is not offered to a countryless client", func(t *testing.T) {
+		s := stack(t)
+		account := s.provider(t, dummyConfig(nil), "UG")
+		s.route(t, account.ID, 1)
+
+		if methods := must(s.routing.AvailablePaymentMethods(context.Background(), "", "")); len(methods) != 0 {
+			t.Errorf("AvailablePaymentMethods(no country) = %+v, want none", methods)
+		}
+		if methods := must(s.routing.AvailablePaymentMethods(context.Background(), "", "UG")); len(methods) != 1 {
+			t.Errorf("AvailablePaymentMethods(UG) = %+v, want the scoped method", methods)
+		}
+	})
+
+	// The listing and SelectProvider must agree: anything offered has to be payable,
+	// or a checkout screen shows a method that 503s the moment it is used.
+	t.Run("agrees with SelectProvider", func(t *testing.T) {
+		s := stack(t)
+		account := s.provider(t, dummyConfig(nil))
+		s.route(t, account.ID, 1)
+
+		for _, method := range must(s.routing.AvailablePaymentMethods(context.Background(), "", "")) {
+			if _, err := s.routing.SelectProvider(
+				context.Background(),
+				method.ServiceType,
+				method.PaymentMethod,
+				"",
+			); err != nil {
+				t.Errorf("SelectProvider(%+v) error = %v, want a listed method to be routable", method, err)
+			}
+		}
+	})
+
+	t.Run("rejects an unknown service and an invalid country", func(t *testing.T) {
+		s := stack(t)
+		if _, err := s.routing.AvailablePaymentMethods(context.Background(), "refund", ""); err == nil {
+			t.Error("AvailablePaymentMethods(refund) = nil, want an error")
+		}
+		if _, err := s.routing.AvailablePaymentMethods(context.Background(), "", "ZZ"); err == nil {
+			t.Error("AvailablePaymentMethods(ZZ) = nil, want an error")
+		}
+	})
+
+	t.Run("an inactive provider account removes its method", func(t *testing.T) {
+		s := stack(t)
+		account := s.provider(t, dummyConfig(nil))
+		s.route(t, account.ID, 1)
+		noError(s.providerAdmin.Deactivate(context.Background(), s.actor, account.ID))
+
+		if methods := must(s.routing.AvailablePaymentMethods(context.Background(), "", "")); len(methods) != 0 {
+			t.Errorf("AvailablePaymentMethods() = %+v, want none once the account is inactive", methods)
+		}
+	})
 }

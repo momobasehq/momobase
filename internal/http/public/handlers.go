@@ -3,6 +3,7 @@ package public
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -75,13 +76,43 @@ func AppRefreshToken(auth *services.AppAuthService) http.HandlerFunc {
 // Handler serves authenticated client-facing payment endpoints.
 type Handler struct {
 	payments *services.PaymentOrchestrator
+	routes   *services.RouteEngine
 	db       *gorm.DB
 }
 
-// NewHandler constructs a public API handler from a payment orchestrator and
-// database connection.
-func NewHandler(p *services.PaymentOrchestrator, db *gorm.DB) *Handler {
-	return &Handler{payments: p, db: db}
+// NewHandler constructs a public API handler from a payment orchestrator, the
+// route engine backing method discovery, and a database connection.
+func NewHandler(p *services.PaymentOrchestrator, routes *services.RouteEngine, db *gorm.DB) *Handler {
+	return &Handler{payments: p, routes: routes, db: db}
+}
+
+// ListPaymentMethods writes the payment methods this deployment can currently
+// serve, which is what a checkout screen offers before collecting any details.
+//
+// @Summary List available payment methods
+// @Tags Payments
+// @Produce json
+// @Security BearerAuth
+// @Param service_type query string false "Filter by collection or disbursement"
+// @Param country query string false "ISO 3166-1 alpha-2 transaction country"
+// @Success 200 {object} apidoc.DocResponse
+// @Failure 400 {object} apidoc.ErrorResponse
+// @Failure 401 {object} apidoc.ErrorResponse
+// @Failure 429 {object} apidoc.ErrorResponse
+// @Router /api/v1/payment-methods [get]
+func (h *Handler) ListPaymentMethods(w http.ResponseWriter, r *http.Request) {
+	methods, err := h.routes.AvailablePaymentMethods(
+		r.Context(),
+		strings.ToLower(strings.TrimSpace(r.URL.Query().Get("service_type"))),
+		r.URL.Query().Get("country"),
+	)
+	if err != nil {
+		platform.Error(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	// Always an array, never null: a checkout screen iterating the response should
+	// render "no methods available" rather than crash on a nil.
+	platform.JSON(w, http.StatusOK, map[string]any{"items": methods, "count": len(methods)})
 }
 
 // CreateCollection validates and creates a collection transaction for the

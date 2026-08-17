@@ -17,20 +17,6 @@ import (
 	"github.com/momobasehq/momobase/providers"
 )
 
-// AccountPayload identifies the account a payment moves funds from or to.
-type AccountPayload struct {
-	// Account is the provider-specific account identifier, such as a mobile number,
-	// bank account, card token, or wallet address. Momobase treats it as opaque and
-	// leaves its validation to the selected provider.
-	Account string `json:"account"`
-	// Scheme optionally names the account's provider-specific scheme, such as a
-	// mobile network, bank, or card brand.
-	Scheme string `json:"scheme,omitempty"`
-	// Metadata optionally carries provider-specific account details, such as a bank
-	// branch code. It is passed to the selected provider and is never persisted.
-	Metadata map[string]any `json:"metadata,omitempty"`
-}
-
 // PartyPayload contains the identifying details of a payment party.
 type PartyPayload struct {
 	// Name is the party's display name.
@@ -55,8 +41,20 @@ type CreatePaymentRequest struct {
 	Reference string `json:"reference"`
 	// Description is optional payment context shown to downstream systems.
 	Description string `json:"description"`
-	// Account identifies the account the payment is collected from or disbursed to.
-	Account *AccountPayload `json:"account"`
+	// Account is the provider-specific account the payment is collected from or
+	// disbursed to: a mobile number, bank account, card token, or wallet address.
+	// Momobase treats it as opaque and leaves its validation to the selected
+	// provider, through providers.RequestValidator.
+	Account string `json:"account"`
+	// Scheme optionally names the account's provider-specific scheme, such as a
+	// mobile network, bank, or card brand. Like PaymentMethod it is free-form; the
+	// selected provider interprets it and Momobase never matches on it.
+	Scheme string `json:"scheme,omitempty"`
+	// Metadata optionally carries provider-specific payment details, such as a bank
+	// branch code. It reaches the selected provider and is never persisted, so it
+	// cannot become a free-form store of identifiers Momobase would then have to
+	// protect. It is part of the idempotency hash.
+	Metadata map[string]any `json:"metadata,omitempty"`
 	// Customer optionally identifies the collection customer.
 	Customer *PartyPayload `json:"customer,omitempty"`
 	// Recipient optionally identifies the disbursement recipient.
@@ -119,11 +117,9 @@ func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 		country,
 		strings.ToUpper(strings.TrimSpace(req.Currency)),
 		strings.ToLower(strings.TrimSpace(req.PaymentMethod))
-	if req.Account != nil {
-		req.Account.Account, req.Account.Scheme =
-			strings.TrimSpace(req.Account.Account),
-			strings.ToLower(strings.TrimSpace(req.Account.Scheme))
-	}
+	req.Account, req.Scheme =
+		strings.TrimSpace(req.Account),
+		strings.ToLower(strings.TrimSpace(req.Scheme))
 	switch {
 	case req.PaymentMethod == "" || !validIdentifier(req.PaymentMethod):
 		return errors.New("payment_method is required and may contain only letters, digits, and _-. and must not exceed 64 characters")
@@ -135,12 +131,12 @@ func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 		return errors.New("reference is required and must not exceed 128 characters")
 	case len(req.Description) > 255:
 		return errors.New("description must not exceed 255 characters")
-	case req.Account == nil || req.Account.Account == "":
-		return errors.New("account.account is required")
-	case !validAccount(req.Account.Account):
-		return errors.New("account.account must not exceed 255 characters or contain control characters")
-	case !validIdentifier(req.Account.Scheme):
-		return errors.New("account.scheme may contain only letters, digits, and _-. and must not exceed 64 characters")
+	case req.Account == "":
+		return errors.New("account is required")
+	case !validAccount(req.Account):
+		return errors.New("account must not exceed 255 characters or contain control characters")
+	case !validIdentifier(req.Scheme):
+		return errors.New("scheme may contain only letters, digits, and _-. and must not exceed 64 characters")
 	}
 	return validateParty(paymentParty(service, req))
 }
@@ -196,9 +192,9 @@ func (o *PaymentOrchestrator) Create(
 		Currency:      req.Currency,
 		Country:       req.Country,
 		Reference:     req.Reference,
-		Account:       req.Account.Account,
-		Scheme:        req.Account.Scheme,
-		Metadata:      req.Account.Metadata,
+		Account:       req.Account,
+		Scheme:        req.Scheme,
+		Metadata:      req.Metadata,
 		Name:          name,
 		Email:         email,
 		Description:   req.Description,

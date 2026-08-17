@@ -125,7 +125,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		WorkerNames:    manager.Names(),
 	}
 
-	publicHandler := publich.NewHandler(payments, db)
+	publicHandler := publich.NewHandler(payments, routeEngine, db)
 	adminHandler := adminh.NewHandler(
 		db,
 		adminAuth,

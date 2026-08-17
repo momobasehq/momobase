@@ -25,7 +25,7 @@ func testRouterWith(dashboard bool) http.Handler {
 		Logger:             slog.New(slog.NewTextHandler(io.Discard, nil)),
 		DashboardEnabled:   dashboard,
 		CORSAllowedOrigins: []string{"https://console.example.com"},
-		Public:             publich.NewHandler(nil, nil),
+		Public:             publich.NewHandler(nil, nil, nil),
 		Admin:              adminh.NewHandler(nil, nil, nil, nil, nil, nil, nil, nil, adminh.SystemInfo{}),
 		Webhooks:           webhookh.NewHandler(nil),
 	})

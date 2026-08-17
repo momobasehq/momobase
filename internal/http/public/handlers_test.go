@@ -59,7 +59,7 @@ func authenticatedHandler(t *testing.T) (*Handler, *services.AppAuthService, str
 	if err != nil {
 		t.Fatalf("IssueClientToken() error = %v", err)
 	}
-	return NewHandler(nil, db), auth, tokens.AccessToken
+	return NewHandler(nil, nil, db), auth, tokens.AccessToken
 }
 
 func serveAuthenticated(auth *services.AppAuthService, token string, handler http.HandlerFunc, recorder *httptest.ResponseRecorder, req *http.Request) {

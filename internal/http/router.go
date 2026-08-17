@@ -68,6 +68,9 @@ func NewRouter(d RouterDeps) http.Handler {
 	webhookLimit := middlewarex.RateLimitByIP(300, time.Minute)
 	route(mux, "POST /api/v1/token", publich.ClientToken(d.AppAuth), tokens)
 	route(mux, "POST /api/v1/token/refresh", publich.AppRefreshToken(d.AppAuth), tokens)
+	// Discovery is what a checkout screen calls before it has any payment details,
+	// so it needs a session but no create scope and no JSON body.
+	route(mux, "GET /api/v1/payment-methods", d.Public.ListPaymentMethods, publicLimit, middlewarex.WithAppBearer(d.AppAuth))
 	app := []middleware{publicLimit, middlewarex.WithAppBearer(d.AppAuth), middlewarex.JSONOnly}
 	route(mux, "POST /api/v1/collections", d.Public.CreateCollection, append(app, middlewarex.RequireAppScope("collections:create"))...)
 	route(mux, "POST /api/v1/disbursements", d.Public.CreateDisbursement, append(app, middlewarex.RequireAppScope("disbursements:create"))...)

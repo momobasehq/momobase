@@ -2493,6 +2493,62 @@
                 }
             }
         },
+        "/api/v1/payment-methods": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "List available payment methods",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by collection or disbursement",
+                        "name": "service_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "ISO 3166-1 alpha-2 transaction country",
+                        "name": "country",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.DocResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/token": {
             "post": {
                 "description": "Validates an active client ID and secret and returns an access/refresh token pair.",
@@ -3205,34 +3261,12 @@
                 }
             }
         },
-        "services.AccountPayload": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "description": "Account is the provider-specific account identifier, such as a mobile number,\nbank account, card token, or wallet address. Momobase treats it as opaque and\nleaves its validation to the selected provider.",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "Metadata optionally carries provider-specific account details, such as a bank\nbranch code. It is passed to the selected provider and is never persisted.",
-                    "type": "object",
-                    "additionalProperties": {}
-                },
-                "scheme": {
-                    "description": "Scheme optionally names the account's provider-specific scheme, such as a\nmobile network, bank, or card brand.",
-                    "type": "string"
-                }
-            }
-        },
         "services.CreatePaymentRequest": {
             "type": "object",
             "properties": {
                 "account": {
-                    "description": "Account identifies the account the payment is collected from or disbursed to.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/services.AccountPayload"
-                        }
-                    ]
+                    "description": "Account is the provider-specific account the payment is collected from or\ndisbursed to: a mobile number, bank account, card token, or wallet address.\nMomobase treats it as opaque and leaves its validation to the selected\nprovider, through providers.RequestValidator.",
+                    "type": "string"
                 },
                 "amount": {
                     "description": "Amount is the payment amount in the currency's minor unit.",
@@ -3258,6 +3292,11 @@
                     "description": "Description is optional payment context shown to downstream systems.",
                     "type": "string"
                 },
+                "metadata": {
+                    "description": "Metadata optionally carries provider-specific payment details, such as a bank\nbranch code. It reaches the selected provider and is never persisted, so it\ncannot become a free-form store of identifiers Momobase would then have to\nprotect. It is part of the idempotency hash.",
+                    "type": "object",
+                    "additionalProperties": {}
+                },
                 "payment_method": {
                     "description": "PaymentMethod identifies the requested payment rail. It is free-form and must\nmatch an active payment route.",
                     "type": "string"
@@ -3272,6 +3311,10 @@
                 },
                 "reference": {
                     "description": "Reference is the application's unique business reference.",
+                    "type": "string"
+                },
+                "scheme": {
+                    "description": "Scheme optionally names the account's provider-specific scheme, such as a\nmobile network, bank, or card brand. Like PaymentMethod it is free-form; the\nselected provider interprets it and Momobase never matches on it.",
                     "type": "string"
                 }
             }

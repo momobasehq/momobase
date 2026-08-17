@@ -46,7 +46,7 @@ Important runtime guarantees:
 ## Payment workflow
 
 1. An application exchanges its client ID and secret for an access token.
-2. The application creates a collection or disbursement with an `Idempotency-Key`.
+2. The application lists the methods it can offer, then creates a collection or disbursement with an `Idempotency-Key`.
 3. Momobase validates the request for shape and claims the idempotency key.
 4. Routing selects the highest-priority active provider account eligible for the request country.
 5. The selected provider validates and normalizes the account, if it implements `providers.RequestValidator`; a rejection ends the request before anything is persisted.
@@ -60,6 +60,7 @@ Public payment routes:
 ```text
 POST /api/v1/token
 POST /api/v1/token/refresh
+GET  /api/v1/payment-methods
 POST /api/v1/collections
 POST /api/v1/disbursements
 GET  /api/v1/transactions/{id}
@@ -245,23 +246,38 @@ curl -X POST http://localhost:9090/api/v1/token/refresh \
   --data-urlencode 'refresh_token=<refresh_token>'
 ```
 
-## Payment accounts
+## Payment methods and accounts
 
-Every payment carries an `account`, and the engine treats it as an opaque identifier:
+A gateway client runs the flow in that order: ask what can be paid with, let the user
+choose, collect that method's details, post the payment.
+
+```text
+GET /api/v1/payment-methods?service_type=collection&country=UG
+```
+
+It answers only with methods that would route right now — the same eligibility check
+routing itself applies — so a method it lists is one a payment can actually use, and a
+method whose only provider is unhealthy or circuit-open is not offered. Schemes are not
+listed: nothing registers them server-side, because a scheme is free-form text the
+provider interprets.
+
+The payment payload is flat, in the order a checkout fills it in:
 
 ```json
 {
   "payment_method": "momo",
+  "scheme": "mtn",
+  "account": "256770000000",
   "amount": 50000,
   "currency": "UGX",
   "country": "UG",
   "reference": "ORDER-1",
-  "account": { "account": "256770000000", "scheme": "mtn" },
   "customer": { "name": "Ada Lovelace", "email": "ada@example.com" }
 }
 ```
 
-`account.account` may be a mobile number, a bank account, a card token, or a wallet address. Momobase validates only its shape: at most 255 characters and no control characters. What counts as a usable account belongs to the provider, which implements the optional `providers.RequestValidator` interface:
+`payment_method` and `scheme` come from the chosen method; `account` and the optional
+`metadata` are what the user entered. `account` may be a mobile number, a bank account, a card token, or a wallet address. Momobase validates only its shape: at most 255 characters and no control characters. What counts as a usable account belongs to the provider, which implements the optional `providers.RequestValidator` interface:
 
 - `ValidateRequest` runs after a route is chosen and before any row is written, so a rejection leaves no transaction behind.
 - It may rewrite `Account` and `Scheme` in place. The normalized value is what the transaction records and what webhook matching later compares against, exactly.
@@ -270,7 +286,7 @@ Every payment carries an `account`, and the engine treats it as an opaque identi
 
 The engine ships no account-format logic of its own — an adapter that needs mobile numbers, IBANs, or card tokens carries its own rules, so the formats Momobase supports are never bounded by the ones it happens to know about. `examples/customprovider/main.go` shows the whole pattern for a mobile-money API.
 
-`account.scheme` optionally names a provider-specific network, bank, or card brand. `account.metadata` passes provider-specific details through to the adapter and is never persisted. `customer` and `recipient` are optional context carrying a name and email.
+`scheme` optionally names a provider-specific network, bank, or card brand, and is matched against nothing — the adapter interprets it. `metadata` passes provider-specific details through to the adapter and is never persisted, so it cannot become a free-form store of identifiers Momobase would then have to protect; it is part of the idempotency hash. `customer` and `recipient` stay nested because they are party context rather than payment details, and they are the one part of the payload that differs by service.
 
 `payment_method` is free-form: it must match an active route, and Momobase only ever compares it. There are no built-in payment-method constants.
 

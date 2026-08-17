@@ -11,13 +11,21 @@ export interface ListOptions { page?: number; perPage?: number; signal?: AbortSi
 export interface RequestOptions { idempotencyKey?: string; signal?: AbortSignal }
 
 export interface PartyPayload { name?: string; email?: string }
-/** The account a payment moves funds from or to. `account` is provider-specific —
- * a mobile number, bank account, card token, or wallet address — and is validated
- * by the provider the request routes to, not by the engine. */
-export interface AccountPayload { account: string; scheme?: string; metadata?: Record<string, unknown> }
+/** One payment method this deployment can currently serve. Fetch these before
+ * collecting any payment details: the list only contains methods that will route. */
+export interface AvailablePaymentMethod { service_type: ServiceType; payment_method: PaymentMethod }
+export interface AvailablePaymentMethods { items: AvailablePaymentMethod[]; count: number }
+/** The payment payload is flat, matching the order a checkout collects it in:
+ * `payment_method` and `scheme` come from the method the user picked, and `account`
+ * plus `metadata` are the details they entered.
+ *
+ * `account` is provider-specific — a mobile number, bank account, card token, or
+ * wallet address — and is validated by the provider the request routes to, not by
+ * the engine. `scheme` is likewise free-form; the provider interprets it. */
 interface PaymentRequest {
-  payment_method: PaymentMethod; amount: number; currency: string; country?: string
-  reference: string; description?: string; account: AccountPayload
+  payment_method: PaymentMethod; scheme?: string; account: string
+  amount: number; currency: string; country?: string
+  reference: string; description?: string; metadata?: Record<string, unknown>
 }
 export interface CreateCollectionRequest extends PaymentRequest { customer?: PartyPayload }
 export interface CreateDisbursementRequest extends PaymentRequest { recipient?: PartyPayload }

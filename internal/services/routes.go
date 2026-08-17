@@ -145,6 +145,60 @@ func (e *RouteEngine) SelectProvider(ctx context.Context, service, method, count
 	}
 	return nil, ErrNoRouteAvailable
 }
+
+// AvailablePaymentMethod is one method a client may currently pay with.
+type AvailablePaymentMethod struct {
+	// ServiceType is the service the method is available for.
+	ServiceType string `json:"service_type"`
+	// PaymentMethod is the value to send as a payment's payment_method.
+	PaymentMethod string `json:"payment_method"`
+}
+
+// AvailablePaymentMethods lists the methods that would route right now, ordered by
+// service then method. Both filters are optional: an empty service covers both, and
+// an empty country only matches provider accounts that declare no countries.
+//
+// Availability is decided by the same candidate check SelectProvider uses, so a
+// listed method is one SelectProvider will find. Answering from a second query would
+// let the two drift, and the failure mode is offering a payment that then 503s.
+//
+// Schemes are deliberately absent. Nothing registers them server-side: a scheme is
+// free-form text the selected provider interprets, so what values are valid is the
+// provider's to document, not Momobase's to enumerate.
+func (e *RouteEngine) AvailablePaymentMethods(ctx context.Context, service, country string) ([]AvailablePaymentMethod, error) {
+	if service != "" && service != domain.ServiceCollection && service != domain.ServiceDisbursement {
+		return nil, errors.New("service_type must be collection or disbursement")
+	}
+	country, err := NormalizeOptionalCountry(country)
+	if err != nil {
+		return nil, err
+	}
+	query := e.db.WithContext(ctx).Where("active = ?", true)
+	if service != "" {
+		query = query.Where("service_type = ?", service)
+	}
+	var routes []domain.PaymentRoute
+	if err := query.Order("service_type asc, payment_method asc, priority asc").Find(&routes).Error; err != nil {
+		return nil, err
+	}
+	// One method may have several routes; the first that passes makes it available,
+	// and the rest are the fallbacks SelectProvider would try.
+	seen := make(map[AvailablePaymentMethod]struct{}, len(routes))
+	available := make([]AvailablePaymentMethod, 0, len(routes))
+	for _, route := range routes {
+		method := AvailablePaymentMethod{ServiceType: route.ServiceType, PaymentMethod: route.PaymentMethod}
+		if _, done := seen[method]; done {
+			continue
+		}
+		if _, ok := e.candidate(ctx, route, route.ServiceType, country); !ok {
+			continue
+		}
+		seen[method] = struct{}{}
+		available = append(available, method)
+	}
+	return available, nil
+}
+
 func (e *RouteEngine) candidate(ctx context.Context, route domain.PaymentRoute, service, country string) (*SelectedProvider, bool) {
 	var account domain.ProviderAccount
 	if e.db.WithContext(ctx).

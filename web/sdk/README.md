@@ -40,23 +40,32 @@ The SDK uses the global `fetch()` directly. There is no `fetchImpl` option.
 
 Both clients cache access tokens and call the refresh endpoint when a `refresh_token` is available. If no refresh token exists, the app client requests a new `client_credentials` token and the admin client falls back to password grant when email/password are configured.
 
-## Accounts are opaque
+## Paying: discover, then charge
 
-Every payment carries an `account`, and the engine treats it as an opaque string:
+Ask what this deployment can serve before collecting any details. The list contains
+only methods that would actually route, so a checkout can render it directly:
+
+```ts
+const { items } = await app.paymentMethods.list({ serviceType: "collection", country: "UG" })
+// [{ service_type: "collection", payment_method: "momo" }]
+```
+
+Then post a flat payload, in the order a checkout fills it in:
 
 ```ts
 await app.collections.create({
   payment_method: "momo",
+  scheme: "mtn",
+  account: "256770000000",
   amount: 50000,
   currency: "UGX",
   country: "UG",
   reference: "ORDER-1",
-  account: { account: "256770000000", scheme: "mtn" },
   customer: { name: "Ada Lovelace" },
 }, { idempotencyKey: "order-1" })
 ```
 
-`account.account` may be a mobile number, a bank account, a card token, or a wallet address. What counts as valid is the provider's to decide: an adapter that needs an MSISDN validates and canonicalizes it when the request is routed, and the normalized value is what the transaction records. `account.scheme` optionally names the network, bank, or card brand, and `account.metadata` passes provider-specific details through without being persisted.
+`payment_method` and `scheme` come from the chosen method; `account` is what the user entered. `account` may be a mobile number, a bank account, a card token, or a wallet address, and the engine treats it as opaque. What counts as valid is the provider's to decide: an adapter that needs an MSISDN validates and canonicalizes it when the request is routed, and the normalized value is what the transaction records. `scheme` optionally names the network, bank, or card brand, and `metadata` passes provider-specific details through without being persisted.
 
 ## Country routing
 
@@ -65,7 +74,7 @@ await app.collections.create({
 ## Contract notes
 
 - `payment_method` is free-form and must match an active payment route. `momo` is a convention, not an enum.
-- `account` is required. `customer` and `recipient` are optional context, and carry a name and email only.
+- `account` and `payment_method` are required. `scheme`, `metadata`, and `country` are optional, as are `customer` and `recipient`, which carry a name and email only.
 - Supported countries can be changed with `admin.providers.updateCountries(id, countries)`; an empty array leaves the account unrestricted.
 - `admin.providers.balance(id, country)` requires `country` only for a provider that declares more than one.
 - Provider configs should include `webhook_secret`; country eligibility is not stored in provider credential config.

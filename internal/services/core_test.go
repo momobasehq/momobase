@@ -161,7 +161,7 @@ func TestCoreFlows(t *testing.T) {
 			Currency:      "UGX",
 			Country:       "UG",
 			Reference:     "ORDER-1",
-			Account:       &AccountPayload{Account: "256770000000"},
+			Account:       "256770000000",
 			Customer:      &PartyPayload{Name: "Test Customer"},
 		}
 		first := must(s.payments.Create(context.Background(), app.ID, domain.ServiceCollection, "idem", req))
@@ -186,7 +186,7 @@ func TestCoreFlows(t *testing.T) {
 			Currency:      "UGX",
 			Country:       "UG",
 			Reference:     "ORDER-RECON",
-			Account:       &AccountPayload{Account: "256770000000"},
+			Account:       "256770000000",
 			Customer:      &PartyPayload{Name: "Test Customer"},
 		}))
 		if created.Status != domain.TxProcessing {

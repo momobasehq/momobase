@@ -267,33 +267,15 @@ definitions:
       message:
         type: string
     type: object
-  services.AccountPayload:
-    properties:
-      account:
-        description: |-
-          Account is the provider-specific account identifier, such as a mobile number,
-          bank account, card token, or wallet address. Momobase treats it as opaque and
-          leaves its validation to the selected provider.
-        type: string
-      metadata:
-        additionalProperties: {}
-        description: |-
-          Metadata optionally carries provider-specific account details, such as a bank
-          branch code. It is passed to the selected provider and is never persisted.
-        type: object
-      scheme:
-        description: |-
-          Scheme optionally names the account's provider-specific scheme, such as a
-          mobile network, bank, or card brand.
-        type: string
-    type: object
   services.CreatePaymentRequest:
     properties:
       account:
-        allOf:
-        - $ref: '#/definitions/services.AccountPayload'
-        description: Account identifies the account the payment is collected from
-          or disbursed to.
+        description: |-
+          Account is the provider-specific account the payment is collected from or
+          disbursed to: a mobile number, bank account, card token, or wallet address.
+          Momobase treats it as opaque and leaves its validation to the selected
+          provider, through providers.RequestValidator.
+        type: string
       amount:
         description: Amount is the payment amount in the currency's minor unit.
         type: integer
@@ -312,6 +294,14 @@ definitions:
       description:
         description: Description is optional payment context shown to downstream systems.
         type: string
+      metadata:
+        additionalProperties: {}
+        description: |-
+          Metadata optionally carries provider-specific payment details, such as a bank
+          branch code. It reaches the selected provider and is never persisted, so it
+          cannot become a free-form store of identifiers Momobase would then have to
+          protect. It is part of the idempotency hash.
+        type: object
       payment_method:
         description: |-
           PaymentMethod identifies the requested payment rail. It is free-form and must
@@ -323,6 +313,12 @@ definitions:
         description: Recipient optionally identifies the disbursement recipient.
       reference:
         description: Reference is the application's unique business reference.
+        type: string
+      scheme:
+        description: |-
+          Scheme optionally names the account's provider-specific scheme, such as a
+          mobile network, bank, or card brand. Like PaymentMethod it is free-form; the
+          selected provider interprets it and Momobase never matches on it.
         type: string
     type: object
   services.PartyPayload:
@@ -1933,6 +1929,41 @@ paths:
       security:
       - BearerAuth: []
       summary: Create a disbursement
+      tags:
+      - Payments
+  /api/v1/payment-methods:
+    get:
+      parameters:
+      - description: Filter by collection or disbursement
+        in: query
+        name: service_type
+        type: string
+      - description: ISO 3166-1 alpha-2 transaction country
+        in: query
+        name: country
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List available payment methods
       tags:
       - Payments
   /api/v1/token:
