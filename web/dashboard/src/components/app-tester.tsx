@@ -53,12 +53,14 @@ export function AppTester({ clientId, clientSecret }: AppTesterProps) {
     setCredentials({ clientId, clientSecret: clientSecret ?? "" })
   }
 
-  // Same origin: the dashboard is served by the very binary it is testing.
+  // Same origin by default, since the dashboard is normally served by the very binary
+  // it is testing. VITE_API_URL overrides it for a separately deployed frontend, which
+  // then needs its origin in the server's CORS_ALLOWED_ORIGINS.
   const client = useMemo(
     () =>
       credentials.clientId && credentials.clientSecret
         ? new MomobaseClient({
-            baseUrl: window.location.origin,
+            baseUrl: import.meta.env.VITE_API_URL || window.location.origin,
             clientId: credentials.clientId,
             clientSecret: credentials.clientSecret,
           })

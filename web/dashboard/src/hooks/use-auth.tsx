@@ -19,7 +19,8 @@ interface AuthValue {
 const AuthContext = createContext<AuthValue | undefined>(undefined)
 
 function createClient(onToken: (t: Parameters<typeof persistToken>[0]) => void) {
-  // Same-origin: the dashboard is served by the very binary it administers.
+  // Same origin by default, since the dashboard is normally served by the very binary it
+  // administers. VITE_API_URL points it elsewhere when the two are deployed separately.
   return new MomobaseAdminClient({ baseUrl: import.meta.env.VITE_API_URL || window.location.origin, onTokenChange: onToken })
 }
 

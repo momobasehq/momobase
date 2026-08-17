@@ -372,6 +372,11 @@ make dashboard          # build the bundle
 make build-dashboard    # bundle + binary with it embedded
 ```
 
+**Deploying the dashboard separately** is supported: copy `web/dashboard/.env.example` to
+`.env` and set `VITE_API_URL` to the API's origin. It defaults to the page's own origin,
+which is what the embedded build wants. A cross-origin deployment also needs that origin
+listed in the server's `CORS_ALLOWED_ORIGINS`, or the browser blocks every request.
+
 ## Local verification
 
 Run these checks after generating dependencies:
