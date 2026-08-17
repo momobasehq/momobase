@@ -134,6 +134,12 @@ func (s *AppService) CreateCredential(
 	if scopes == "" {
 		scopes = defaultScopes
 	}
+	// Scopes are checked against the seeded app-audience catalogue, so a typo fails
+	// here rather than surfacing as a 403 on the first payment the credential makes.
+	scopes, err := ValidateAppScopes(scopes)
+	if err != nil {
+		return nil, err
+	}
 	if len(name) > 255 || len(scopes) > 1000 {
 		return nil, errors.New("credential name or scopes too long")
 	}

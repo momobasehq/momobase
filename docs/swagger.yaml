@@ -1,5 +1,25 @@
 basePath: /
 definitions:
+  admin.RoleRequest:
+    properties:
+      description:
+        description: Description explains the role in an operator-facing list.
+        example: Read transactions and reissue credentials
+        type: string
+      name:
+        description: Name identifies the role. It is ignored when updating, since
+          the path carries it.
+        example: support
+        type: string
+      permissions:
+        description: Permissions are the codes the role grants, from GET /api/admin/permissions.
+        example:
+        - transactions:read
+        - credentials:update
+        items:
+          type: string
+        type: array
+    type: object
   apidoc.ChangePasswordRequest:
     properties:
       password:
@@ -27,9 +47,8 @@ definitions:
         format: password
         type: string
       role:
-        enum:
-        - super_admin
-        - operations
+        description: Role names a seeded or operator-created role; list them with
+          GET /api/admin/roles.
         example: operations
         type: string
     type: object
@@ -931,6 +950,40 @@ paths:
       summary: Get the current administrator
       tags:
       - Admin - Authentication
+  /api/admin/permissions:
+    get:
+      parameters:
+      - description: Filter by admin or app
+        enum:
+        - admin
+        - app
+        in: query
+        name: audience
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List assignable permissions
+      tags:
+      - Admin - Roles
   /api/admin/providers:
     get:
       parameters:
@@ -1279,6 +1332,141 @@ paths:
       summary: List registered provider codes
       tags:
       - Admin - Providers
+  /api/admin/roles:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List roles
+      tags:
+      - Admin - Roles
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Role definition
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/admin.RoleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a role
+      tags:
+      - Admin - Roles
+  /api/admin/roles/{name}:
+    delete:
+      parameters:
+      - description: Role name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a role
+      tags:
+      - Admin - Roles
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Role name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Replacement description and permissions
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/admin.RoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a role
+      tags:
+      - Admin - Roles
   /api/admin/routes:
     get:
       parameters:

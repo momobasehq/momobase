@@ -50,6 +50,7 @@ type AdminAuthService struct {
 	accessTTL, refreshTTL time.Duration
 	audit                 *AuditService
 	tokens                *platform.TokenManager
+	authz                 *AuthzService
 }
 
 // NewAdminAuthService creates an administrator authentication service with the supplied token lifetimes.
@@ -59,8 +60,9 @@ func NewAdminAuthService(
 	refreshTTL time.Duration,
 	audit *AuditService,
 	tokens *platform.TokenManager,
+	authz *AuthzService,
 ) *AdminAuthService {
-	return &AdminAuthService{db, accessTTL, refreshTTL, audit, tokens}
+	return &AdminAuthService{db, accessTTL, refreshTTL, audit, tokens, authz}
 }
 func (s *AdminAuthService) issue(ctx context.Context, user *domain.AdminUser, session *domain.AdminSession, ip, ua string) (*TokenResponse, error) {
 	base := platform.TokenClaims{SubjectType: "admin", SubjectID: user.ID, Email: user.Email, Role: user.Role}
@@ -157,6 +159,16 @@ func (s *AdminAuthService) activeUser(ctx context.Context, id string) (*domain.A
 	var user domain.AdminUser
 	if s.db.WithContext(ctx).Where("id = ? AND status = ?", id, "active").First(&user).Error != nil {
 		return nil, errors.New("admin inactive")
+	}
+	// Resolved per request rather than carried in the token, so revoking a permission
+	// takes effect immediately instead of when the access token next refreshes. The
+	// admin row is already loaded, so this is one indexed join, not a round trip.
+	if s.authz != nil {
+		permissions, err := s.authz.EffectivePermissions(ctx, user.Role)
+		if err != nil {
+			return nil, err
+		}
+		user.Permissions = permissions
 	}
 	return &user, nil
 }

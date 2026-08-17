@@ -45,6 +45,7 @@ type testStack struct {
 	routes        *RouteAdminService
 	routing       *RouteEngine
 	payments      *PaymentOrchestrator
+	authz         *AuthzService
 	registry      providers.Registry
 	actor         *domain.AdminUser
 }
@@ -65,6 +66,8 @@ func stack(t *testing.T) *testStack {
 	db := must(gorm.Open(sqlite.Open("file:"+platform.NewID("test")+"?mode=memory&cache=shared"), &gorm.Config{}))
 	noError(db.AutoMigrate(
 		&domain.AdminUser{},
+		&domain.Permission{},
+		&domain.Role{},
 		&domain.AuditLog{},
 		&domain.App{},
 		&domain.AppCredential{},
@@ -85,6 +88,8 @@ func stack(t *testing.T) *testStack {
 	auth := NewAppAuthService(db, "app_test", "secret_test", 30*time.Minute, 24*time.Hour, tokens)
 	apps, routes := NewAppService(db, auth, audit), NewRouteAdminService(db, audit)
 	routing := NewRouteEngine(db, runtime)
+	authz := NewAuthzService(db, audit)
+	noError(authz.Seed(context.Background()))
 	return &testStack{
 		db,
 		auth,
@@ -94,6 +99,7 @@ func stack(t *testing.T) *testStack {
 		routes,
 		routing,
 		NewPaymentOrchestrator(db, routing, NewProviderExecutor(runtime)),
+		authz,
 		registry,
 		&domain.AdminUser{
 			BaseModel: domain.BaseModel{ID: "admin"},

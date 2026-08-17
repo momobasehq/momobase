@@ -22,6 +22,40 @@ type AdminUser struct {
 	FailedLoginAttempts int        `gorm:"not null;default:0" json:"failed_login_attempts"`
 	LockedUntil         *time.Time `json:"locked_until"`
 	CreatedBy           string     `gorm:"size:40" json:"created_by"`
+	// Permissions is the role's effective permission codes, resolved when the request
+	// is authenticated rather than stored. It is not a column: keeping it out of the
+	// token and out of the row is what makes a role change take effect on the very
+	// next request instead of the next refresh.
+	Permissions []string `gorm:"-" json:"permissions,omitempty"`
+}
+
+// Permission is one entry of the seeded permission catalogue. Rows are upserted from
+// domain.Permissions on every boot, so the table follows the code rather than leading
+// it, and a permission is never defined by a migration.
+type Permission struct {
+	BaseModel
+	// Code is the permission a route requires, formatted resource:action.
+	Code string `gorm:"size:128;uniqueIndex:idx_permission_code_audience;not null" json:"code"`
+	// Audience is AudienceAdmin or AudienceApp. It is part of the unique key because a
+	// code may exist in both, meaning different things to an admin and to an app.
+	Audience string `gorm:"size:16;uniqueIndex:idx_permission_code_audience;index;not null" json:"audience"`
+	// Description explains the permission in an operator-facing list.
+	Description string `gorm:"type:text" json:"description"`
+}
+
+// Role is a named set of administrative permissions. AdminUser.Role stores the name,
+// not an identifier, so a role's name is its identity and renaming is refused.
+type Role struct {
+	BaseModel
+	// Name is what AdminUser.Role refers to.
+	Name string `gorm:"size:64;uniqueIndex;not null" json:"name"`
+	// Description explains the role in an operator-facing list.
+	Description string `gorm:"type:text" json:"description"`
+	// System marks a seeded role. System roles cannot be edited or deleted, which is
+	// what makes re-synchronising their permissions on every boot safe.
+	System bool `gorm:"not null;default:false" json:"system"`
+	// Permissions are the codes this role grants.
+	Permissions []Permission `gorm:"many2many:role_permissions" json:"permissions"`
 }
 
 // AdminSession records a revocable administrator access and refresh token pair.

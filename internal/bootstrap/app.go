@@ -90,14 +90,22 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 
 	audit := services.NewAuditService(db, log)
 
+	// Seeded before anything can authenticate: the catalogue and the system roles are
+	// what every authorization check resolves against, so a boot that skipped this
+	// would authorize nothing.
+	authz := services.NewAuthzService(db, audit)
+	if err = authz.Seed(context.Background()); err != nil {
+		return nil, err
+	}
 	adminAuth := services.NewAdminAuthService(
 		db,
 		cfg.Security.AdminAccessTTL,
 		cfg.Security.AdminRefreshTTL,
 		audit,
 		adminTokens,
+		authz,
 	)
-	adminUsers := services.NewAdminUserService(db, audit)
+	adminUsers := services.NewAdminUserService(db, audit, authz)
 	appAuth := services.NewAppAuthService(
 		db,
 		cfg.Security.AppClientIDPrefix,
@@ -135,6 +143,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		apps,
 		runtime,
 		audit,
+		authz,
 		info,
 	)
 	router := httpx.NewRouter(httpx.RouterDeps{

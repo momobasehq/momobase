@@ -62,6 +62,8 @@ func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&domain.AdminUser{},
 		&domain.AdminSession{},
+		&domain.Permission{},
+		&domain.Role{},
 		&domain.AuditLog{},
 		&domain.App{},
 		&domain.AppCredential{},

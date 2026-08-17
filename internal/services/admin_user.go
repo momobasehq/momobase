@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -16,24 +17,34 @@ import (
 type AdminUserService struct {
 	db    *gorm.DB
 	audit *AuditService
+	authz *AuthzService
 }
 
 // NewAdminUserService creates an administrator account service.
-func NewAdminUserService(db *gorm.DB, audit *AuditService) *AdminUserService {
-	return &AdminUserService{db, audit}
+func NewAdminUserService(db *gorm.DB, audit *AuditService, authz *AuthzService) *AdminUserService {
+	return &AdminUserService{db, audit, authz}
 }
 
 // Create validates and persists an administrator account, subject to the actor's role.
 func (s *AdminUserService) Create(ctx context.Context, actor *domain.AdminUser, name, email, password, role string) (*domain.AdminUser, error) {
-	if actor != nil && actor.Role != "super_admin" {
-		return nil, errors.New("only super_admin can create admins")
-	}
-	name, email, role = strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(email)), strings.TrimSpace(role)
+	name, email, role = strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(email)), strings.ToLower(strings.TrimSpace(role))
 	if role == "" {
-		role = "operations"
+		role = domain.RoleOperations
 	}
-	if name == "" || len(name) > 255 || len(password) < 8 || strings.Count(email, "@") != 1 || role != "super_admin" && role != "operations" {
-		return nil, errors.New("invalid admin name, email, password, or role")
+	if name == "" || len(name) > 255 || len(password) < 8 || strings.Count(email, "@") != 1 {
+		return nil, errors.New("invalid admin name, email, or password")
+	}
+	// Any seeded or operator-created role is assignable. Checking the roles table
+	// rather than a literal list is the point: a custom role was unusable before,
+	// because the two valid names were compiled in here.
+	if s.authz != nil {
+		exists, err := s.authz.RoleExists(ctx, role)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, fmt.Errorf("unknown role %q", role)
+		}
 	}
 	hash, err := platform.HashPassword(password)
 	if err != nil {
@@ -71,7 +82,10 @@ func (s *AdminUserService) Create(ctx context.Context, actor *domain.AdminUser, 
 
 // ChangePassword replaces an administrator's password and revokes all of that user's active sessions.
 func (s *AdminUserService) ChangePassword(ctx context.Context, actor *domain.AdminUser, id, password string) error {
-	if actor == nil || actor.Role != "super_admin" && actor.ID != id {
+	// Self-service is deliberately not a permission: changing your own password is
+	// allowed without users:update, and changing someone else's needs it, which the
+	// route's middleware has already enforced by the time this runs.
+	if actor == nil {
 		return errors.New("not allowed")
 	}
 	if len(password) < 8 {
@@ -103,8 +117,8 @@ func (s *AdminUserService) ChangePassword(ctx context.Context, actor *domain.Adm
 
 // ChangeStatus activates or deactivates an administrator and revokes sessions when deactivating.
 func (s *AdminUserService) ChangeStatus(ctx context.Context, actor *domain.AdminUser, id, status string) error {
-	if actor == nil || actor.Role != "super_admin" {
-		return errors.New("only super_admin can change status")
+	if actor == nil {
+		return errors.New("not allowed")
 	}
 	if status != "active" && status != "inactive" {
 		return errors.New("invalid status")

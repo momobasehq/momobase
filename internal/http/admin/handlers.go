@@ -35,6 +35,7 @@ type Handler struct {
 	apps      *services.AppService
 	runtime   *services.ProviderRuntimeManager
 	audit     *services.AuditService
+	authz     *services.AuthzService
 	system    SystemInfo
 }
 
@@ -51,9 +52,10 @@ func NewHandler(
 	apps *services.AppService,
 	runtime *services.ProviderRuntimeManager,
 	audit *services.AuditService,
+	authz *services.AuthzService,
 	system SystemInfo,
 ) *Handler {
-	return &Handler{db, auth, users, providers, routes, apps, runtime, audit, system}
+	return &Handler{db, auth, users, providers, routes, apps, runtime, audit, authz, system}
 }
 
 func actor(r *http.Request) *domain.AdminUser { return authmw.AdminUser(r) }

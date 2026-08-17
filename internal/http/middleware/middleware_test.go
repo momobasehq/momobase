@@ -117,7 +117,7 @@ func TestAuthenticationContextAndAuthorization(t *testing.T) {
 		t.Fatalf("BearerToken() = %q", got)
 	}
 
-	verified := &domain.AdminUser{Role: "operations"}
+	verified := &domain.AdminUser{Role: "operations", Permissions: []string{"transactions:read"}}
 	auth := authenticate(adminKey, func(ctx context.Context, token string) (*domain.AdminUser, error) {
 		if marked, _ := ctx.Value(requestMarker{}).(bool); token == "token-value" && !marked {
 			t.Fatal("request context was not passed to authentication")
@@ -127,7 +127,7 @@ func TestAuthenticationContextAndAuthorization(t *testing.T) {
 		}
 		return verified, nil
 	})
-	protected := auth(RequireRole("operations")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	protected := auth(RequirePermission("transactions:read")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if AdminUser(r) != verified {
 			t.Fatal("authenticated admin was not stored in context")
 		}
@@ -146,14 +146,36 @@ func TestAuthenticationContextAndAuthorization(t *testing.T) {
 		t.Fatalf("unauthenticated status = %d", recorder.Code)
 	}
 
+	// A role that grants nothing is refused, which is also what an administrator whose
+	// role was deleted looks like: no permissions resolve, so nothing is authorized.
 	forbidden := httptest.NewRequest(http.MethodGet, "/", nil)
 	forbidden = forbidden.WithContext(context.WithValue(forbidden.Context(), adminKey, &domain.AdminUser{Role: "viewer"}))
 	recorder = httptest.NewRecorder()
-	RequireRole("operations")(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	RequirePermission("transactions:read")(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("forbidden handler was called")
 	})).ServeHTTP(recorder, forbidden)
 	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("RequireRole() status = %d", recorder.Code)
+		t.Fatalf("RequirePermission() status = %d", recorder.Code)
+	}
+}
+
+// TestRequirePermissionHonorsTheWildcard pins the mechanism that keeps super_admin
+// correct as permissions are added: the role holds "*", not an enumerated set, so a
+// permission introduced by a later release needs no migration to reach it.
+func TestRequirePermissionHonorsTheWildcard(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(context.WithValue(
+		req.Context(),
+		adminKey,
+		&domain.AdminUser{Role: "super_admin", Permissions: []string{domain.PermissionWildcard}},
+	))
+	for _, permission := range []string{"transactions:read", "roles:delete", "something:invented:later"} {
+		recorder := httptest.NewRecorder()
+		RequirePermission(permission)(next).ServeHTTP(recorder, req)
+		if recorder.Code != http.StatusNoContent {
+			t.Errorf("RequirePermission(%q) with the wildcard = %d, want %d", permission, recorder.Code, http.StatusNoContent)
+		}
 	}
 }
 
@@ -176,8 +198,10 @@ func TestRequireAppScope(t *testing.T) {
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("RequireAppScope(missing) status = %d", recorder.Code)
 	}
-	if !hasScope("*", "anything") || hasScope("read", "write") {
-		t.Fatal("hasScope() wildcard or mismatch behavior is incorrect")
+	// Admin roles and app credentials share one wildcard rule, so the two paths
+	// cannot come to disagree on what "*" grants.
+	if !granted([]string{"*"}, "anything") || granted([]string{"read"}, "write") {
+		t.Fatal("granted() wildcard or mismatch behavior is incorrect")
 	}
 }
 

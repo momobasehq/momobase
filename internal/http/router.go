@@ -106,71 +106,66 @@ func NewRouter(d RouterDeps) http.Handler {
 }
 
 func adminRoutes(mux *http.ServeMux, h *adminh.Handler, base ...middleware) {
-	super := middlewarex.RequireRole("super_admin")
-	ops := middlewarex.RequireRole("super_admin", "operations")
-	add := func(pattern string, handler http.HandlerFunc, extra ...middleware) {
-		route(mux, pattern, handler, append(base, extra...)...)
+	// Every administrative route names exactly one permission. Before this, most reads
+	// were reachable by any authenticated administrator and every write was compared
+	// against a literal role name in this file.
+	add := func(pattern string, handler http.HandlerFunc, permission string, extra ...middleware) {
+		guards := base
+		if permission != "" {
+			guards = append(append([]middleware{}, base...), middlewarex.RequirePermission(permission))
+		}
+		route(mux, pattern, handler, append(guards, extra...)...)
 	}
-	add("POST /api/admin/logout", h.Logout)
-	add("GET /api/admin/me", h.Me)
-	add("GET /api/admin/transactions", h.ListTransactions)
-	add("GET /api/admin/audit-logs", h.ListAuditLogs)
-	add("GET /api/admin/health/providers", h.ListProviderHealth)
-	add("GET /api/admin/balances/providers", h.ActiveProviderBalances, ops)
-	add("GET /api/admin/system/info", h.SystemInfo)
-	add("GET /api/admin/system/health", h.SystemHealth)
-	add("GET /api/admin/workers", h.Workers)
-	add("GET /api/admin/runtime/providers", h.RuntimeProviders)
-	add("GET /api/admin/users", h.ListAdmins)
-	add("POST /api/admin/users", h.CreateAdminUser, super, middlewarex.JSONOnly)
-	add("PATCH /api/admin/users/{id}/password", h.ChangeAdminPassword, super, middlewarex.JSONOnly)
-	add("PATCH /api/admin/users/{id}/status", h.ChangeAdminStatus, super, middlewarex.JSONOnly)
-	add("GET /api/admin/apps", h.ListApps)
-	add("POST /api/admin/apps", h.CreateApp, super, middlewarex.JSONOnly)
-	add("GET /api/admin/apps/{id}", h.GetApp)
-	add("PATCH /api/admin/apps/{id}", h.UpdateApp, super, middlewarex.JSONOnly)
-	add("PATCH /api/admin/apps/{id}/status", h.ChangeAppStatus, super, middlewarex.JSONOnly)
-	add("GET /api/admin/apps/{id}/credentials", h.ListCredentials)
-	add(
-		"POST /api/admin/apps/{id}/credentials",
-		h.CreateCredential,
-		super,
-		middlewarex.JSONOnly,
-	)
-	add(
-		"PATCH /api/admin/apps/{id}/credentials/{credentialID}/revoke",
-		h.RevokeCredential,
-		super,
-	)
-	add(
-		"POST /api/admin/apps/{id}/credentials/{credentialID}/rotate",
-		h.RotateCredential,
-		super,
-	)
-	add("GET /api/admin/providers", h.ListProviders)
-	add("GET /api/admin/providers/registry", h.ProviderRegistry)
-	add("POST /api/admin/providers/accounts", h.CreateProvider, super, middlewarex.JSONOnly)
-	add(
-		"PATCH /api/admin/providers/accounts/{id}/countries",
-		h.UpdateProviderCountries,
-		super,
-		middlewarex.JSONOnly,
-	)
-	add(
-		"PATCH /api/admin/providers/accounts/{id}/config",
-		h.UpdateProviderConfig,
-		super,
-		middlewarex.JSONOnly,
-	)
-	add("PATCH /api/admin/providers/accounts/{id}/activate", h.ActivateProvider, super)
-	add(
-		"PATCH /api/admin/providers/accounts/{id}/deactivate",
-		h.DeactivateProvider,
-		super,
-	)
-	add("POST /api/admin/providers/accounts/{id}/test", h.TestProvider, super)
-	add("GET /api/admin/providers/accounts/{id}/balance", h.ProviderBalance, ops)
-	add("GET /api/admin/routes", h.ListRoutes)
-	add("POST /api/admin/routes", h.CreateRoute, super, middlewarex.JSONOnly)
-	add("PATCH /api/admin/routes/{id}", h.UpdateRoute, super, middlewarex.JSONOnly)
+	// Logout and identity are self-service: they act on the caller's own session, so
+	// gating them on a permission would let a role lock someone out of signing out.
+	add("POST /api/admin/logout", h.Logout, "")
+	add("GET /api/admin/me", h.Me, "")
+
+	add("GET /api/admin/permissions", h.ListPermissions, "roles:read")
+	add("GET /api/admin/roles", h.ListRoles, "roles:read")
+	add("POST /api/admin/roles", h.CreateRole, "roles:create", middlewarex.JSONOnly)
+	add("PATCH /api/admin/roles/{name}", h.UpdateRole, "roles:update", middlewarex.JSONOnly)
+	add("DELETE /api/admin/roles/{name}", h.DeleteRole, "roles:delete")
+
+	add("GET /api/admin/transactions", h.ListTransactions, "transactions:read")
+	add("GET /api/admin/audit-logs", h.ListAuditLogs, "audit:read")
+	add("GET /api/admin/system/info", h.SystemInfo, "system:read")
+	add("GET /api/admin/system/health", h.SystemHealth, "system:read")
+	add("GET /api/admin/workers", h.Workers, "system:read")
+
+	add("GET /api/admin/users", h.ListAdmins, "users:read")
+	add("POST /api/admin/users", h.CreateAdminUser, "users:create", middlewarex.JSONOnly)
+	// Self-service password changes are allowed without users:update; the service
+	// distinguishes the caller's own account from someone else's.
+	add("PATCH /api/admin/users/{id}/password", h.ChangeAdminPassword, "", middlewarex.JSONOnly)
+	add("PATCH /api/admin/users/{id}/status", h.ChangeAdminStatus, "users:update", middlewarex.JSONOnly)
+
+	add("GET /api/admin/apps", h.ListApps, "apps:read")
+	add("POST /api/admin/apps", h.CreateApp, "apps:create", middlewarex.JSONOnly)
+	add("GET /api/admin/apps/{id}", h.GetApp, "apps:read")
+	add("PATCH /api/admin/apps/{id}", h.UpdateApp, "apps:update", middlewarex.JSONOnly)
+	add("PATCH /api/admin/apps/{id}/status", h.ChangeAppStatus, "apps:update", middlewarex.JSONOnly)
+	add("GET /api/admin/apps/{id}/credentials", h.ListCredentials, "credentials:read")
+	add("POST /api/admin/apps/{id}/credentials", h.CreateCredential, "credentials:create", middlewarex.JSONOnly)
+	add("PATCH /api/admin/apps/{id}/credentials/{credentialID}/revoke", h.RevokeCredential, "credentials:update")
+	add("POST /api/admin/apps/{id}/credentials/{credentialID}/rotate", h.RotateCredential, "credentials:update")
+
+	add("GET /api/admin/providers", h.ListProviders, "providers:read")
+	add("GET /api/admin/providers/registry", h.ProviderRegistry, "providers:read")
+	add("GET /api/admin/health/providers", h.ListProviderHealth, "providers:read")
+	add("GET /api/admin/runtime/providers", h.RuntimeProviders, "providers:read")
+	add("POST /api/admin/providers/accounts", h.CreateProvider, "providers:create", middlewarex.JSONOnly)
+	add("PATCH /api/admin/providers/accounts/{id}/countries", h.UpdateProviderCountries, "providers:update", middlewarex.JSONOnly)
+	add("PATCH /api/admin/providers/accounts/{id}/config", h.UpdateProviderConfig, "providers:update", middlewarex.JSONOnly)
+	add("PATCH /api/admin/providers/accounts/{id}/activate", h.ActivateProvider, "providers:update")
+	add("PATCH /api/admin/providers/accounts/{id}/deactivate", h.DeactivateProvider, "providers:update")
+	add("POST /api/admin/providers/accounts/{id}/test", h.TestProvider, "providers:test")
+	// Balances reach the provider's API rather than the database, which is why they
+	// are their own permission and why read_only does not hold it.
+	add("GET /api/admin/balances/providers", h.ActiveProviderBalances, "balances:read")
+	add("GET /api/admin/providers/accounts/{id}/balance", h.ProviderBalance, "balances:read")
+
+	add("GET /api/admin/routes", h.ListRoutes, "routes:read")
+	add("POST /api/admin/routes", h.CreateRoute, "routes:create", middlewarex.JSONOnly)
+	add("PATCH /api/admin/routes/{id}", h.UpdateRoute, "routes:update", middlewarex.JSONOnly)
 }

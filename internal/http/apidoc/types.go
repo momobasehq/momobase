@@ -63,7 +63,8 @@ type CreateAdminRequest struct {
 	Name     string `json:"name" example:"Operations Admin"`
 	Email    string `json:"email" format:"email" example:"ops@example.com"`
 	Password string `json:"password" format:"password" example:"change-me-now"`
-	Role     string `json:"role" enums:"super_admin,operations" example:"operations"`
+	// Role names a seeded or operator-created role; list them with GET /api/admin/roles.
+	Role string `json:"role" example:"operations"`
 }
 
 // ChangePasswordRequest replaces an administrator password.

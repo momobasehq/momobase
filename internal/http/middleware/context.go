@@ -65,18 +65,20 @@ func WithAppBearer(auth *services.AppAuthService) func(http.Handler) http.Handle
 	return authenticate(appKey, auth.AuthenticateBearer)
 }
 
-// RequireRole allows requests whose authenticated administrator has one of the
-// supplied roles and rejects all others with a forbidden response.
-func RequireRole(roles ...string) func(http.Handler) http.Handler {
-	allowed := map[string]bool{}
-	for _, role := range roles {
-		allowed[role] = true
-	}
+// RequirePermission allows requests whose authenticated administrator holds the
+// named permission, through their role, and rejects all others with a forbidden
+// response.
+//
+// The permission is resolved from the role on every request rather than read from the
+// token, so removing it from a role takes effect on the next call. An administrator
+// whose role no longer exists resolves to no permissions and is therefore refused,
+// which is the safe direction to fail.
+func RequirePermission(permission string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user := AdminUser(r)
-			if user == nil || !allowed[user.Role] {
-				platform.Error(w, 403, "FORBIDDEN", "permission denied")
+			if user == nil || !granted(user.Permissions, permission) {
+				platform.Error(w, 403, "FORBIDDEN", "permission denied: "+permission)
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -90,7 +92,7 @@ func RequireAppScope(scope string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			identity := App(r)
-			if identity == nil || !hasScope(identity.Credential.Scopes, scope) {
+			if identity == nil || !granted(strings.Fields(identity.Credential.Scopes), scope) {
 				platform.Error(w, 403, "FORBIDDEN", "app credential is missing required scope")
 				return
 			}
@@ -98,9 +100,13 @@ func RequireAppScope(scope string) func(http.Handler) http.Handler {
 		})
 	}
 }
-func hasScope(scopes, required string) bool {
-	for _, scope := range strings.Fields(scopes) {
-		if scope == required || scope == "*" {
+
+// granted reports whether held satisfies required, honouring the wildcard. Admin roles
+// and app credentials share it so the two authorization paths cannot drift on what a
+// wildcard means.
+func granted(held []string, required string) bool {
+	for _, permission := range held {
+		if permission == required || permission == domain.PermissionWildcard {
 			return true
 		}
 	}

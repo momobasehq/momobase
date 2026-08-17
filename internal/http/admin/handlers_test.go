@@ -71,6 +71,7 @@ func testHandlerWithProviders(t *testing.T, registry providers.Registry) *Handle
 		apps,
 		runtime,
 		audit,
+		services.NewAuthzService(db, audit),
 		SystemInfo{
 			AppName:        "momobase-test",
 			AppEnv:         "test",
