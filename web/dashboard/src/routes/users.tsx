@@ -90,12 +90,29 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
 
 /** Users manages administrator accounts and their status. */
 export function Users() {
-  const { client } = useAuth()
+  const { client, me } = useAuth()
   const queryClient = useQueryClient()
   const paged = usePagedQuery(keys.users.list, (page) => client.users.list(page))
   const [creating, setCreating] = useState(false)
   const [resetting, setResetting] = useState<AdminUser>()
   const [newPassword, setNewPassword] = useState("")
+  const [reassigning, setReassigning] = useState<AdminUser>()
+  const [nextRole, setNextRole] = useState("")
+
+  const roles = useQuery({ queryKey: keys.authz.roles(), queryFn: () => client.authz.roles() })
+
+  const changeRole = useMutation({
+    mutationFn: () => client.users.changeRole(reassigning!.id, nextRole),
+    onSuccess: async () => {
+      // No session is revoked: permissions resolve from the role on every request, so
+      // the change lands on the target's next call rather than their next sign-in.
+      toast.success("Role changed — it applies on their next request")
+      setReassigning(undefined)
+      setNextRole("")
+      await queryClient.invalidateQueries({ queryKey: keys.users.all })
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
 
   const changePassword = useMutation({
     mutationFn: () => client.users.changePassword(resetting!.id, newPassword),
@@ -128,6 +145,20 @@ export function Users() {
       align: "end",
       cell: (user) => (
         <div className="flex justify-end gap-2">
+          <GuardedAction
+            permission={AdminPermissions.usersUpdate}
+            variant="outline"
+            size="sm"
+            // Changing your own role is refused by the API — it is both a lockout risk
+            // and a self-promotion path — so the control says so rather than 400ing.
+            disabled={user.id === me?.id}
+            onClick={() => {
+              setReassigning(user)
+              setNextRole(user.role)
+            }}
+          >
+            Change role
+          </GuardedAction>
           <GuardedAction permission={AdminPermissions.usersUpdate} variant="outline" size="sm" onClick={() => setResetting(user)}>
             Set password
           </GuardedAction>
@@ -168,6 +199,44 @@ export function Users() {
         />
       </CardContent>
       <CreateUserDialog open={creating} onOpenChange={setCreating} />
+
+      <Dialog open={Boolean(reassigning)} onOpenChange={(open) => !open && setReassigning(undefined)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change role</DialogTitle>
+            <DialogDescription>
+              {reassigning?.email} currently holds <strong>{titleCase(reassigning?.role ?? "")}</strong>. A new role
+              applies on their next request; they stay signed in.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="next-role">Role</Label>
+            <Select value={nextRole} onValueChange={(role) => setNextRole(role ?? "")}>
+              <SelectTrigger id="next-role">
+                <SelectValue placeholder={roles.isPending ? "Loading…" : "Select a role"} />
+              </SelectTrigger>
+              <SelectContent>
+                {(roles.data?.items ?? []).map((role) => (
+                  <SelectItem key={role.name} value={role.name}>
+                    {titleCase(role.name)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReassigning(undefined)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => changeRole.mutate()}
+              disabled={changeRole.isPending || !nextRole || nextRole === reassigning?.role}
+            >
+              Change role
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(resetting)} onOpenChange={(open) => !open && setResetting(undefined)}>
         <DialogContent>

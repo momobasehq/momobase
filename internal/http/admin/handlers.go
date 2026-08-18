@@ -236,6 +236,32 @@ func (h *Handler) ChangeAdminStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ChangeAdminRole documents administrator role reassignment.
+//
+// @Summary Change an administrator's role
+// @Tags Admin - Users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Administrator ID"
+// @Param request body apidoc.ChangeRoleRequest true "Replacement role"
+// @Success 200 {object} apidoc.DocResponse
+// @Failure 400 {object} apidoc.ErrorResponse
+// @Failure 401 {object} apidoc.ErrorResponse
+// @Failure 403 {object} apidoc.ErrorResponse
+// @Failure 404 {object} apidoc.ErrorResponse
+// @Router /api/admin/users/{id}/role [patch]
+func (h *Handler) ChangeAdminRole(w http.ResponseWriter, r *http.Request) {
+	req, err := platform.DecodeJSON[apidoc.ChangeRoleRequest](r)
+	if err != nil {
+		platform.Error(w, 400, "VALIDATION_ERROR", err.Error())
+		return
+	}
+	reply(w, 200, "ROLE_CHANGE_FAILED", func() (apidoc.OK, error) {
+		return apidoc.OK{OK: true}, h.users.ChangeRole(r.Context(), actor(r), id(r), req.Role)
+	})
+}
+
 // ListApps documents application listing.
 //
 // @Summary List applications

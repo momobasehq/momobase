@@ -181,3 +181,45 @@ func TestListPermissionsFiltersByAudience(t *testing.T) {
 		t.Error("ListPermissions(nobody) = nil, want an error")
 	}
 }
+
+func TestChangeRole(t *testing.T) {
+	s := stack(t)
+	ctx := context.Background()
+	users := NewAdminUserService(s.db, NewAuditService(s.db, nil), s.authz)
+
+	target := must(users.Create(ctx, s.actor, "Target", "target@example.com", "password123", domain.RoleReadOnly))
+
+	t.Run("reassigns to any existing role, seeded or custom", func(t *testing.T) {
+		must(s.authz.CreateRole(ctx, s.actor, "support", "", []string{"transactions:read"}))
+		noError(users.ChangeRole(ctx, s.actor, target.ID, "support"))
+
+		var stored domain.AdminUser
+		noError(s.db.First(&stored, "id = ?", target.ID).Error)
+		if stored.Role != "support" {
+			t.Fatalf("role = %q, want support", stored.Role)
+		}
+		// The point of resolving permissions per request: the new role takes effect
+		// without revoking anything, so no session bookkeeping is involved.
+		if permissions := must(s.authz.EffectivePermissions(ctx, stored.Role)); len(permissions) != 1 {
+			t.Errorf("effective permissions = %v, want the new role's single permission", permissions)
+		}
+	})
+
+	// Both a lockout risk — the last super_admin demoting itself leaves nobody able to
+	// undo it — and a privilege escalation, since users:update would otherwise be enough
+	// to promote yourself.
+	t.Run("refuses a self change", func(t *testing.T) {
+		if err := users.ChangeRole(ctx, s.actor, s.actor.ID, domain.RoleReadOnly); err == nil {
+			t.Error("ChangeRole() let an administrator change their own role")
+		}
+	})
+
+	t.Run("refuses an unknown role and an unknown user", func(t *testing.T) {
+		if err := users.ChangeRole(ctx, s.actor, target.ID, "not_a_role"); err == nil {
+			t.Error("ChangeRole() accepted an unknown role")
+		}
+		if err := users.ChangeRole(ctx, s.actor, "missing", domain.RoleReadOnly); err == nil {
+			t.Error("ChangeRole() accepted an unknown administrator")
+		}
+	})
+}

@@ -139,6 +139,7 @@ func adminRoutes(mux *http.ServeMux, h *adminh.Handler, base ...middleware) {
 	// distinguishes the caller's own account from someone else's.
 	add("PATCH /api/admin/users/{id}/password", h.ChangeAdminPassword, "", middlewarex.JSONOnly)
 	add("PATCH /api/admin/users/{id}/status", h.ChangeAdminStatus, "users:update", middlewarex.JSONOnly)
+	add("PATCH /api/admin/users/{id}/role", h.ChangeAdminRole, "users:update", middlewarex.JSONOnly)
 
 	add("GET /api/admin/apps", h.ListApps, "apps:read")
 	add("POST /api/admin/apps", h.CreateApp, "apps:create", middlewarex.JSONOnly)

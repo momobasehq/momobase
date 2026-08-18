@@ -151,7 +151,11 @@ create a role.
 
 An administrator's effective permissions are resolved from their role when a request
 authenticates, not carried in the access token, so removing a permission takes effect on
-the next call rather than the next refresh. `GET /api/admin/me` returns them, which is
+the next call rather than the next refresh. Reassigning an administrator to another role
+(`PATCH /api/admin/users/{id}/role`) needs no session revocation for the same reason.
+Changing your **own** role is refused: it is both a lockout risk, since the last
+`super_admin` demoting itself leaves nobody able to undo it, and a self-promotion path
+that `users:update` would otherwise be enough for. `GET /api/admin/me` returns them, which is
 what the dashboard gates its controls on.
 
 An administrator whose role no longer exists resolves to no permissions and is refused

@@ -77,6 +77,12 @@ type ChangeStatusRequest struct {
 	Status string `json:"status" example:"active"`
 }
 
+// ChangeRoleRequest reassigns an administrator to a different role.
+type ChangeRoleRequest struct {
+	// Role names a seeded or operator-created role; list them with GET /api/admin/roles.
+	Role string `json:"role" example:"operations"`
+}
+
 // CreateAppRequest creates an application.
 type CreateAppRequest struct {
 	Name        string `json:"name" example:"Checkout"`

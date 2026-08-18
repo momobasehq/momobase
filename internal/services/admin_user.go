@@ -115,6 +115,42 @@ func (s *AdminUserService) ChangePassword(ctx context.Context, actor *domain.Adm
 	return err
 }
 
+// ChangeRole reassigns an administrator to a different role.
+//
+// No session is revoked, and none needs to be: permissions are resolved from the role
+// on every request rather than carried in the access token, so the change takes effect
+// on the target's very next call.
+//
+// Changing your own role is refused. It is the one case that is both a lockout risk —
+// the last super_admin demoting itself leaves nobody able to put it back — and a
+// privilege escalation, since users:update would otherwise be enough to promote
+// yourself to super_admin.
+func (s *AdminUserService) ChangeRole(ctx context.Context, actor *domain.AdminUser, id, role string) error {
+	if actor == nil {
+		return errors.New("not allowed")
+	}
+	if actor.ID == id {
+		return errors.New("an administrator cannot change their own role; ask another administrator")
+	}
+	role = strings.ToLower(strings.TrimSpace(role))
+	if s.authz != nil {
+		exists, err := s.authz.RoleExists(ctx, role)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("unknown role %q", role)
+		}
+	}
+	if err := store.Affected(
+		s.db.WithContext(ctx).Model(&domain.AdminUser{}).Where("id = ?", id).Update("role", role),
+	); err != nil {
+		return err
+	}
+	s.audit.RecordBestEffort(ctx, actor.ID, "admin", "admin.role_changed", "admin_user", id, map[string]any{"role": role}, "", "")
+	return nil
+}
+
 // ChangeStatus activates or deactivates an administrator and revokes sessions when deactivating.
 func (s *AdminUserService) ChangeStatus(ctx context.Context, actor *domain.AdminUser, id, status string) error {
 	if actor == nil {

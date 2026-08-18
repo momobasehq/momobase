@@ -155,7 +155,11 @@ export class MomobaseAdminClient extends SessionClient {
     me: () => this.get<AdminUser>("/api/admin/me"), list: (o?: ListOptions) => this.get<PaginatedData<AdminUser>>(`/api/admin/users${query(o)}`),
     create: (p: { name: string; email: string; password: string; role?: string }) => this.post<AdminUser>("/api/admin/users", p),
     changePassword: (id: string, password: string) => this.patch<unknown>(endpoint("/api/admin/users", id) + "/password", { password }),
-    changeStatus: (id: string, status: "active" | "inactive") => this.patch<unknown>(endpoint("/api/admin/users", id) + "/status", { status })
+    changeStatus: (id: string, status: "active" | "inactive") => this.patch<unknown>(endpoint("/api/admin/users", id) + "/status", { status }),
+    /** Reassigns an administrator to a different role. Takes effect on their next
+     * request — permissions resolve from the role rather than from the token, so no
+     * session has to be revoked. An administrator cannot change their own role. */
+    changeRole: (id: string, role: string) => this.patch<unknown>(endpoint("/api/admin/users", id) + "/role", { role })
   }
   readonly apps = {
     list: (o?: ListOptions) => this.get<PaginatedData<App>>(`/api/admin/apps${query(o)}`), create: (p: { name: string; description?: string; environment?: "sandbox" | "production" }) => this.post<App>("/api/admin/apps", p),
