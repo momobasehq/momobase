@@ -125,6 +125,29 @@ Capabilities name the service only — `{"service_type": "collection"}`. Which p
 - Disabling an admin invalidates their active sessions.
 - Every administrative endpoint requires one permission, checked by middleware.
 
+## Analytics
+
+```text
+GET /api/admin/analytics/transactions?from=&to=&interval=day&app_id=&provider_account_id=
+```
+
+Returns a bucketed transaction series — one point per day or hour, with quiet periods
+present and zeroed so a chart shows a gap in traffic rather than joining a line across
+it. Bucketing happens in SQL, so the response size depends on the range rather than on
+how many transactions fall in it; a range covering more than 400 buckets is refused
+rather than truncated, because a silently capped series renders as a chart that omits
+part of its own range.
+
+Volume is reported **per currency and never summed**: amounts are in each currency's
+minor unit, so a single total across UGX and USD would mean nothing.
+
+It requires `transactions:read` — the same rows the transaction list already exposes,
+in aggregate — so any role that can read transactions can chart them.
+
+The one piece of per-driver SQL in the codebase is the date-truncation expression, since
+SQLite, PostgreSQL, and MySQL each spell it differently. Only SQLite is covered by the
+test suite; the other two are exercised by a real deployment.
+
 ## Roles and permissions
 
 A permission is `resource:action` — `transactions:read`, `providers:update` — and

@@ -128,6 +128,9 @@ func adminRoutes(mux *http.ServeMux, h *adminh.Handler, base ...middleware) {
 	add("DELETE /api/admin/roles/{name}", h.DeleteRole, "roles:delete")
 
 	add("GET /api/admin/transactions", h.ListTransactions, "transactions:read")
+	// Aggregates of the same rows transactions:read already exposes, so it needs no
+	// permission of its own; a role that can read transactions can chart them.
+	add("GET /api/admin/analytics/transactions", h.TransactionAnalytics, "transactions:read")
 	add("GET /api/admin/audit-logs", h.ListAuditLogs, "audit:read")
 	add("GET /api/admin/system/info", h.SystemInfo, "system:read")
 	add("GET /api/admin/system/health", h.SystemHealth, "system:read")

@@ -364,6 +364,56 @@ info:
   title: Momobase API
   version: "1.0"
 paths:
+  /api/admin/analytics/transactions:
+    get:
+      parameters:
+      - description: Inclusive RFC3339 start; defaults to 30 days ago
+        in: query
+        name: from
+        type: string
+      - description: Exclusive RFC3339 end; defaults to now
+        in: query
+        name: to
+        type: string
+      - description: Bucket width
+        enum:
+        - day
+        - hour
+        in: query
+        name: interval
+        type: string
+      - description: Restrict to one application
+        in: query
+        name: app_id
+        type: string
+      - description: Restrict to one provider account
+        in: query
+        name: provider_account_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Transaction analytics
+      tags:
+      - Admin - Analytics
   /api/admin/apps:
     get:
       parameters:

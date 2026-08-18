@@ -1,11 +1,11 @@
 import { MomobaseAPIError } from "./errors.js"
 import type {
-  AdminUser, APIEnvelope, App, AppCredential, AuditLog, CreateCollectionRequest,
+  AdminUser, AnalyticsQuery, APIEnvelope, App, AppCredential, AuditLog, CreateCollectionRequest,
   CreateDisbursementRequest, CreatePaymentResponse, CreatedCredential, ListOptions,
   AvailablePaymentMethods, OAuthTokenResponse, PaginatedData, PaymentRoute, ProviderAccount, ProviderBalance,
   ProviderBalanceResult, ProviderHealthSnapshot, ProviderRegistry, RequestOptions,
   PermissionAudience, PermissionList, Role, RoleList, RoleRequest,
-  RuntimeProvider, ServiceType, SystemHealth, SystemInfo, Transaction, WorkerState
+  RuntimeProvider, ServiceType, SystemHealth, SystemInfo, Transaction, TransactionAnalytics, WorkerState
 } from "./types.js"
 
 export interface MomobaseClientOptions { baseUrl: string; clientId: string; clientSecret: string; tokenSkewSeconds?: number }
@@ -186,5 +186,17 @@ export class MomobaseAdminClient extends SessionClient {
   }
   readonly transactions = {
     list: (o?: ListOptions) => this.get<PaginatedData<Transaction>>(`/api/admin/transactions${query(o)}`), auditLogs: (o?: ListOptions) => this.get<PaginatedData<AuditLog>>(`/api/admin/audit-logs${query(o)}`)
+  }
+  /** Aggregates of the same rows transactions.list exposes, bucketed for charting. */
+  readonly analytics = {
+    transactions: (q: AnalyticsQuery = {}) => {
+      const search = new URLSearchParams()
+      if (q.from) search.set("from", q.from)
+      if (q.to) search.set("to", q.to)
+      if (q.interval) search.set("interval", q.interval)
+      if (q.appId) search.set("app_id", q.appId)
+      if (q.providerAccountId) search.set("provider_account_id", q.providerAccountId)
+      return this.get<TransactionAnalytics>(`/api/admin/analytics/transactions${search.size ? `?${search}` : ""}`)
+    },
   }
 }

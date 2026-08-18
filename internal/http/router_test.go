@@ -26,7 +26,7 @@ func testRouterWith(dashboard bool) http.Handler {
 		DashboardEnabled:   dashboard,
 		CORSAllowedOrigins: []string{"https://console.example.com"},
 		Public:             publich.NewHandler(nil, nil, nil),
-		Admin:              adminh.NewHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil, adminh.SystemInfo{}),
+		Admin:              adminh.NewHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, adminh.SystemInfo{}),
 		Webhooks:           webhookh.NewHandler(nil),
 	})
 }
@@ -58,6 +58,31 @@ func TestRouterHealthEndpointsAndCORS(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Header().Get("Access-Control-Allow-Headers"), "Idempotency-Key") {
 		t.Fatalf("CORS allow headers = %q", recorder.Header().Get("Access-Control-Allow-Headers"))
+	}
+	// Every method the router serves must be advertised. One missing fails preflight
+	// rather than the request, which the browser reports as an opaque CORS error with
+	// no status to trace — how DELETE went unnoticed after roles gained it.
+	methods := recorder.Header().Get("Access-Control-Allow-Methods")
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete, http.MethodOptions} {
+		if !strings.Contains(methods, method) {
+			t.Errorf("CORS allow methods = %q, missing %s", methods, method)
+		}
+	}
+	if recorder.Header().Get("Vary") != "Origin" {
+		t.Errorf("CORS Vary = %q, want Origin", recorder.Header().Get("Vary"))
+	}
+
+	// A refused origin still gets Vary, so a shared cache cannot serve an allowed
+	// origin's permissive response to it.
+	recorder = httptest.NewRecorder()
+	refused := httptest.NewRequest(http.MethodOptions, "/api/v1/collections", nil)
+	refused.Header.Set("Origin", "https://attacker.example")
+	router.ServeHTTP(recorder, refused)
+	if recorder.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Error("a refused origin was allowed")
+	}
+	if recorder.Header().Get("Vary") != "Origin" {
+		t.Error("a refused preflight did not advertise Vary: Origin")
 	}
 
 	recorder = httptest.NewRecorder()

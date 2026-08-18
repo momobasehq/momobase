@@ -46,6 +46,7 @@ type testStack struct {
 	routing       *RouteEngine
 	payments      *PaymentOrchestrator
 	authz         *AuthzService
+	analytics     *AnalyticsService
 	registry      providers.Registry
 	actor         *domain.AdminUser
 }
@@ -100,6 +101,7 @@ func stack(t *testing.T) *testStack {
 		routing,
 		NewPaymentOrchestrator(db, routing, NewProviderExecutor(runtime)),
 		authz,
+		NewAnalyticsService(db),
 		registry,
 		&domain.AdminUser{
 			BaseModel: domain.BaseModel{ID: "admin"},

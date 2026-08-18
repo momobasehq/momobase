@@ -12,6 +12,84 @@
     },
     "basePath": "/",
     "paths": {
+        "/api/admin/analytics/transactions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Analytics"
+                ],
+                "summary": "Transaction analytics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Inclusive RFC3339 start; defaults to 30 days ago",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Exclusive RFC3339 end; defaults to now",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "day",
+                            "hour"
+                        ],
+                        "type": "string",
+                        "description": "Bucket width",
+                        "name": "interval",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Restrict to one application",
+                        "name": "app_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Restrict to one provider account",
+                        "name": "provider_account_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.DocResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/admin/apps": {
             "get": {
                 "security": [

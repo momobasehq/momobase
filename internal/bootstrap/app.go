@@ -144,6 +144,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		runtime,
 		audit,
 		authz,
+		services.NewAnalyticsService(db),
 		info,
 	)
 	router := httpx.NewRouter(httpx.RouterDeps{
