@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"log/slog"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -66,22 +65,29 @@ type bucket struct {
 	reset time.Time
 }
 
-// RateLimitByIP permits at most limit requests from each remote IP during each
-// window and responds with too many requests after the limit is exceeded.
-func RateLimitByIP(limit int, window time.Duration) func(http.Handler) http.Handler {
+// RateLimitByIP permits at most limit requests from each client during each window
+// and responds with too many requests after the limit is exceeded.
+//
+// The resolver is a parameter rather than package state so the untrusted default is
+// explicit at every call site: pass RemoteClientIP to key on the immediate peer, or a
+// resolver from NewForwardedClientIP where a configured proxy sits in front.
+func RateLimitByIP(limit int, window time.Duration, ip ClientIP) func(http.Handler) http.Handler {
+	if ip == nil {
+		ip = RemoteClientIP
+	}
 	var mu sync.Mutex
 	buckets := map[string]bucket{}
 	var checks uint64
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			now, ip := time.Now(), clientIP(r)
+			now, client := time.Now(), ip(r)
 			mu.Lock()
-			current := buckets[ip]
+			current := buckets[client]
 			if now.After(current.reset) {
 				current = bucket{reset: now.Add(window)}
 			}
 			current.count++
-			buckets[ip] = current
+			buckets[client] = current
 			checks++
 			if checks%256 == 0 {
 				for key, item := range buckets {
@@ -99,11 +105,4 @@ func RateLimitByIP(limit int, window time.Duration) func(http.Handler) http.Hand
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil && host != "" {
-		return host
-	}
-	return r.RemoteAddr
 }

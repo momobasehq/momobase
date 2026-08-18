@@ -76,7 +76,7 @@ func TestRecoverConvertsPanicToJSONError(t *testing.T) {
 }
 
 func TestRateLimitByIPIsolatedByClient(t *testing.T) {
-	handler := RateLimitByIP(2, time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := RateLimitByIP(2, time.Minute, RemoteClientIP)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	for attempt := 1; attempt <= 3; attempt++ {
@@ -100,8 +100,8 @@ func TestRateLimitByIPIsolatedByClient(t *testing.T) {
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("different client status = %d", recorder.Code)
 	}
-	if got := clientIP(req); got != "198.51.100.2" {
-		t.Fatalf("clientIP() = %q", got)
+	if got := RemoteClientIP(req); got != "198.51.100.2" {
+		t.Fatalf("RemoteClientIP() = %q", got)
 	}
 }
 
@@ -208,15 +208,20 @@ func TestRequireAppScope(t *testing.T) {
 func TestStructuredLoggerRecordsRequest(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))
-	handler := StructuredLogger(logger)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	// Wrapped in RequestID so the log carries the identifier, which is the point of
+	// having one: it is what ties a report to the line that produced it.
+	handler := RequestID(StructuredLogger(logger, RemoteClientIP)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-	}))
+	})))
 	req := httptest.NewRequest(http.MethodPost, "/payments", nil)
 	req.RemoteAddr = "192.0.2.10:4321"
+	req.Header.Set(RequestIDHeader, "trace-1")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, req)
 	log := output.String()
-	for _, value := range []string{"http_request", "POST", "/payments", `"status":201`, "192.0.2.10:4321"} {
+	// The address is the resolved client, without the ephemeral port: it has to match
+	// what the rate limiter keys on, or a 429 and its log line name different things.
+	for _, value := range []string{"http_request", "POST", "/payments", `"status":201`, `"ip":"192.0.2.10"`, `"request_id":"trace-1"`} {
 		if !strings.Contains(log, value) {
 			t.Fatalf("StructuredLogger() log %q does not contain %q", log, value)
 		}

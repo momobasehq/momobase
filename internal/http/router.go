@@ -24,9 +24,13 @@ type RouterDeps struct {
 	// the assets; see web/dashboard.
 	DashboardEnabled   bool
 	CORSAllowedOrigins []string
-	Public             *publich.Handler
-	Admin              *adminh.Handler
-	Webhooks           *webhookh.Handler
+	// ClientIP resolves the address rate limiting keys on and request logs record.
+	// Nil means the immediate peer, ignoring forwarded headers, which is the only safe
+	// default without knowing which proxies sit in front.
+	ClientIP middlewarex.ClientIP
+	Public   *publich.Handler
+	Admin    *adminh.Handler
+	Webhooks *webhookh.Handler
 }
 
 type middleware = middlewarex.Middleware
@@ -62,10 +66,14 @@ func NewRouter(d RouterDeps) http.Handler {
 		mux.HandleFunc("GET /admin/", movedToDashboard)
 		mux.HandleFunc("GET /admin", movedToDashboard)
 	}
-	tokens := middlewarex.RateLimitByIP(20, time.Minute)
-	publicLimit := middlewarex.RateLimitByIP(120, time.Minute)
-	adminLimit := middlewarex.RateLimitByIP(120, time.Minute)
-	webhookLimit := middlewarex.RateLimitByIP(300, time.Minute)
+	clientIP := d.ClientIP
+	if clientIP == nil {
+		clientIP = middlewarex.RemoteClientIP
+	}
+	tokens := middlewarex.RateLimitByIP(20, time.Minute, clientIP)
+	publicLimit := middlewarex.RateLimitByIP(120, time.Minute, clientIP)
+	adminLimit := middlewarex.RateLimitByIP(120, time.Minute, clientIP)
+	webhookLimit := middlewarex.RateLimitByIP(300, time.Minute, clientIP)
 	route(mux, "POST /api/v1/token", publich.ClientToken(d.AppAuth), tokens)
 	route(mux, "POST /api/v1/token/refresh", publich.AppRefreshToken(d.AppAuth), tokens)
 	// Discovery is what a checkout screen calls before it has any payment details,
@@ -98,9 +106,12 @@ func NewRouter(d RouterDeps) http.Handler {
 	route(mux, "POST /webhooks/{providerAccountID}", d.Webhooks.ProviderWebhook, webhookLimit, middlewarex.MaxBodyBytes(256<<10))
 	return chain(
 		mux,
+		// Outermost, so every later middleware and every log line for this request —
+		// including a panic report — can name the same identifier.
+		middlewarex.RequestID,
 		middlewarex.Recover(d.Logger),
 		middlewarex.MaxBodyBytes(1<<20),
-		middlewarex.StructuredLogger(d.Logger),
+		middlewarex.StructuredLogger(d.Logger, clientIP),
 		middlewarex.CORS(d.CORSAllowedOrigins),
 	)
 }

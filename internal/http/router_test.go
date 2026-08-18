@@ -178,3 +178,27 @@ func TestChainAppliesMiddlewareInDeclarationOrder(t *testing.T) {
 		t.Fatalf("chain order = %q", got)
 	}
 }
+
+// TestRouterAnswers405ForAMethodMismatch pins behaviour the standard library already
+// provides, so nobody adds a handler for it: because every pattern names its method,
+// ServeMux distinguishes "wrong method" from "no such path" and supplies Allow itself.
+func TestRouterAnswers405ForAMethodMismatch(t *testing.T) {
+	router := testRouter()
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, "/api/admin/users", nil))
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("DELETE on a GET/POST path = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
+	}
+	// The header is what makes the status actionable to a client.
+	if allow := recorder.Header().Get("Allow"); !strings.Contains(allow, http.MethodPost) {
+		t.Errorf("Allow = %q, want it to list POST", allow)
+	}
+
+	// An unknown path is still a 404, so the two failures stay distinguishable.
+	recorder = httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/nonexistent", nil))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("GET on an unknown path = %d, want %d", recorder.Code, http.StatusNotFound)
+	}
+}

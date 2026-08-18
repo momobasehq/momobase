@@ -16,6 +16,10 @@ type AppConfig struct {
 	Addr               string
 	PublicURL          string
 	CORSAllowedOrigins []string
+	// TrustedProxyCIDRs names the proxies in front of this deployment, as addresses or
+	// CIDRs. Empty means no forwarded header is believed, so rate limiting keys on the
+	// immediate peer; behind a proxy that would put every client in one bucket.
+	TrustedProxyCIDRs []string
 }
 
 // LogConfig contains structured logging settings.
@@ -88,6 +92,7 @@ func LoadConfig() (Config, error) {
 	c.App.Addr = env("APP_ADDR", ":9090")
 	c.App.PublicURL = env("APP_PUBLIC_URL", "http://localhost:9090")
 	c.App.CORSAllowedOrigins = list("CORS_ALLOWED_ORIGINS", "http://localhost:9090")
+	c.App.TrustedProxyCIDRs = list("TRUSTED_PROXY_CIDRS", "")
 	// logs
 	c.Log.Level = env("LOG_LEVEL", "info")
 	// database

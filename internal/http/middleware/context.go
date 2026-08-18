@@ -15,6 +15,7 @@ type key uint8
 const (
 	adminKey key = iota
 	appKey
+	requestIDKey
 )
 
 // BearerToken returns the token from a Bearer Authorization header, or an empty

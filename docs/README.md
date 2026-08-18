@@ -125,6 +125,30 @@ Capabilities name the service only — `{"service_type": "collection"}`. Which p
 - Disabling an admin invalidates their active sessions.
 - Every administrative endpoint requires one permission, checked by middleware.
 
+## Client addresses behind a proxy
+
+Rate limiting and request logs both key on the same resolved client address. By default
+that is the immediate peer and **no forwarded header is believed**: `X-Forwarded-For` is
+one any caller can set, so honouring it unconditionally would let a client mint a fresh
+bucket per request and switch the limiter off.
+
+```env
+TRUSTED_PROXY_CIDRS=10.0.0.0/8,192.0.2.1
+```
+
+With proxies named, trust becomes directional. The header is read only when the request
+arrived **from** one of them, and the chain is then walked right to left to the first
+address that is not a trusted proxy — the last hop this deployment did not control.
+Anything further left was supplied by something upstream and is not believed. A
+malformed hop ends the walk rather than being skipped.
+
+Without this, every client behind one proxy shares a single bucket. A malformed entry
+fails at start-up rather than silently disabling the feature.
+
+Each request also carries an `X-Request-Id`, echoed on the response and included in its
+log line. An inbound one is adopted when present and plausibly sized, so a trace begun by
+a proxy stays one trace; it is a correlation aid and nothing authorizes on it.
+
 ## Analytics
 
 ```text

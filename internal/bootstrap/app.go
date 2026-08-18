@@ -14,6 +14,7 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	httpx "github.com/momobasehq/momobase/internal/http"
 	adminh "github.com/momobasehq/momobase/internal/http/admin"
+	middlewarex "github.com/momobasehq/momobase/internal/http/middleware"
 	publich "github.com/momobasehq/momobase/internal/http/public"
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
 	"github.com/momobasehq/momobase/internal/platform"
@@ -147,12 +148,19 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		services.NewAnalyticsService(db),
 		info,
 	)
+	// Parsed here rather than in the router so a malformed CIDR fails at start-up with
+	// a clear error instead of silently disabling forwarded-header trust.
+	clientIP, err := middlewarex.NewForwardedClientIP(cfg.App.TrustedProxyCIDRs)
+	if err != nil {
+		return nil, err
+	}
 	router := httpx.NewRouter(httpx.RouterDeps{
 		Logger:             log,
 		AdminAuth:          adminAuth,
 		AppAuth:            appAuth,
 		DashboardEnabled:   cfg.Features.DashboardEnabled,
 		CORSAllowedOrigins: cfg.App.CORSAllowedOrigins,
+		ClientIP:           clientIP,
 		Public:             publicHandler,
 		Admin:              adminHandler,
 		Webhooks:           webhookh.NewHandler(webhooks),
