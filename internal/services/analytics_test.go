@@ -1,4 +1,4 @@
-package services
+package services_test
 
 import (
 	"context"
@@ -7,17 +7,19 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/testsupport"
 )
 
 // seedTransaction inserts a transaction at an explicit time, since the buckets are
 // keyed on created_at and BaseModel would otherwise stamp them all as now.
-func seedTransaction(t *testing.T, s *testStack, at time.Time, service, status, currency string, amount int64, appID, accountID string) {
+func seedTransaction(t *testing.T, s *testsupport.Stack, at time.Time, service, status, currency string, amount int64, appID, accountID string) {
 	t.Helper()
 	tx := domain.Transaction{
 		BaseModel:                 domain.BaseModel{ID: platform.NewID("txn")},
 		AppID:                     appID,
 		ServiceType:               service,
-		PaymentMethod:             testMethod,
+		PaymentMethod:             testsupport.Method,
 		Amount:                    amount,
 		Currency:                  currency,
 		Reference:                 platform.NewID("ref"),
@@ -25,14 +27,14 @@ func seedTransaction(t *testing.T, s *testStack, at time.Time, service, status, 
 		Status:                    status,
 		SelectedProviderAccountID: accountID,
 	}
-	noError(s.db.Create(&tx).Error)
+	testsupport.NoError(s.DB.Create(&tx).Error)
 	// Written after creation: GORM populates CreatedAt on insert, so the backdating has
 	// to overwrite it rather than be supplied alongside.
-	noError(s.db.Model(&domain.Transaction{}).Where("id = ?", tx.ID).Update("created_at", at).Error)
+	testsupport.NoError(s.DB.Model(&domain.Transaction{}).Where("id = ?", tx.ID).Update("created_at", at).Error)
 }
 
 func TestTransactionAnalytics(t *testing.T) {
-	s := stack(t)
+	s := testsupport.New(t)
 	ctx := context.Background()
 	// Midnight-aligned bounds: day buckets are truncated to a day boundary, so an
 	// arbitrary start time would widen the range by a partial day and make the expected
@@ -47,7 +49,7 @@ func TestTransactionAnalytics(t *testing.T) {
 	seedTransaction(t, s, day(2), domain.ServiceCollection, domain.TxSucceeded, "USD", 700, "app-1", "pacc-2")
 
 	t.Run("buckets every period, including quiet ones", func(t *testing.T) {
-		result := must(s.analytics.Transactions(ctx, AnalyticsFilter{From: from, To: to}))
+		result := testsupport.Must(s.Analytics.Transactions(ctx, services.AnalyticsFilter{From: from, To: to}))
 		if len(result.Buckets) != 3 {
 			t.Fatalf("buckets = %d, want one per day in the range", len(result.Buckets))
 		}
@@ -66,7 +68,7 @@ func TestTransactionAnalytics(t *testing.T) {
 	// Summing amounts across currencies would produce a number that means nothing, so
 	// volume stays split and is never totalled.
 	t.Run("volume is reported per currency", func(t *testing.T) {
-		result := must(s.analytics.Transactions(ctx, AnalyticsFilter{From: from, To: to}))
+		result := testsupport.Must(s.Analytics.Transactions(ctx, services.AnalyticsFilter{From: from, To: to}))
 		if len(result.Volume) != 2 {
 			t.Fatalf("volume = %+v, want one entry per currency", result.Volume)
 		}
@@ -79,22 +81,24 @@ func TestTransactionAnalytics(t *testing.T) {
 	})
 
 	t.Run("filters by app and by provider account", func(t *testing.T) {
-		byApp := must(s.analytics.Transactions(ctx, AnalyticsFilter{From: from, To: to, AppID: "app-1"}))
+		byApp := testsupport.Must(s.Analytics.Transactions(ctx, services.AnalyticsFilter{From: from, To: to, AppID: "app-1"}))
 		if byApp.Total != 3 {
 			t.Errorf("app-1 total = %d, want 3", byApp.Total)
 		}
-		byProvider := must(s.analytics.Transactions(ctx, AnalyticsFilter{From: from, To: to, ProviderAccountID: "pacc-2"}))
+		byProvider := testsupport.Must(s.Analytics.Transactions(ctx, services.AnalyticsFilter{From: from, To: to, ProviderAccountID: "pacc-2"}))
 		if byProvider.Total != 2 {
 			t.Errorf("pacc-2 total = %d, want 2", byProvider.Total)
 		}
-		both := must(s.analytics.Transactions(ctx, AnalyticsFilter{From: from, To: to, AppID: "app-1", ProviderAccountID: "pacc-2"}))
+		both := testsupport.Must(
+			s.Analytics.Transactions(ctx, services.AnalyticsFilter{From: from, To: to, AppID: "app-1", ProviderAccountID: "pacc-2"}),
+		)
 		if both.Total != 1 {
 			t.Errorf("app-1 + pacc-2 total = %d, want 1", both.Total)
 		}
 	})
 
 	t.Run("hour buckets are finer than day buckets", func(t *testing.T) {
-		result := must(s.analytics.Transactions(ctx, AnalyticsFilter{From: to.Add(-6 * time.Hour), To: to, Interval: "hour"}))
+		result := testsupport.Must(s.Analytics.Transactions(ctx, services.AnalyticsFilter{From: to.Add(-6 * time.Hour), To: to, Interval: "hour"}))
 		if len(result.Buckets) != 6 {
 			t.Errorf("hour buckets = %d, want 6", len(result.Buckets))
 		}
@@ -103,16 +107,16 @@ func TestTransactionAnalytics(t *testing.T) {
 	// Refusing beats truncating: a capped series would render as a chart that quietly
 	// omits part of its own range.
 	t.Run("rejects a range too wide to render", func(t *testing.T) {
-		if _, err := s.analytics.Transactions(ctx, AnalyticsFilter{From: to.AddDate(-3, 0, 0), To: to, Interval: "hour"}); err == nil {
+		if _, err := s.Analytics.Transactions(ctx, services.AnalyticsFilter{From: to.AddDate(-3, 0, 0), To: to, Interval: "hour"}); err == nil {
 			t.Error("Transactions() accepted a range beyond the bucket cap")
 		}
 	})
 
 	t.Run("rejects an inverted range and an unknown interval", func(t *testing.T) {
-		if _, err := s.analytics.Transactions(ctx, AnalyticsFilter{From: to, To: from}); err == nil {
+		if _, err := s.Analytics.Transactions(ctx, services.AnalyticsFilter{From: to, To: from}); err == nil {
 			t.Error("Transactions() accepted an inverted range")
 		}
-		if _, err := s.analytics.Transactions(ctx, AnalyticsFilter{From: from, To: to, Interval: "week"}); err == nil {
+		if _, err := s.Analytics.Transactions(ctx, services.AnalyticsFilter{From: from, To: to, Interval: "week"}); err == nil {
 			t.Error("Transactions() accepted an unknown interval")
 		}
 	})

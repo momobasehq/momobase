@@ -23,7 +23,7 @@ go test -race ./...                                            # CI runs this
 go test -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
 ```
 
-CI gates (`.github/workflows/tests.yml`): `gofmt -l`, `go mod tidy -diff`, `go mod verify`, vet, tests with **≥50% total coverage**, race detector, golangci-lint (version pinned in `.golangci-lint-version`), Staticcheck, and govulncheck.
+CI gates (`.github/workflows/tests.yml`): `gofmt -l`, `go mod tidy -diff`, `go mod verify`, vet, tests with **≥55% total coverage** (measured with `-coverpkg=./...`, so a test credits every package it exercises, not just its own), race detector, golangci-lint (version pinned in `.golangci-lint-version`), Staticcheck, and govulncheck.
 
 **cgo is required.** SQLite is linked through cgo; a `CGO_ENABLED=0` binary compiles and even prints `version`, then fails on its first query. Release and Docker builds use `CGO_ENABLED=1` with a static link.
 
@@ -97,5 +97,6 @@ Note that `.env` autoload comes from a `godotenv/autoload` import in `cmd/momoba
 - Every exported symbol has a doc comment, including struct fields on API payload types. Match that density.
 - Line limit is 160 (`golines` via golangci `formatters`); long call signatures are broken one argument per line.
 - Small constructors and predicates are written tightly, often without a blank line between them. Follow the surrounding file.
-- Tests use in-memory or temp-dir SQLite (`internal/services/core_test.go` `stack()` is the shared fixture), no mocking framework, and `t.Fatalf("Method() error = %v", err)`-style messages.
-- `internal/services` tests are in-package (they exercise unexported helpers); `momobase_test.go` is deliberately in `momobase_test` to prove the public API works from outside the module.
+- Tests use in-memory or temp-dir SQLite (`internal/testsupport` `New(t)` is the shared fixture), no mocking framework, and `t.Fatalf("Method() error = %v", err)`-style messages.
+- Tests that use `testsupport` **must** be external (`package foo_test`): `testsupport` imports the packages under test, so an in-package test importing it is a cycle. A test covering an unexported helper stays in-package and builds its own fixtures — see `internal/services/internal_test.go`, where all three cases are pure functions needing no database.
+- `momobase_test.go` is deliberately in `momobase_test` to prove the public API works from outside the module.
