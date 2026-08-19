@@ -1,4 +1,4 @@
-package services
+package reconciliation
 
 import (
 	"context"
@@ -12,29 +12,30 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/provider"
 	"github.com/momobasehq/momobase/internal/store"
+	"github.com/momobasehq/momobase/internal/webhook"
 	"github.com/momobasehq/momobase/providers"
 )
 
-// ReconciliationService refreshes non-terminal transaction states and retries pending webhook processing.
-type ReconciliationService struct {
+// Service refreshes non-terminal transaction states and retries pending webhook processing.
+type Service struct {
 	db       *gorm.DB
 	executor *provider.Executor
-	webhook  *WebhookService
+	webhook  *webhook.Service
 	logger   *slog.Logger
 }
 
-// NewReconciliationService creates a transaction reconciliation service.
-func NewReconciliationService(
+// New creates a transaction reconciliation service.
+func New(
 	db *gorm.DB,
 	runtime *provider.RuntimeManager,
-	webhook *WebhookService,
+	webhook *webhook.Service,
 	logger *slog.Logger,
-) *ReconciliationService {
-	return &ReconciliationService{db, provider.NewExecutor(runtime), webhook, logger}
+) *Service {
+	return &Service{db, provider.NewExecutor(runtime), webhook, logger}
 }
 
 // RunOnce reconciles up to limit eligible transactions and reprocesses pending webhooks.
-func (s *ReconciliationService) RunOnce(ctx context.Context, limit int) error {
+func (s *Service) RunOnce(ctx context.Context, limit int) error {
 	if limit < 1 {
 		limit = 100
 	}
@@ -71,7 +72,7 @@ func (s *ReconciliationService) RunOnce(ctx context.Context, limit int) error {
 	}
 	return errors.Join(errs...)
 }
-func (s *ReconciliationService) reconcile(ctx context.Context, row *domain.Transaction) error {
+func (s *Service) reconcile(ctx context.Context, row *domain.Transaction) error {
 	result, err := s.executor.QueryTransaction(ctx, row.SelectedProviderAccountID, row.ProviderReference, row.Country)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -119,7 +120,7 @@ func (s *ReconciliationService) reconcile(ctx context.Context, row *domain.Trans
 		return store.Affected(db.Model(&attempt).Updates(attemptUpdates))
 	})
 }
-func (s *ReconciliationService) deferRetry(ctx context.Context, row *domain.Transaction, cause error) error {
+func (s *Service) deferRetry(ctx context.Context, row *domain.Transaction, cause error) error {
 	err := store.Within(ctx, s.db, func(db *gorm.DB) error {
 		var tx domain.Transaction
 		if err := db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&tx, "id = ?", row.ID).Error; err != nil || domain.Terminal(tx.Status) {

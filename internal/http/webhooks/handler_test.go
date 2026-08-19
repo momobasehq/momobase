@@ -17,7 +17,7 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/provider"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/webhook"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -86,7 +86,7 @@ func webhookHandler(t *testing.T) (*Handler, *gorm.DB) {
 	if err := runtime.LoadActive(context.Background()); err != nil {
 		t.Fatalf("LoadActive() error = %v", err)
 	}
-	return NewHandler(services.NewWebhookService(db, runtime)), db
+	return NewHandler(webhook.New(db, runtime)), db
 }
 
 func TestProviderWebhookAcceptsVerifiedEvent(t *testing.T) {

@@ -1,4 +1,4 @@
-package services
+package webhook
 
 import (
 	"testing"
@@ -7,9 +7,9 @@ import (
 	"github.com/momobasehq/momobase/providers"
 )
 
-// These tests cover unexported helpers, so they stay in-package and must not reach
-// for internal/testsupport — that would be an import cycle. Each one is a pure
-// function, so none of them needs a database.
+// This test covers an unexported helper, so it stays in-package and must not reach
+// for internal/testsupport — that would be an import cycle. It is a pure function
+// and needs no database.
 
 func TestWebhookAccountMatching(t *testing.T) {
 	tx := &domain.Transaction{

@@ -21,8 +21,10 @@ import (
 	"github.com/momobasehq/momobase/internal/payment"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/provider"
+	"github.com/momobasehq/momobase/internal/reconciliation"
 	"github.com/momobasehq/momobase/internal/routing"
 	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/webhook"
 	"github.com/momobasehq/momobase/internal/workers"
 )
 
@@ -124,9 +126,9 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	routeAdmin := routing.NewAdminService(db, audit)
 	routeEngine := routing.NewEngine(db, runtime)
 	payments := payment.NewOrchestrator(db, routeEngine, provider.NewExecutor(runtime))
-	webhooks := services.NewWebhookService(db, runtime)
+	webhooks := webhook.New(db, runtime)
 	health := provider.NewHealthService(db, runtime)
-	recon := services.NewReconciliationService(db, runtime, webhooks, log)
+	recon := reconciliation.New(db, runtime, webhooks, log)
 	manager := workers.NewManager(log, workerTasks(cfg, db, health, recon)...)
 
 	info := adminh.SystemInfo{
@@ -189,7 +191,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	return app, nil
 }
 
-func workerTasks(c Config, db *gorm.DB, health *provider.HealthService, recon *services.ReconciliationService) []workers.Task {
+func workerTasks(c Config, db *gorm.DB, health *provider.HealthService, recon *reconciliation.Service) []workers.Task {
 	if !c.Workers.Enabled {
 		return nil
 	}

@@ -1,4 +1,4 @@
-package services
+package webhook
 
 import (
 	"context"
@@ -31,18 +31,18 @@ type VerifiedWebhook struct {
 	PayloadHash string `json:"payload_hash"`
 }
 
-// WebhookService authenticates, verifies, stores, and applies provider webhook events.
-type WebhookService struct {
+// Service authenticates, verifies, stores, and applies provider webhook events.
+type Service struct {
 	db       *gorm.DB
 	runtime  *provider.RuntimeManager
 	executor *provider.Executor
 }
 
-// NewWebhookService creates a provider webhook processing service.
-func NewWebhookService(db *gorm.DB, runtime *provider.RuntimeManager) *WebhookService {
-	return &WebhookService{db, runtime, provider.NewExecutor(runtime)}
+// New creates a provider webhook processing service.
+func New(db *gorm.DB, runtime *provider.RuntimeManager) *Service {
+	return &Service{db, runtime, provider.NewExecutor(runtime)}
 }
-func (s *WebhookService) verify(
+func (s *Service) verify(
 	ctx context.Context,
 	accountID string,
 	payload []byte,
@@ -76,7 +76,7 @@ func (s *WebhookService) verify(
 }
 
 // Handle verifies and idempotently stores a webhook, then applies it to a matching transaction when available.
-func (s *WebhookService) Handle(ctx context.Context, accountID string, payload []byte, headers map[string]string) error {
+func (s *Service) Handle(ctx context.Context, accountID string, payload []byte, headers map[string]string) error {
 	event, err := s.verify(ctx, accountID, payload, headers)
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func (s *WebhookService) Handle(ctx context.Context, accountID string, payload [
 		return s.apply(db, row, event)
 	})
 }
-func (s *WebhookService) apply(db *gorm.DB, row *domain.WebhookEvent, event *VerifiedWebhook) error {
+func (s *Service) apply(db *gorm.DB, row *domain.WebhookEvent, event *VerifiedWebhook) error {
 	tx, attempt, err := findWebhookTarget(db, event.ProviderAccountID, event.ProviderReference)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
@@ -142,7 +142,7 @@ func (s *WebhookService) apply(db *gorm.DB, row *domain.WebhookEvent, event *Ver
 }
 
 // ReprocessPending retries applying up to limit stored webhook events that have not been processed.
-func (s *WebhookService) ReprocessPending(ctx context.Context, limit int) error {
+func (s *Service) ReprocessPending(ctx context.Context, limit int) error {
 	if limit < 1 {
 		limit = 100
 	}

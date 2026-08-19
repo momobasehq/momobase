@@ -5,14 +5,14 @@ import (
 	"net/http"
 
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/webhook"
 )
 
 // Handler serves incoming provider webhook requests.
-type Handler struct{ service *services.WebhookService }
+type Handler struct{ service *webhook.Service }
 
 // NewHandler constructs a provider webhook handler from a webhook service.
-func NewHandler(s *services.WebhookService) *Handler { return &Handler{service: s} }
+func NewHandler(s *webhook.Service) *Handler { return &Handler{service: s} }
 
 // ProviderWebhook reads an incoming provider webhook and delegates validation
 // and processing to the webhook service.

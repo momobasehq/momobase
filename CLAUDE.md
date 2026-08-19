@@ -40,7 +40,9 @@ The root package (`momobase.go`, `provider.go`, `doc.go`) is a facade: it re-exp
 Layers, outermost first:
 
 - `internal/http` — `NewRouter` wires every route with an explicit middleware chain (`chain`/`route` helpers). Route groups: `public` (app-token payments), `admin` (bearer + role), `webhooks` (body-capped), plus the optional embedded dashboard from `web/dashboard`, served at `/dashboard/` when `DASHBOARD_ENABLED` is set **and** the binary was built with the `dashboard` tag.
-- `internal/services` — auth, tenancy, authorization, webhooks, reconciliation, analytics.
+- `internal/services` — identity and tenancy only: admin auth/users, app auth, apps and credentials, authorization, analytics. It imports none of the payment packages.
+- `internal/webhook` — authenticates, dedupes, and applies provider callbacks to their transactions.
+- `internal/reconciliation` — the worker-driven settle path for transactions the request path left unresolved.
 - `internal/payment` — `payment.Orchestrator` runs the create path end to end, plus the request DTOs, payload validation, and the idempotency hash.
 - `internal/routing` — `routing.Engine` selects a provider account for a request; `routing.AdminService` maintains the routes.
 - `internal/provider` — the adapter lifecycle: `RuntimeManager` (loaded adapters), `Executor` (timeout + circuit breaker), `AdminService` (accounts and encrypted config), `HealthService`. Distinct from the top-level `providers` package, which is the contract an adapter implements.

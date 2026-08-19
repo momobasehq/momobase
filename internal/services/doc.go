@@ -1,7 +1,8 @@
 // Package services implements Momobase's application-level business workflows.
 //
-// It coordinates authentication, application tenancy, authorization, payment
-// routing, transaction reconciliation, webhook processing, and reporting. Provider
-// runtime, execution, administration, and health live in internal/provider; audit
-// recording in internal/audit.
+// It covers identity and tenancy: administrator authentication and accounts,
+// application credentials and their tokens, the authorization catalogue, and
+// transaction reporting. The payment path lives in internal/payment, routing in
+// internal/routing, adapters in internal/provider, callbacks in internal/webhook,
+// and settlement in internal/reconciliation.
 package services
