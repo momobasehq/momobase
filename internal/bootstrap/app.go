@@ -141,19 +141,19 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	}
 
 	publicHandler := publich.NewHandler(payments, routeEngine, db)
-	adminHandler := adminh.NewHandler(
-		db,
-		adminAuth,
-		adminUsers,
-		providerAdmin,
-		routeAdmin,
-		apps,
-		runtime,
-		audit,
-		authz,
-		services.NewAnalyticsService(db),
-		info,
-	)
+	adminHandler := adminh.NewHandler(adminh.Deps{
+		DB:        db,
+		Auth:      adminAuth,
+		Users:     adminUsers,
+		Providers: providerAdmin,
+		Routes:    routeAdmin,
+		Apps:      apps,
+		Runtime:   runtime,
+		Audit:     audit,
+		Authz:     authz,
+		Analytics: services.NewAnalyticsService(db),
+		System:    info,
+	})
 	// Parsed here rather than in the router so a malformed CIDR fails at start-up with
 	// a clear error instead of silently disabling forwarded-header trust.
 	clientIP, err := middlewarex.NewForwardedClientIP(cfg.App.TrustedProxyCIDRs)

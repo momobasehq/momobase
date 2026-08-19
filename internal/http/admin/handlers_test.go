@@ -64,18 +64,15 @@ func testHandlerWithProviders(t *testing.T, registry providers.Registry) *Handle
 	runtime := provider.NewRuntimeManager(db, registry, encryptor, log)
 	audit := audit.New(db, log)
 	apps := services.NewAppService(db, nil, nil)
-	return NewHandler(
-		db,
-		nil,
-		nil,
-		provider.NewAdminService(db, audit, encryptor, registry, runtime),
-		nil,
-		apps,
-		runtime,
-		audit,
-		services.NewAuthzService(db, audit),
-		services.NewAnalyticsService(db),
-		SystemInfo{
+	return NewHandler(Deps{
+		DB:        db,
+		Providers: provider.NewAdminService(db, audit, encryptor, registry, runtime),
+		Apps:      apps,
+		Runtime:   runtime,
+		Audit:     audit,
+		Authz:     services.NewAuthzService(db, audit),
+		Analytics: services.NewAnalyticsService(db),
+		System: SystemInfo{
 			AppName:        "momobase-test",
 			AppEnv:         "test",
 			DBType:         "sqlite",
@@ -83,7 +80,7 @@ func testHandlerWithProviders(t *testing.T, registry providers.Registry) *Handle
 			WorkersEnabled: true,
 			WorkerNames:    []string{"health", "cleanup"},
 		},
-	)
+	})
 }
 
 func TestHandlerProviderRegistryListsRegisteredCodes(t *testing.T) {

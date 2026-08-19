@@ -45,22 +45,53 @@ type Handler struct {
 
 type Response interface{}
 
+// Deps carries the services an administrative handler needs.
+//
+// It is a struct rather than a positional argument list because these fields come
+// from five packages and several share a shape: two adjacent *services pointers
+// swapped by mistake would still compile, and the handler would quietly serve the
+// wrong thing.
+type Deps struct {
+	// DB is the database handle used by read-only listing endpoints.
+	DB *gorm.DB
+	// Auth issues and validates administrator sessions.
+	Auth *services.AdminAuthService
+	// Users administers administrator accounts.
+	Users *services.AdminUserService
+	// Providers administers provider accounts and their encrypted configuration.
+	Providers *provider.AdminService
+	// Routes administers payment routes.
+	Routes *routing.AdminService
+	// Apps administers applications and their credentials.
+	Apps *services.AppService
+	// Runtime exposes loaded adapters for status and balance endpoints.
+	Runtime *provider.RuntimeManager
+	// Audit records administrative actions.
+	Audit *audit.Service
+	// Authz resolves and maintains roles and permissions.
+	Authz *services.AuthzService
+	// Analytics answers transaction reporting queries.
+	Analytics *services.AnalyticsService
+	// System describes the running build for the status endpoint.
+	System SystemInfo
+}
+
 // NewHandler constructs an administrative HTTP handler from its services and
 // system metadata.
-func NewHandler(
-	db *gorm.DB,
-	auth *services.AdminAuthService,
-	users *services.AdminUserService,
-	providers *provider.AdminService,
-	routes *routing.AdminService,
-	apps *services.AppService,
-	runtime *provider.RuntimeManager,
-	audit *audit.Service,
-	authz *services.AuthzService,
-	analytics *services.AnalyticsService,
-	system SystemInfo,
-) *Handler {
-	return &Handler{db, auth, users, providers, routes, apps, runtime, audit, authz, analytics, system}
+func NewHandler(deps Deps) *Handler {
+	return &Handler{
+		db:        deps.DB,
+		auth:      deps.Auth,
+		users:     deps.Users,
+		providers: deps.Providers,
+		routes:    deps.Routes,
+		apps:      deps.Apps,
+		runtime:   deps.Runtime,
+		audit:     deps.Audit,
+		authz:     deps.Authz,
+		analytics: deps.Analytics,
+		system:    deps.System,
+	}
 }
 
 func actor(r *http.Request) *domain.AdminUser { return authmw.AdminUser(r) }

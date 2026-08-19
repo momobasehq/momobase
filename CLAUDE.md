@@ -100,6 +100,8 @@ These are load-bearing; breaking one is a silent correctness bug.
 
 **Adding an HTTP endpoint.** Handler in the matching `internal/http/*` package with swag annotations → register in `internal/http/router.go` with its middleware (role/scope, `JSONOnly`, `NoCache`) → `make docs` → mirror in `web/sdk/src/client.ts` (+`types.ts`), which the dashboard consumes through the pnpm workspace. There is no second client to keep in step.
 
+An admin handler dependency is added to `adminh.Deps`, never as another positional argument: its fields come from five packages and several share a shape, so a swapped pair would still compile.
+
 **Adding a config value.** `internal/bootstrap/config.go` (`env`/`boolean`/`duration`/`list`), a rule in `Config.Validate` if it is unsafe by default in staging/production, then `.env.example`, `.env.docker.example`, and `docker-compose.yml`.
 
 Note that `.env` autoload comes from a `godotenv/autoload` import in `cmd/momobase/main.go` only — embedding applications supply their own configuration.
