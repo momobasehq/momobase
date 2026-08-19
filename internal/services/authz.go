@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/store"
@@ -22,11 +23,11 @@ var ErrSystemRole = errors.New("system roles cannot be changed or deleted")
 // AuthzService seeds the permission catalogue and manages roles.
 type AuthzService struct {
 	db    *gorm.DB
-	audit *AuditService
+	audit *audit.Service
 }
 
 // NewAuthzService creates a permission and role service.
-func NewAuthzService(db *gorm.DB, audit *AuditService) *AuthzService {
+func NewAuthzService(db *gorm.DB, audit *audit.Service) *AuthzService {
 	return &AuthzService{db, audit}
 }
 

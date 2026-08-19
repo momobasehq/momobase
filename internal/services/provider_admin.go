@@ -9,6 +9,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/store"
@@ -19,7 +20,7 @@ import (
 // ProviderAdminService manages provider accounts, encrypted configuration, and runtime activation.
 type ProviderAdminService struct {
 	db        *gorm.DB
-	audit     *AuditService
+	audit     *audit.Service
 	encryptor *platform.Encryptor
 	registry  providers.Registry
 	runtime   *ProviderRuntimeManager
@@ -28,7 +29,7 @@ type ProviderAdminService struct {
 // NewProviderAdminService creates a provider administration service.
 func NewProviderAdminService(
 	db *gorm.DB,
-	audit *AuditService,
+	audit *audit.Service,
 	enc *platform.Encryptor,
 	registry providers.Registry,
 	runtime *ProviderRuntimeManager,

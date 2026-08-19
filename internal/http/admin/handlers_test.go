@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/http/apidoc"
 	"github.com/momobasehq/momobase/internal/platform"
@@ -60,7 +61,7 @@ func testHandlerWithProviders(t *testing.T, registry providers.Registry) *Handle
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	runtime := services.NewProviderRuntimeManager(db, registry, encryptor, log)
-	audit := services.NewAuditService(db, log)
+	audit := audit.New(db, log)
 	apps := services.NewAppService(db, nil, nil)
 	return NewHandler(
 		db,

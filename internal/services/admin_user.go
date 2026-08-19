@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/store"
@@ -16,12 +17,12 @@ import (
 // AdminUserService manages administrator accounts, passwords, and account status.
 type AdminUserService struct {
 	db    *gorm.DB
-	audit *AuditService
+	audit *audit.Service
 	authz *AuthzService
 }
 
 // NewAdminUserService creates an administrator account service.
-func NewAdminUserService(db *gorm.DB, audit *AuditService, authz *AuthzService) *AdminUserService {
+func NewAdminUserService(db *gorm.DB, audit *audit.Service, authz *AuthzService) *AdminUserService {
 	return &AdminUserService{db, audit, authz}
 }
 

@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/http/apidoc"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
@@ -34,7 +35,7 @@ type Handler struct {
 	routes    *services.RouteAdminService
 	apps      *services.AppService
 	runtime   *services.ProviderRuntimeManager
-	audit     *services.AuditService
+	audit     *audit.Service
 	authz     *services.AuthzService
 	analytics *services.AnalyticsService
 	system    SystemInfo
@@ -52,7 +53,7 @@ func NewHandler(
 	routes *services.RouteAdminService,
 	apps *services.AppService,
 	runtime *services.ProviderRuntimeManager,
-	audit *services.AuditService,
+	audit *audit.Service,
 	authz *services.AuthzService,
 	analytics *services.AnalyticsService,
 	system SystemInfo,

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 )
 
@@ -185,7 +186,7 @@ func TestListPermissionsFiltersByAudience(t *testing.T) {
 func TestChangeRole(t *testing.T) {
 	s := stack(t)
 	ctx := context.Background()
-	users := NewAdminUserService(s.db, NewAuditService(s.db, nil), s.authz)
+	users := NewAdminUserService(s.db, audit.New(s.db, nil), s.authz)
 
 	target := must(users.Create(ctx, s.actor, "Target", "target@example.com", "password123", domain.RoleReadOnly))
 

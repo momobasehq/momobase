@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/store"
@@ -48,7 +49,7 @@ func issueTokenPair(
 type AdminAuthService struct {
 	db                    *gorm.DB
 	accessTTL, refreshTTL time.Duration
-	audit                 *AuditService
+	audit                 *audit.Service
 	tokens                *platform.TokenManager
 	authz                 *AuthzService
 }
@@ -58,7 +59,7 @@ func NewAdminAuthService(
 	db *gorm.DB,
 	accessTTL time.Duration,
 	refreshTTL time.Duration,
-	audit *AuditService,
+	audit *audit.Service,
 	tokens *platform.TokenManager,
 	authz *AuthzService,
 ) *AdminAuthService {

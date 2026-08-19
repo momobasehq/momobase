@@ -11,6 +11,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	httpx "github.com/momobasehq/momobase/internal/http"
 	adminh "github.com/momobasehq/momobase/internal/http/admin"
@@ -89,7 +90,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 
 	runtime := services.NewProviderRuntimeManager(db, registry, enc, log)
 
-	audit := services.NewAuditService(db, log)
+	audit := audit.New(db, log)
 
 	// Seeded before anything can authenticate: the catalogue and the system roles are
 	// what every authorization check resolves against, so a boot that skipped this

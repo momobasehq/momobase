@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/store"
@@ -21,11 +22,11 @@ var ErrNoRouteAvailable = errors.New("no active provider route available")
 // RouteAdminService manages payment routing rules.
 type RouteAdminService struct {
 	db    *gorm.DB
-	audit *AuditService
+	audit *audit.Service
 }
 
 // NewRouteAdminService creates a payment route administration service.
-func NewRouteAdminService(db *gorm.DB, audit *AuditService) *RouteAdminService {
+func NewRouteAdminService(db *gorm.DB, audit *audit.Service) *RouteAdminService {
 	return &RouteAdminService{db, audit}
 }
 

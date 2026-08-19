@@ -40,7 +40,8 @@ The root package (`momobase.go`, `provider.go`, `doc.go`) is a facade: it re-exp
 Layers, outermost first:
 
 - `internal/http` — `NewRouter` wires every route with an explicit middleware chain (`chain`/`route` helpers). Route groups: `public` (app-token payments), `admin` (bearer + role), `webhooks` (body-capped), plus the optional embedded dashboard from `web/dashboard`, served at `/dashboard/` when `DASHBOARD_ENABLED` is set **and** the binary was built with the `dashboard` tag.
-- `internal/services` — all business logic: auth, payment orchestration, routing, provider runtime/admin, webhooks, reconciliation, health, audit.
+- `internal/services` — all business logic: auth, payment orchestration, routing, provider runtime/admin, webhooks, reconciliation, health.
+- `internal/audit` — `audit.Service`, the best-effort audit-log recorder. A leaf, so any service package may take one.
 - `providers` — the public adapter contract plus shared helpers (`DoJSON`, `TokenCache`, `Redact`, config accessors, amount/status normalization). `providers/dummy` is the in-tree reference adapter: it simulates payments in memory, so it is registered like any third-party one and needs no credentials.
 - `internal/domain` — GORM models, the shared service/status/circuit constants, and behaviour belonging to a model (`Transaction.Transition`, `AdminUser.ActorID`).
 - `internal/utils` — dependency-free helpers shared across services: identifier/account shape checks, ISO-3166 country normalization, and raw-payload redaction. Nothing here touches the database.

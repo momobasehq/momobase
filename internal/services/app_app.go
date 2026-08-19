@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/store"
@@ -24,11 +25,11 @@ type CreatedCredential struct {
 type AppService struct {
 	db    *gorm.DB
 	auth  *AppAuthService
-	audit *AuditService
+	audit *audit.Service
 }
 
 // NewAppService creates an application management service.
-func NewAppService(db *gorm.DB, auth *AppAuthService, audit *AuditService) *AppService {
+func NewAppService(db *gorm.DB, auth *AppAuthService, audit *audit.Service) *AppService {
 	return &AppService{db, auth, audit}
 }
 func (s *AppService) auditChange(ctx context.Context, actor *domain.AdminUser, action, resource, id string, meta map[string]any) {

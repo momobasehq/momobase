@@ -11,6 +11,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/utils"
@@ -85,7 +86,7 @@ func stack(t *testing.T) *testStack {
 	enc := must(platform.NewEncryptor("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="))
 	registry := providers.NewRegistry()
 	registry.Register("test_provider", dummy.New)
-	runtime, audit := NewProviderRuntimeManager(db, registry, enc, log), NewAuditService(db, log)
+	runtime, audit := NewProviderRuntimeManager(db, registry, enc, log), audit.New(db, log)
 	tokens := must(platform.NewTokenManager("test-app-token-secret-must-be-long-1234567890"))
 	auth := NewAppAuthService(db, "app_test", "secret_test", 30*time.Minute, 24*time.Hour, tokens)
 	apps, routes := NewAppService(db, auth, audit), NewRouteAdminService(db, audit)
