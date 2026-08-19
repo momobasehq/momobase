@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/routing"
 	"github.com/momobasehq/momobase/internal/services"
 	"github.com/momobasehq/momobase/internal/testsupport"
 	"github.com/momobasehq/momobase/internal/utils"
@@ -123,7 +124,7 @@ func TestCoreFlows(t *testing.T) {
 			domain.ServiceCollection,
 			testsupport.Method,
 			"TZ",
-		); !errors.Is(err, services.ErrNoRouteAvailable) {
+		); !errors.Is(err, routing.ErrNoRouteAvailable) {
 			t.Fatalf("unexpected fallback for unsupported country: %v", err)
 		}
 	})

@@ -11,6 +11,7 @@ import (
 	httpcommon "github.com/momobasehq/momobase/internal/http/common"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/routing"
 	"github.com/momobasehq/momobase/internal/services"
 )
 
@@ -76,13 +77,13 @@ func AppRefreshToken(auth *services.AppAuthService) http.HandlerFunc {
 // Handler serves authenticated client-facing payment endpoints.
 type Handler struct {
 	payments *services.PaymentOrchestrator
-	routes   *services.RouteEngine
+	routes   *routing.Engine
 	db       *gorm.DB
 }
 
 // NewHandler constructs a public API handler from a payment orchestrator, the
 // route engine backing method discovery, and a database connection.
-func NewHandler(p *services.PaymentOrchestrator, routes *services.RouteEngine, db *gorm.DB) *Handler {
+func NewHandler(p *services.PaymentOrchestrator, routes *routing.Engine, db *gorm.DB) *Handler {
 	return &Handler{payments: p, routes: routes, db: db}
 }
 
@@ -172,7 +173,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request, service string)
 		return
 	}
 	out, err := h.payments.Create(r.Context(), id.App.ID, service, r.Header.Get("Idempotency-Key"), req)
-	if errors.Is(err, services.ErrNoRouteAvailable) {
+	if errors.Is(err, routing.ErrNoRouteAvailable) {
 		platform.Error(w, 503, "ROUTE_UNAVAILABLE", "no active provider route is available")
 		return
 	}

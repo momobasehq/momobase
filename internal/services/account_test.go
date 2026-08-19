@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/routing"
 	"github.com/momobasehq/momobase/internal/services"
 	"github.com/momobasehq/momobase/internal/testsupport"
 	"github.com/momobasehq/momobase/providers"
@@ -201,8 +202,8 @@ func TestCountryOptionalRouting(t *testing.T) {
 			domain.ServiceCollection,
 			testsupport.Method,
 			"",
-		); !errors.Is(err, services.ErrNoRouteAvailable) {
-			t.Fatalf("SelectProvider() error = %v, want %v", err, services.ErrNoRouteAvailable)
+		); !errors.Is(err, routing.ErrNoRouteAvailable) {
+			t.Fatalf("SelectProvider() error = %v, want %v", err, routing.ErrNoRouteAvailable)
 		}
 	})
 }

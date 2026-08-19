@@ -20,6 +20,7 @@ import (
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/provider"
+	"github.com/momobasehq/momobase/internal/routing"
 	"github.com/momobasehq/momobase/internal/services"
 	"github.com/momobasehq/momobase/internal/workers"
 )
@@ -119,8 +120,8 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	)
 	apps := services.NewAppService(db, appAuth, audit)
 	providerAdmin := provider.NewAdminService(db, audit, enc, registry, runtime)
-	routeAdmin := services.NewRouteAdminService(db, audit)
-	routeEngine := services.NewRouteEngine(db, runtime)
+	routeAdmin := routing.NewAdminService(db, audit)
+	routeEngine := routing.NewEngine(db, runtime)
 	payments := services.NewPaymentOrchestrator(db, routeEngine, provider.NewExecutor(runtime))
 	webhooks := services.NewWebhookService(db, runtime)
 	health := provider.NewHealthService(db, runtime)

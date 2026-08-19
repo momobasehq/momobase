@@ -11,18 +11,6 @@ import (
 // for internal/testsupport — that would be an import cycle. Each one is a pure
 // function, so none of them needs a database.
 
-func TestCountryEligible(t *testing.T) {
-	if !countryEligible(nil, "UG") || !countryEligible(nil, "") {
-		t.Error("countryEligible() = false, want an account with no countries to be unrestricted")
-	}
-	if !countryEligible([]string{"UG"}, "UG") {
-		t.Error("countryEligible(UG, UG) = false, want true")
-	}
-	if countryEligible([]string{"UG"}, "RW") || countryEligible([]string{"UG"}, "") {
-		t.Error("countryEligible() = true, want a declared country to be required")
-	}
-}
-
 func TestWebhookAccountMatching(t *testing.T) {
 	tx := &domain.Transaction{
 		Amount:          1500,

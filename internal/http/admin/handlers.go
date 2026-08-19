@@ -13,6 +13,7 @@ import (
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/provider"
+	"github.com/momobasehq/momobase/internal/routing"
 	"github.com/momobasehq/momobase/internal/services"
 )
 
@@ -33,7 +34,7 @@ type Handler struct {
 	auth      *services.AdminAuthService
 	users     *services.AdminUserService
 	providers *provider.AdminService
-	routes    *services.RouteAdminService
+	routes    *routing.AdminService
 	apps      *services.AppService
 	runtime   *provider.RuntimeManager
 	audit     *audit.Service
@@ -51,7 +52,7 @@ func NewHandler(
 	auth *services.AdminAuthService,
 	users *services.AdminUserService,
 	providers *provider.AdminService,
-	routes *services.RouteAdminService,
+	routes *routing.AdminService,
 	apps *services.AppService,
 	runtime *provider.RuntimeManager,
 	audit *audit.Service,

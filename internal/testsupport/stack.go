@@ -14,6 +14,7 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/provider"
+	"github.com/momobasehq/momobase/internal/routing"
 	"github.com/momobasehq/momobase/internal/services"
 	"github.com/momobasehq/momobase/providers"
 	"github.com/momobasehq/momobase/providers/dummy"
@@ -48,8 +49,8 @@ type Stack struct {
 	Apps          *services.AppService
 	ProviderAdmin *provider.AdminService
 	Runtime       *provider.RuntimeManager
-	Routes        *services.RouteAdminService
-	Routing       *services.RouteEngine
+	Routes        *routing.AdminService
+	Routing       *routing.Engine
 	Payments      *services.PaymentOrchestrator
 	Authz         *services.AuthzService
 	Analytics     *services.AnalyticsService
@@ -101,8 +102,8 @@ func New(t *testing.T) *Stack {
 	runtime, recorder := provider.NewRuntimeManager(db, registry, enc, log), audit.New(db, log)
 	tokens := Must(platform.NewTokenManager("test-app-token-secret-must-be-long-1234567890"))
 	auth := services.NewAppAuthService(db, "app_test", "secret_test", 30*time.Minute, 24*time.Hour, tokens)
-	apps, routes := services.NewAppService(db, auth, recorder), services.NewRouteAdminService(db, recorder)
-	routing := services.NewRouteEngine(db, runtime)
+	apps, routes := services.NewAppService(db, auth, recorder), routing.NewAdminService(db, recorder)
+	routing := routing.NewEngine(db, runtime)
 	authz := services.NewAuthzService(db, recorder)
 	NoError(authz.Seed(context.Background()))
 	return &Stack{
