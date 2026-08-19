@@ -106,7 +106,7 @@ func (s *AnalyticsService) Transactions(ctx context.Context, filter AnalyticsFil
 	if err != nil {
 		return nil, err
 	}
-	expression, err := bucketExpression(s.db.Dialector.Name(), filter.Interval)
+	expression, err := bucketExpression(s.db.Name(), filter.Interval)
 	if err != nil {
 		return nil, err
 	}
