@@ -18,6 +18,7 @@ import (
 	middlewarex "github.com/momobasehq/momobase/internal/http/middleware"
 	publich "github.com/momobasehq/momobase/internal/http/public"
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
+	"github.com/momobasehq/momobase/internal/payment"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/provider"
 	"github.com/momobasehq/momobase/internal/routing"
@@ -122,7 +123,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	providerAdmin := provider.NewAdminService(db, audit, enc, registry, runtime)
 	routeAdmin := routing.NewAdminService(db, audit)
 	routeEngine := routing.NewEngine(db, runtime)
-	payments := services.NewPaymentOrchestrator(db, routeEngine, provider.NewExecutor(runtime))
+	payments := payment.NewOrchestrator(db, routeEngine, provider.NewExecutor(runtime))
 	webhooks := services.NewWebhookService(db, runtime)
 	health := provider.NewHealthService(db, runtime)
 	recon := services.NewReconciliationService(db, runtime, webhooks, log)

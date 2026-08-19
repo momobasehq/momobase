@@ -10,6 +10,7 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	httpcommon "github.com/momobasehq/momobase/internal/http/common"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
+	"github.com/momobasehq/momobase/internal/payment"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/routing"
 	"github.com/momobasehq/momobase/internal/services"
@@ -76,14 +77,14 @@ func AppRefreshToken(auth *services.AppAuthService) http.HandlerFunc {
 
 // Handler serves authenticated client-facing payment endpoints.
 type Handler struct {
-	payments *services.PaymentOrchestrator
+	payments *payment.Orchestrator
 	routes   *routing.Engine
 	db       *gorm.DB
 }
 
 // NewHandler constructs a public API handler from a payment orchestrator, the
 // route engine backing method discovery, and a database connection.
-func NewHandler(p *services.PaymentOrchestrator, routes *routing.Engine, db *gorm.DB) *Handler {
+func NewHandler(p *payment.Orchestrator, routes *routing.Engine, db *gorm.DB) *Handler {
 	return &Handler{payments: p, routes: routes, db: db}
 }
 
@@ -126,7 +127,7 @@ func (h *Handler) ListPaymentMethods(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param Idempotency-Key header string true "Unique idempotency key"
-// @Param request body services.CreatePaymentRequest true "Collection request"
+// @Param request body payment.CreatePaymentRequest true "Collection request"
 // @Success 201 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -149,7 +150,7 @@ func (h *Handler) CreateCollection(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param Idempotency-Key header string true "Unique idempotency key"
-// @Param request body services.CreatePaymentRequest true "Disbursement request"
+// @Param request body payment.CreatePaymentRequest true "Disbursement request"
 // @Success 201 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -167,7 +168,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request, service string)
 		platform.Error(w, 401, "UNAUTHORIZED", "missing app identity")
 		return
 	}
-	req, err := platform.DecodeJSON[services.CreatePaymentRequest](r)
+	req, err := platform.DecodeJSON[payment.CreatePaymentRequest](r)
 	if err != nil {
 		platform.Error(w, 400, "VALIDATION_ERROR", err.Error())
 		return

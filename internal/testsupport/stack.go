@@ -12,6 +12,7 @@ import (
 
 	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/payment"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/provider"
 	"github.com/momobasehq/momobase/internal/routing"
@@ -51,7 +52,7 @@ type Stack struct {
 	Runtime       *provider.RuntimeManager
 	Routes        *routing.AdminService
 	Routing       *routing.Engine
-	Payments      *services.PaymentOrchestrator
+	Payments      *payment.Orchestrator
 	Authz         *services.AuthzService
 	Analytics     *services.AnalyticsService
 	Registry      providers.Registry
@@ -114,7 +115,7 @@ func New(t *testing.T) *Stack {
 		runtime,
 		routes,
 		routing,
-		services.NewPaymentOrchestrator(db, routing, provider.NewExecutor(runtime)),
+		payment.NewOrchestrator(db, routing, provider.NewExecutor(runtime)),
 		authz,
 		services.NewAnalyticsService(db),
 		registry,
@@ -187,4 +188,17 @@ type requestValidator struct {
 
 func (p *requestValidator) ValidateRequest(_ context.Context, req *providers.PaymentRequest) error {
 	return p.validate(req)
+}
+
+// PaymentRequest builds a minimal collection request on Method, which most payment
+// and routing tests only need to vary by reference, country, and account.
+func PaymentRequest(reference, country, account string) *payment.CreatePaymentRequest {
+	return &payment.CreatePaymentRequest{
+		PaymentMethod: Method,
+		Amount:        1500,
+		Currency:      "UGX",
+		Country:       country,
+		Reference:     reference,
+		Account:       account,
+	}
 }

@@ -287,14 +287,7 @@ definitions:
         minimum: 1
         type: integer
     type: object
-  platform.APIError:
-    properties:
-      code:
-        type: string
-      message:
-        type: string
-    type: object
-  services.CreatePaymentRequest:
+  payment.CreatePaymentRequest:
     properties:
       account:
         description: |-
@@ -316,7 +309,7 @@ definitions:
         type: string
       customer:
         allOf:
-        - $ref: '#/definitions/services.PartyPayload'
+        - $ref: '#/definitions/payment.PartyPayload'
         description: Customer optionally identifies the collection customer.
       description:
         description: Description is optional payment context shown to downstream systems.
@@ -336,7 +329,7 @@ definitions:
         type: string
       recipient:
         allOf:
-        - $ref: '#/definitions/services.PartyPayload'
+        - $ref: '#/definitions/payment.PartyPayload'
         description: Recipient optionally identifies the disbursement recipient.
       reference:
         description: Reference is the application's unique business reference.
@@ -348,13 +341,20 @@ definitions:
           selected provider interprets it and Momobase never matches on it.
         type: string
     type: object
-  services.PartyPayload:
+  payment.PartyPayload:
     properties:
       email:
         description: Email is the party's email address.
         type: string
       name:
         description: Name is the party's display name.
+        type: string
+    type: object
+  platform.APIError:
+    properties:
+      code:
+        type: string
+      message:
         type: string
     type: object
 info:
@@ -2131,7 +2131,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/services.CreatePaymentRequest'
+          $ref: '#/definitions/payment.CreatePaymentRequest'
       produces:
       - application/json
       responses:
@@ -2184,7 +2184,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/services.CreatePaymentRequest'
+          $ref: '#/definitions/payment.CreatePaymentRequest'
       produces:
       - application/json
       responses:

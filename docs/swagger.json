@@ -2776,7 +2776,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/services.CreatePaymentRequest"
+                            "$ref": "#/definitions/payment.CreatePaymentRequest"
                         }
                     }
                 ],
@@ -2858,7 +2858,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/services.CreatePaymentRequest"
+                            "$ref": "#/definitions/payment.CreatePaymentRequest"
                         }
                     }
                 ],
@@ -3698,18 +3698,7 @@
                 }
             }
         },
-        "platform.APIError": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "services.CreatePaymentRequest": {
+        "payment.CreatePaymentRequest": {
             "type": "object",
             "properties": {
                 "account": {
@@ -3732,7 +3721,7 @@
                     "description": "Customer optionally identifies the collection customer.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/services.PartyPayload"
+                            "$ref": "#/definitions/payment.PartyPayload"
                         }
                     ]
                 },
@@ -3753,7 +3742,7 @@
                     "description": "Recipient optionally identifies the disbursement recipient.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/services.PartyPayload"
+                            "$ref": "#/definitions/payment.PartyPayload"
                         }
                     ]
                 },
@@ -3767,7 +3756,7 @@
                 }
             }
         },
-        "services.PartyPayload": {
+        "payment.PartyPayload": {
             "type": "object",
             "properties": {
                 "email": {
@@ -3776,6 +3765,17 @@
                 },
                 "name": {
                     "description": "Name is the party's display name.",
+                    "type": "string"
+                }
+            }
+        },
+        "platform.APIError": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "message": {
                     "type": "string"
                 }
             }
