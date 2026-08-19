@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"strings"
 
-	"golang.org/x/text/language"
 	"gorm.io/gorm"
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/store"
+	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -62,7 +62,7 @@ func (s *ProviderAdminService) CreateAccount(
 	if environment != "sandbox" && environment != "production" {
 		return nil, errors.New("environment must be sandbox or production")
 	}
-	countries, err := NormalizeProviderCountries(countries)
+	countries, err := utils.NormalizeProviderCountries(countries)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (s *ProviderAdminService) CreateAccount(
 	}
 	s.audit.RecordBestEffort(
 		ctx,
-		actorID(actor),
+		actor.ActorID(),
 		"admin",
 		"provider_account.created",
 		"provider_account",
@@ -98,7 +98,7 @@ func (s *ProviderAdminService) CreateAccount(
 
 // UpdateCountries replaces a provider account's supported countries and reloads an active runtime.
 func (s *ProviderAdminService) UpdateCountries(ctx context.Context, actor *domain.AdminUser, id string, countries []string) error {
-	countries, err := NormalizeProviderCountries(countries)
+	countries, err := utils.NormalizeProviderCountries(countries)
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func (s *ProviderAdminService) UpdateCountries(ctx context.Context, actor *domai
 	}
 	s.audit.RecordBestEffort(
 		ctx,
-		actorID(actor),
+		actor.ActorID(),
 		"admin",
 		"provider_countries.updated",
 		"provider_account",
@@ -183,7 +183,7 @@ func (s *ProviderAdminService) UpdateConfig(ctx context.Context, actor *domain.A
 			return err
 		}
 	}
-	s.audit.RecordBestEffort(ctx, actorID(actor), "admin", "provider_config.updated", "provider_account", id, nil, "", "")
+	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "provider_config.updated", "provider_account", id, nil, "", "")
 	return nil
 }
 
@@ -201,7 +201,7 @@ func (s *ProviderAdminService) Activate(ctx context.Context, actor *domain.Admin
 		_ = db.Model(&domain.ProviderAccount{}).Where("id = ?", id).Update("active", false).Error
 		return err
 	}
-	s.audit.RecordBestEffort(ctx, actorID(actor), "admin", "provider.activated", "provider_account", id, nil, "", "")
+	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "provider.activated", "provider_account", id, nil, "", "")
 	return nil
 }
 
@@ -211,7 +211,7 @@ func (s *ProviderAdminService) Deactivate(ctx context.Context, actor *domain.Adm
 		return err
 	}
 	s.runtime.Disable(id)
-	s.audit.RecordBestEffort(ctx, actorID(actor), "admin", "provider.deactivated", "provider_account", id, nil, "", "")
+	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "provider.deactivated", "provider_account", id, nil, "", "")
 	return nil
 }
 
@@ -237,63 +237,4 @@ func validateProviderConfig(config map[string]any) error {
 		return errors.New("webhook_secret is required")
 	}
 	return nil
-}
-
-// NormalizeProviderCountries validates, uppercases, and de-duplicates provider
-// country codes while preserving their order.
-//
-// An empty list is allowed and leaves the account unrestricted by country, which is
-// what a rail with no country notion needs. Such an account is eligible for any
-// request country, including a request that carries none, so declaring countries
-// remains the way to keep a provider scoped.
-func NormalizeProviderCountries(values []string) ([]string, error) {
-	if len(values) == 0 {
-		return nil, nil
-	}
-	seen := make(map[string]struct{}, len(values))
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		country, err := NormalizeTransactionCountry(value)
-		if err != nil {
-			return nil, err
-		}
-		if _, exists := seen[country]; !exists {
-			seen[country] = struct{}{}
-			out = append(out, country)
-		}
-	}
-	return out, nil
-}
-
-// NormalizeTransactionCountry returns a validated uppercase ISO 3166-1 alpha-2 country code.
-//
-// The length guard is load-bearing: language.ParseRegion accepts alpha-3 input and
-// silently rewrites it, so "USA" would otherwise be stored as "US". IsCountry then
-// rejects the reserved and grouping regions ParseRegion allows through — ZZ, XX, QO,
-// EU, 419. The stored value is the caller's own input uppercased rather than the
-// parsed region, which is what keeps a rewrite from reaching the database.
-func NormalizeTransactionCountry(country string) (string, error) {
-	country = strings.TrimSpace(country)
-	region, err := language.ParseRegion(country)
-	if len(country) != 2 || err != nil || !region.IsCountry() {
-		return "", errors.New("country must be a supported ISO-3166 alpha-2 code")
-	}
-	return strings.ToUpper(country), nil
-}
-
-// NormalizeOptionalCountry validates a country code that a request may omit,
-// returning an empty string when none was supplied. A payment without a country
-// can only be routed to a provider account that declares no countries.
-func NormalizeOptionalCountry(country string) (string, error) {
-	if strings.TrimSpace(country) == "" {
-		return "", nil
-	}
-	return NormalizeTransactionCountry(country)
-}
-
-func actorID(actor *domain.AdminUser) string {
-	if actor == nil || actor.ID == "" {
-		return "system"
-	}
-	return actor.ID
 }

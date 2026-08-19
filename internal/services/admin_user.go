@@ -60,14 +60,13 @@ func (s *AdminUserService) Create(ctx context.Context, actor *domain.AdminUser, 
 		Status:            "active",
 		PasswordChangedAt: &now,
 	}
-	actorID := "system"
 	if actor != nil {
-		actorID, user.CreatedBy = actor.ID, actor.ID
+		user.CreatedBy = actor.ID
 	}
 	if err = s.db.WithContext(ctx).Create(user).Error; err == nil {
 		s.audit.RecordBestEffort(
 			ctx,
-			actorID,
+			actor.ActorID(),
 			"admin",
 			"admin.created",
 			"admin_user",

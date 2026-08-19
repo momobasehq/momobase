@@ -11,6 +11,7 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/store"
+	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -45,7 +46,7 @@ func (s *RouteAdminService) Create(
 	// the engine only ever compares against a request, so it is checked for shape
 	// rather than against a fixed set.
 	method = strings.ToLower(strings.TrimSpace(method))
-	if method == "" || !validIdentifier(method) {
+	if method == "" || !utils.ValidIdentifier(method) {
 		return nil, errors.New("payment_method is required and may contain only letters, digits, and _-. and must not exceed 64 characters")
 	}
 	var count int64
@@ -67,7 +68,7 @@ func (s *RouteAdminService) Create(
 	if err := db.Create(route).Error; err != nil {
 		return nil, err
 	}
-	s.audit.RecordBestEffort(ctx, actorID(actor), "admin", "route.created", "payment_route", route.ID, nil, "", "")
+	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "route.created", "payment_route", route.ID, nil, "", "")
 	return route, nil
 }
 
@@ -85,7 +86,7 @@ func (s *RouteAdminService) Update(ctx context.Context, actor *domain.AdminUser,
 	}
 	s.audit.RecordBestEffort(
 		ctx,
-		actorID(actor),
+		actor.ActorID(),
 		"admin",
 		"route.updated",
 		"payment_route",
@@ -122,7 +123,7 @@ func NewRouteEngine(db *gorm.DB, runtime *ProviderRuntimeManager) *RouteEngine {
 // requested service, method, and country. The country may be empty, which only
 // provider accounts that declare no countries of their own can serve.
 func (e *RouteEngine) SelectProvider(ctx context.Context, service, method, country string) (*SelectedProvider, error) {
-	country, err := NormalizeOptionalCountry(country)
+	country, err := utils.NormalizeOptionalCountry(country)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +170,7 @@ func (e *RouteEngine) AvailablePaymentMethods(ctx context.Context, service, coun
 	if service != "" && service != domain.ServiceCollection && service != domain.ServiceDisbursement {
 		return nil, errors.New("service_type must be collection or disbursement")
 	}
-	country, err := NormalizeOptionalCountry(country)
+	country, err := utils.NormalizeOptionalCountry(country)
 	if err != nil {
 		return nil, err
 	}

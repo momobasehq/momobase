@@ -81,11 +81,11 @@ func (s *ReconciliationService) reconcile(ctx context.Context, row *domain.Trans
 	target := providers.PaymentStatus(result.Status)
 	return store.Within(ctx, s.db, func(db *gorm.DB) error {
 		var tx domain.Transaction
-		if err := db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&tx, "id = ?", row.ID).Error; err != nil || terminal(tx.Status) {
+		if err := db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&tx, "id = ?", row.ID).Error; err != nil || domain.Terminal(tx.Status) {
 			return err
 		}
 		previous := tx.Status
-		if err := transition(&tx, target); err != nil {
+		if err := tx.Transition(target); err != nil {
 			return err
 		}
 		now := time.Now().UTC()
@@ -95,7 +95,7 @@ func (s *ReconciliationService) reconcile(ctx context.Context, row *domain.Trans
 			"reconciliation_attempts": gorm.Expr("reconciliation_attempts + 1"),
 			"next_reconcile_at":       nil,
 		}
-		if !terminal(tx.Status) {
+		if !domain.Terminal(tx.Status) {
 			next := now.Add(backoff(tx.ReconciliationAttempts + 1))
 			updates["next_reconcile_at"] = &next
 		}
@@ -112,7 +112,7 @@ func (s *ReconciliationService) reconcile(ctx context.Context, row *domain.Trans
 			return err
 		}
 		attemptUpdates := map[string]any{"status": tx.Status, "error_code": "", "error_message": ""}
-		if terminal(tx.Status) {
+		if domain.Terminal(tx.Status) {
 			attemptUpdates["completed_at"] = &now
 		}
 		return store.Affected(db.Model(&attempt).Updates(attemptUpdates))
@@ -121,11 +121,11 @@ func (s *ReconciliationService) reconcile(ctx context.Context, row *domain.Trans
 func (s *ReconciliationService) deferRetry(ctx context.Context, row *domain.Transaction, cause error) error {
 	err := store.Within(ctx, s.db, func(db *gorm.DB) error {
 		var tx domain.Transaction
-		if err := db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&tx, "id = ?", row.ID).Error; err != nil || terminal(tx.Status) {
+		if err := db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&tx, "id = ?", row.ID).Error; err != nil || domain.Terminal(tx.Status) {
 			return err
 		}
 		previous, now := tx.Status, time.Now().UTC()
-		if err := transition(&tx, domain.TxUnknown); err != nil {
+		if err := tx.Transition(domain.TxUnknown); err != nil {
 			return err
 		}
 		next := now.Add(backoff(tx.ReconciliationAttempts + 1))

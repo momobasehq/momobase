@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -60,7 +61,7 @@ func guardValidatedRequest(before providers.PaymentRequest, after *providers.Pay
 		before.Reference != after.Reference {
 		return errors.New("provider modified a payment request field it does not own")
 	}
-	if after.Account == "" || !validAccount(after.Account) {
+	if after.Account == "" || !utils.ValidAccount(after.Account) {
 		return errors.New("provider normalized the account to an unusable value")
 	}
 	return nil

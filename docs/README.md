@@ -8,6 +8,7 @@ The backend is a modular monolith with six main areas:
 - `internal/services`: authentication, payments, routing, provider runtime, health, webhooks, reconciliation, and auditing.
 - `providers`: the public provider contract and shared adapter helpers, plus the in-tree reference adapter in `providers/dummy`. Nothing here is registered automatically; a build chooses its providers through `momobase.WithProvider`.
 - `internal/store`: database helpers and transaction boundaries.
+- `internal/utils`: dependency-free helpers shared across services — validation, country normalization, and redaction.
 - `internal/workers`: bounded health, reconciliation, and session-cleanup loops.
 - `internal/bootstrap`: configuration, database initialization, dependency wiring, migration, and process lifecycle.
 - `internal/migrations`: ordered schema changes that `AutoMigrate` cannot express, and the ledger recording which have been applied.

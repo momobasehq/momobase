@@ -13,6 +13,7 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/store"
+	"github.com/momobasehq/momobase/internal/utils"
 )
 
 // ErrSystemRole indicates an attempt to change or delete a seeded role.
@@ -185,7 +186,7 @@ func (s *AuthzService) CreateRole(
 	codes []string,
 ) (*domain.Role, error) {
 	name = normalizeRoleName(name)
-	if name == "" || !validIdentifier(name) {
+	if name == "" || !utils.ValidIdentifier(name) {
 		return nil, errors.New("role name is required and may contain only letters, digits, and _-. and must not exceed 64 characters")
 	}
 	// A custom role must not shadow a seeded one: AdminUser.Role refers to a role by
@@ -207,7 +208,7 @@ func (s *AuthzService) CreateRole(
 	if err := s.db.WithContext(ctx).Create(role).Error; err != nil {
 		return nil, err
 	}
-	s.audit.RecordBestEffort(ctx, actorID(actor), "admin", "role.created", "role", role.ID, map[string]any{"permissions": codes}, "", "")
+	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "role.created", "role", role.ID, map[string]any{"permissions": codes}, "", "")
 	return role, nil
 }
 
@@ -236,7 +237,7 @@ func (s *AuthzService) UpdateRole(
 	}); err != nil {
 		return err
 	}
-	s.audit.RecordBestEffort(ctx, actorID(actor), "admin", "role.updated", "role", role.ID, map[string]any{"permissions": codes}, "", "")
+	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "role.updated", "role", role.ID, map[string]any{"permissions": codes}, "", "")
 	return nil
 }
 
@@ -263,7 +264,7 @@ func (s *AuthzService) DeleteRole(ctx context.Context, actor *domain.AdminUser, 
 	}); err != nil {
 		return err
 	}
-	s.audit.RecordBestEffort(ctx, actorID(actor), "admin", "role.deleted", "role", role.ID, nil, "", "")
+	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "role.deleted", "role", role.ID, nil, "", "")
 	return nil
 }
 

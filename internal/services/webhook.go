@@ -16,6 +16,7 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/store"
+	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -67,7 +68,7 @@ func (s *WebhookService) verify(
 	event.Currency, event.Country, event.Raw =
 		strings.ToUpper(event.Currency),
 		strings.ToUpper(event.Country),
-		redactRawMap(event.Raw)
+		utils.RedactRawMap(event.Raw)
 	out := &VerifiedWebhook{ProviderWebhookEvent: *event, ProviderAccountID: accountID}
 	out.PayloadHash = CanonicalWebhookHash(out)
 	return out, nil
@@ -116,12 +117,12 @@ func (s *WebhookService) apply(db *gorm.DB, row *domain.WebhookEvent, event *Ver
 	if err := validateWebhook(event, tx); err != nil {
 		return err
 	}
-	if err := transition(tx, event.Status); err != nil {
+	if err := tx.Transition(event.Status); err != nil {
 		return err
 	}
 	now := time.Now().UTC()
 	txUpdates := map[string]any{"status": tx.Status, "provider_reference": event.ProviderReference, "next_reconcile_at": nil}
-	if !terminal(tx.Status) {
+	if !domain.Terminal(tx.Status) {
 		next := now.Add(time.Minute)
 		txUpdates["next_reconcile_at"] = &next
 	}
@@ -130,7 +131,7 @@ func (s *WebhookService) apply(db *gorm.DB, row *domain.WebhookEvent, event *Ver
 	}
 	raw, _ := json.Marshal(event.Raw)
 	attemptUpdates := map[string]any{"status": tx.Status, "provider_reference": event.ProviderReference, "raw_response": string(raw)}
-	if terminal(tx.Status) {
+	if domain.Terminal(tx.Status) {
 		attemptUpdates["completed_at"] = &now
 	}
 	if err := store.Affected(db.Model(attempt).Updates(attemptUpdates)); err != nil {

@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode"
 
 	"gorm.io/gorm"
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/store"
+	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -109,7 +109,7 @@ func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 	if req == nil {
 		return errors.New("payment request is required")
 	}
-	country, err := NormalizeOptionalCountry(req.Country)
+	country, err := utils.NormalizeOptionalCountry(req.Country)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 		strings.TrimSpace(req.Account),
 		strings.ToLower(strings.TrimSpace(req.Scheme))
 	switch {
-	case req.PaymentMethod == "" || !validIdentifier(req.PaymentMethod):
+	case req.PaymentMethod == "" || !utils.ValidIdentifier(req.PaymentMethod):
 		return errors.New("payment_method is required and may contain only letters, digits, and _-. and must not exceed 64 characters")
 	case req.Amount <= 0:
 		return errors.New("amount must be greater than zero")
@@ -133,9 +133,9 @@ func ValidatePaymentPayload(service string, req *CreatePaymentRequest) error {
 		return errors.New("description must not exceed 255 characters")
 	case req.Account == "":
 		return errors.New("account is required")
-	case !validAccount(req.Account):
+	case !utils.ValidAccount(req.Account):
 		return errors.New("account must not exceed 255 characters or contain control characters")
-	case !validIdentifier(req.Scheme):
+	case !utils.ValidIdentifier(req.Scheme):
 		return errors.New("scheme may contain only letters, digits, and _-. and must not exceed 64 characters")
 	}
 	return validateParty(paymentParty(service, req))
@@ -266,25 +266,25 @@ func (o *PaymentOrchestrator) persist(
 		if cause == nil {
 			cause = errors.New("provider returned no response")
 		}
-		if err := transition(tx, domain.TxUnknown); err != nil {
+		if err := tx.Transition(domain.TxUnknown); err != nil {
 			return nil, err
 		}
 		attemptUpdates["status"], txUpdates["status"] = tx.Status, tx.Status
 		attemptUpdates["error_code"], attemptUpdates["error_message"] = "PROVIDER_ERROR", providers.Redact(cause.Error())
 	} else {
 		target := providers.PaymentStatus(result.Status)
-		if err := transition(tx, target); err != nil {
+		if err := tx.Transition(target); err != nil {
 			return nil, err
 		}
 		tx.ProviderReference, message = result.ProviderReference, result.Message
-		raw, _ := json.Marshal(redactRawMap(result.Raw))
+		raw, _ := json.Marshal(utils.RedactRawMap(result.Raw))
 		attemptUpdates["status"], attemptUpdates["provider_reference"], attemptUpdates["raw_response"] =
 			tx.Status,
 			tx.ProviderReference,
 			string(raw)
 		txUpdates["status"], txUpdates["provider_reference"] = tx.Status, tx.ProviderReference
 	}
-	if terminal(tx.Status) {
+	if domain.Terminal(tx.Status) {
 		attemptUpdates["completed_at"] = &now
 	} else {
 		next := now.Add(time.Minute)
@@ -328,30 +328,6 @@ func replay(tx *domain.Transaction, hash, _ string, _ *CreatePaymentRequest) (*C
 	}, nil
 }
 
-// validIdentifier reports whether a rail identifier — a payment method or an
-// account scheme — is safely comparable. Both name provider-specific values rather
-// than a fixed set, so they are checked structurally instead of against a list of
-// known ones. The empty string is valid; callers that require a value check it.
-func validIdentifier(value string) bool {
-	if len(value) > 64 {
-		return false
-	}
-	for _, r := range value {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-', r == '.':
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-// validAccount reports whether an account identifier fits the column it is stored
-// in and is safe to log and compare. Its meaning stays opaque to the engine.
-func validAccount(account string) bool {
-	return len(account) <= 255 && strings.IndexFunc(account, unicode.IsControl) < 0
-}
-
 // PaymentRequestHash returns the canonical SHA-256 request hash used for idempotency checks.
 func PaymentRequestHash(service string, req *CreatePaymentRequest) string {
 	data, _ := json.Marshal(struct {
@@ -359,19 +335,4 @@ func PaymentRequestHash(service string, req *CreatePaymentRequest) string {
 		Request *CreatePaymentRequest
 	}{service, req})
 	return platform.SHA256Hex(string(data))
-}
-
-func redactRawMap(raw map[string]any) map[string]any {
-	out := make(map[string]any, len(raw))
-	for k, v := range raw {
-		key := strings.ToLower(k)
-		if strings.Contains(key, "token") ||
-			strings.Contains(key, "secret") ||
-			strings.Contains(key, "key") ||
-			strings.Contains(key, "password") {
-			v = "[redacted]"
-		}
-		out[k] = v
-	}
-	return out
 }

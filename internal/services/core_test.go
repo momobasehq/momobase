@@ -13,6 +13,7 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 	"github.com/momobasehq/momobase/providers/dummy"
 )
@@ -276,36 +277,36 @@ func TestCoreFlows(t *testing.T) {
 }
 
 func TestCountryNormalization(t *testing.T) {
-	countries, err := NormalizeProviderCountries([]string{" ug ", "RW", "UG"})
+	countries, err := utils.NormalizeProviderCountries([]string{" ug ", "RW", "UG"})
 	if err != nil || len(countries) != 2 || countries[0] != "UG" || countries[1] != "RW" {
 		t.Fatalf("countries=%v err=%v", countries, err)
 	}
-	if countries, err = NormalizeProviderCountries(nil); err != nil || countries != nil {
-		t.Fatalf("NormalizeProviderCountries(nil) = %v, %v, want an unrestricted account", countries, err)
+	if countries, err = utils.NormalizeProviderCountries(nil); err != nil || countries != nil {
+		t.Fatalf("utils.NormalizeProviderCountries(nil) = %v, %v, want an unrestricted account", countries, err)
 	}
-	if country, err := NormalizeOptionalCountry("  "); err != nil || country != "" {
-		t.Fatalf("NormalizeOptionalCountry(blank) = %q, %v, want an empty country", country, err)
+	if country, err := utils.NormalizeOptionalCountry("  "); err != nil || country != "" {
+		t.Fatalf("utils.NormalizeOptionalCountry(blank) = %q, %v, want an empty country", country, err)
 	}
-	if country, err := NormalizeOptionalCountry(" ug "); err != nil || country != "UG" {
-		t.Fatalf("NormalizeOptionalCountry(%q) = %q, %v", " ug ", country, err)
+	if country, err := utils.NormalizeOptionalCountry(" ug "); err != nil || country != "UG" {
+		t.Fatalf("utils.NormalizeOptionalCountry(%q) = %q, %v", " ug ", country, err)
 	}
 
 	// language.ParseRegion is deliberately not trusted on its own: it accepts the
 	// reserved and grouping regions, and rewrites alpha-3 input into alpha-2 rather
 	// than rejecting it, so "USA" would otherwise be stored as "US".
 	for _, country := range []string{"XX", "ZZ", "QO", "EU", "419", "USA", "U", "UGX"} {
-		if got, err := NormalizeTransactionCountry(country); err == nil {
-			t.Errorf("NormalizeTransactionCountry(%q) = %q, want an error", country, got)
+		if got, err := utils.NormalizeTransactionCountry(country); err == nil {
+			t.Errorf("utils.NormalizeTransactionCountry(%q) = %q, want an error", country, got)
 		}
 	}
-	if _, err := NormalizeTransactionCountry(""); err == nil {
-		t.Error("NormalizeTransactionCountry(\"\") = nil, want an error for a required country")
+	if _, err := utils.NormalizeTransactionCountry(""); err == nil {
+		t.Error("utils.NormalizeTransactionCountry(\"\") = nil, want an error for a required country")
 	}
 	// UK is exceptionally reserved for GB rather than assigned, and ParseRegion
 	// resolves it. Storing the caller's own input keeps it out of the canonical
 	// rewrite path, so what round-trips is exactly what was sent.
-	if country, err := NormalizeTransactionCountry("uk"); err != nil || country != "UK" {
-		t.Errorf("NormalizeTransactionCountry(%q) = %q, %v, want the input uppercased", "uk", country, err)
+	if country, err := utils.NormalizeTransactionCountry("uk"); err != nil || country != "UK" {
+		t.Errorf("utils.NormalizeTransactionCountry(%q) = %q, %v, want the input uppercased", "uk", country, err)
 	}
 }
 

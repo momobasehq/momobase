@@ -42,7 +42,8 @@ Layers, outermost first:
 - `internal/http` — `NewRouter` wires every route with an explicit middleware chain (`chain`/`route` helpers). Route groups: `public` (app-token payments), `admin` (bearer + role), `webhooks` (body-capped), plus the optional embedded dashboard from `web/dashboard`, served at `/dashboard/` when `DASHBOARD_ENABLED` is set **and** the binary was built with the `dashboard` tag.
 - `internal/services` — all business logic: auth, payment orchestration, routing, provider runtime/admin, webhooks, reconciliation, health, audit.
 - `providers` — the public adapter contract plus shared helpers (`DoJSON`, `TokenCache`, `Redact`, config accessors, amount/status normalization). `providers/dummy` is the in-tree reference adapter: it simulates payments in memory, so it is registered like any third-party one and needs no credentials.
-- `internal/domain` — GORM models and the shared service/status/circuit constants.
+- `internal/domain` — GORM models, the shared service/status/circuit constants, and behaviour belonging to a model (`Transaction.Transition`, `AdminUser.ActorID`).
+- `internal/utils` — dependency-free helpers shared across services: identifier/account shape checks, ISO-3166 country normalization, and raw-payload redaction. Nothing here touches the database.
 - `internal/store` — the only transaction boundary (`Within`) and write-result helper (`Affected`).
 - `internal/platform` — AES-256-GCM encryptor, HMAC token manager, bcrypt, IDs, JSON request decoding, the `{success,data,error}` response envelope, pagination.
 - `internal/workers` — one `Manager` owning all background goroutines (`health`, `reconciliation`, `cleanup`), stopped by context cancellation.
@@ -68,10 +69,10 @@ Each runtime carries its own circuit breaker: 3 consecutive failures open it, it
 
 These are load-bearing; breaking one is a silent correctness bug.
 
-- **Every** transaction status change goes through `services.transition`, which enforces the legal state graph. Use `terminal()` rather than comparing status strings.
+- **Every** transaction status change goes through `(*domain.Transaction).Transition`, which enforces the legal state graph. Never assign `Status` directly. Use `domain.Terminal()` rather than comparing status strings.
 - `store.Within` is the only place a DB transaction starts. **Never** wrap a provider network call in one.
 - Zero-row writes are errors: wrap updates in `store.Affected` so they become `gorm.ErrRecordNotFound`.
-- Anything derived from a provider — errors, raw payloads — passes through `providers.Redact` / `redactRawMap` before it is logged or persisted.
+- Anything derived from a provider — errors, raw payloads — passes through `providers.Redact` / `utils.RedactRawMap` before it is logged or persisted.
 - Request handlers launch no detached goroutines. Background work belongs to `workers.Manager` and stops on context cancellation.
 - Idempotency is `(app_id, idempotency_key)` unique index **plus** `RequestHash` comparison; a reused key with a different body is an error, not a replay. The hash is taken before provider normalization, so two spellings of one account are two different requests.
 - Webhooks authenticate with a constant-time compare of `X-Webhook-Secret` against the account's decrypted `webhook_secret`, dedupe on `(provider_account_id, payload_hash)` via `ON CONFLICT DO NOTHING`, and are validated field-by-field against the target transaction before being applied. `ProviderWebhookEvent.Account` is compared **exactly** against `Transaction.CustomerAccount`, so an adapter that normalizes in `ValidateRequest` must report the same form here.
