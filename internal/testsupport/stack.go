@@ -13,6 +13,7 @@ import (
 	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/provider"
 	"github.com/momobasehq/momobase/internal/services"
 	"github.com/momobasehq/momobase/providers"
 	"github.com/momobasehq/momobase/providers/dummy"
@@ -45,8 +46,8 @@ type Stack struct {
 	DB            *gorm.DB
 	Auth          *services.AppAuthService
 	Apps          *services.AppService
-	ProviderAdmin *services.ProviderAdminService
-	Runtime       *services.ProviderRuntimeManager
+	ProviderAdmin *provider.AdminService
+	Runtime       *provider.RuntimeManager
 	Routes        *services.RouteAdminService
 	Routing       *services.RouteEngine
 	Payments      *services.PaymentOrchestrator
@@ -97,7 +98,7 @@ func New(t *testing.T) *Stack {
 	enc := Must(platform.NewEncryptor("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="))
 	registry := providers.NewRegistry()
 	registry.Register(ProviderCode, dummy.New)
-	runtime, recorder := services.NewProviderRuntimeManager(db, registry, enc, log), audit.New(db, log)
+	runtime, recorder := provider.NewRuntimeManager(db, registry, enc, log), audit.New(db, log)
 	tokens := Must(platform.NewTokenManager("test-app-token-secret-must-be-long-1234567890"))
 	auth := services.NewAppAuthService(db, "app_test", "secret_test", 30*time.Minute, 24*time.Hour, tokens)
 	apps, routes := services.NewAppService(db, auth, recorder), services.NewRouteAdminService(db, recorder)
@@ -108,11 +109,11 @@ func New(t *testing.T) *Stack {
 		db,
 		auth,
 		apps,
-		services.NewProviderAdminService(db, recorder, enc, registry, runtime),
+		provider.NewAdminService(db, recorder, enc, registry, runtime),
 		runtime,
 		routes,
 		routing,
-		services.NewPaymentOrchestrator(db, routing, services.NewProviderExecutor(runtime)),
+		services.NewPaymentOrchestrator(db, routing, provider.NewExecutor(runtime)),
 		authz,
 		services.NewAnalyticsService(db),
 		registry,

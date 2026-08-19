@@ -40,7 +40,8 @@ The root package (`momobase.go`, `provider.go`, `doc.go`) is a facade: it re-exp
 Layers, outermost first:
 
 - `internal/http` — `NewRouter` wires every route with an explicit middleware chain (`chain`/`route` helpers). Route groups: `public` (app-token payments), `admin` (bearer + role), `webhooks` (body-capped), plus the optional embedded dashboard from `web/dashboard`, served at `/dashboard/` when `DASHBOARD_ENABLED` is set **and** the binary was built with the `dashboard` tag.
-- `internal/services` — all business logic: auth, payment orchestration, routing, provider runtime/admin, webhooks, reconciliation, health.
+- `internal/services` — auth, tenancy, authorization, payment orchestration, routing, webhooks, reconciliation, analytics.
+- `internal/provider` — the adapter lifecycle: `RuntimeManager` (loaded adapters), `Executor` (timeout + circuit breaker), `AdminService` (accounts and encrypted config), `HealthService`. Distinct from the top-level `providers` package, which is the contract an adapter implements.
 - `internal/audit` — `audit.Service`, the best-effort audit-log recorder. A leaf, so any service package may take one.
 - `providers` — the public adapter contract plus shared helpers (`DoJSON`, `TokenCache`, `Redact`, config accessors, amount/status normalization). `providers/dummy` is the in-tree reference adapter: it simulates payments in memory, so it is registered like any third-party one and needs no credentials.
 - `internal/domain` — GORM models, the shared service/status/circuit constants, and behaviour belonging to a model (`Transaction.Transition`, `AdminUser.ActorID`).
@@ -52,7 +53,7 @@ Layers, outermost first:
 
 ### Payment path
 
-`POST /api/v1/collections` → app-bearer + scope middleware → `PaymentOrchestrator.Create` → validate & normalize (country, currency, payment method, account shape) → idempotency lookup by `(app_id, idempotency_key)` → `RouteEngine.SelectProvider` → `RuntimeProviderExecutor.ValidateRequest` (the provider's optional `providers.RequestValidator`) → persist `Transaction` + `TransactionAttempt` → `RuntimeProviderExecutor.Collect` (timeout + circuit breaker + structured logging) → `persist` applies the state machine.
+`POST /api/v1/collections` → app-bearer + scope middleware → `PaymentOrchestrator.Create` → validate & normalize (country, currency, payment method, account shape) → idempotency lookup by `(app_id, idempotency_key)` → `RouteEngine.SelectProvider` → `provider.Executor.ValidateRequest` (the provider's optional `providers.RequestValidator`) → persist `Transaction` + `TransactionAttempt` → `provider.Executor.Collect` (timeout + circuit breaker + structured logging) → `persist` applies the state machine.
 
 **Accounts are opaque, and the payload is flat.** A payment carries a top-level `account` (mobile number, bank account, card token, wallet address) plus optional `scheme` and `metadata`; the engine only checks the account's shape. `GET /api/v1/payment-methods` lists what a client may pay with, reusing `RouteEngine`'s own candidate check so the listing cannot drift from routing. A provider that needs a particular kind of identifier implements `providers.RequestValidator`, which runs after routing and before any row is written, may rewrite `Account`/`Scheme` only, and whose rejection is a client error that never trips the circuit breaker. The engine carries no account-format logic of its own — no phone, IBAN, or card validation — so an adapter that needs a format brings its own. `payment_method` is free-form and only ever compared against a route — there are no payment-method constants.
 
@@ -62,7 +63,7 @@ Layers, outermost first:
 
 ### Provider runtime
 
-`ProviderRuntimeManager` holds initialized adapters in a mutex-guarded map keyed by provider account ID. `Reload` decrypts the stored config, constructs the adapter, runs `Init` + `HealthCheck`, and only then swaps it in — a failed reload leaves the previous working runtime untouched. `ProviderAdminService` commits the DB change first, then reloads synchronously and **rolls the row back** if the reload fails (see `UpdateConfig`, `UpdateCountries`, `Activate`).
+`provider.RuntimeManager` holds initialized adapters in a mutex-guarded map keyed by provider account ID. `Reload` decrypts the stored config, constructs the adapter, runs `Init` + `HealthCheck`, and only then swaps it in — a failed reload leaves the previous working runtime untouched. `provider.AdminService` commits the DB change first, then reloads synchronously and **rolls the row back** if the reload fails (see `UpdateConfig`, `UpdateCountries`, `Activate`).
 
 Each runtime carries its own circuit breaker: 3 consecutive failures open it, it half-opens after 30s and allows one probe. Caller cancellation is deliberately not counted as a provider failure.
 

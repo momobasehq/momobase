@@ -15,6 +15,7 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/provider"
 	"github.com/momobasehq/momobase/internal/store"
 	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
@@ -33,13 +34,13 @@ type VerifiedWebhook struct {
 // WebhookService authenticates, verifies, stores, and applies provider webhook events.
 type WebhookService struct {
 	db       *gorm.DB
-	runtime  *ProviderRuntimeManager
-	executor *RuntimeProviderExecutor
+	runtime  *provider.RuntimeManager
+	executor *provider.Executor
 }
 
 // NewWebhookService creates a provider webhook processing service.
-func NewWebhookService(db *gorm.DB, runtime *ProviderRuntimeManager) *WebhookService {
-	return &WebhookService{db, runtime, NewProviderExecutor(runtime)}
+func NewWebhookService(db *gorm.DB, runtime *provider.RuntimeManager) *WebhookService {
+	return &WebhookService{db, runtime, provider.NewExecutor(runtime)}
 }
 func (s *WebhookService) verify(
 	ctx context.Context,

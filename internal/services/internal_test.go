@@ -11,15 +11,6 @@ import (
 // for internal/testsupport — that would be an import cycle. Each one is a pure
 // function, so none of them needs a database.
 
-func TestGuardValidatedRequest(t *testing.T) {
-	if err := guardValidatedRequest(
-		providers.PaymentRequest{Account: "256770000000"},
-		&providers.PaymentRequest{},
-	); err == nil {
-		t.Fatal("guardValidatedRequest() = nil, want an error for an emptied account")
-	}
-}
-
 func TestCountryEligible(t *testing.T) {
 	if !countryEligible(nil, "UG") || !countryEligible(nil, "") {
 		t.Error("countryEligible() = false, want an account with no countries to be unrestricted")

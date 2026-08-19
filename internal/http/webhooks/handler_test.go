@@ -16,6 +16,7 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/provider"
 	"github.com/momobasehq/momobase/internal/services"
 	"github.com/momobasehq/momobase/providers"
 )
@@ -81,7 +82,7 @@ func webhookHandler(t *testing.T) (*Handler, *gorm.DB) {
 	}
 	registry := providers.NewRegistry()
 	registry.Register("test", func(*slog.Logger) providers.PaymentProvider { return &webhookProvider{} })
-	runtime := services.NewProviderRuntimeManager(db, registry, encryptor, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	runtime := provider.NewRuntimeManager(db, registry, encryptor, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err := runtime.LoadActive(context.Background()); err != nil {
 		t.Fatalf("LoadActive() error = %v", err)
 	}

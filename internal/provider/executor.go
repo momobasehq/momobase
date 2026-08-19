@@ -1,4 +1,4 @@
-package services
+package provider
 
 import (
 	"context"
@@ -13,15 +13,15 @@ import (
 	"github.com/momobasehq/momobase/providers"
 )
 
-// RuntimeProviderExecutor invokes loaded provider adapters with readiness checks, timeouts, logging, and circuit breaking.
-type RuntimeProviderExecutor struct {
-	runtime *ProviderRuntimeManager
+// Executor invokes loaded provider adapters with readiness checks, timeouts, logging, and circuit breaking.
+type Executor struct {
+	runtime *RuntimeManager
 	timeout time.Duration
 }
 
-// NewProviderExecutor creates a runtime provider executor with the default operation timeout.
-func NewProviderExecutor(runtime *ProviderRuntimeManager) *RuntimeProviderExecutor {
-	return &RuntimeProviderExecutor{runtime, 45 * time.Second}
+// NewExecutor creates a runtime provider executor with the default operation timeout.
+func NewExecutor(runtime *RuntimeManager) *Executor {
+	return &Executor{runtime, 45 * time.Second}
 }
 
 // ValidateRequest lets the selected provider validate and normalize a payment
@@ -31,7 +31,7 @@ func NewProviderExecutor(runtime *ProviderRuntimeManager) *RuntimeProviderExecut
 // A rejection is a client error rather than a provider outage, so it deliberately
 // bypasses the circuit breaker: a stream of malformed accounts must not take a
 // healthy provider out of rotation.
-func (e *RuntimeProviderExecutor) ValidateRequest(ctx context.Context, id string, req *providers.PaymentRequest) error {
+func (e *Executor) ValidateRequest(ctx context.Context, id string, req *providers.PaymentRequest) error {
 	p, err := e.ready(id, "", req.Country)
 	if err != nil {
 		return err
@@ -68,7 +68,7 @@ func guardValidatedRequest(before providers.PaymentRequest, after *providers.Pay
 }
 
 // Collect executes a collection through a ready provider that supports the request country.
-func (e *RuntimeProviderExecutor) Collect(
+func (e *Executor) Collect(
 	ctx context.Context,
 	id string,
 	req providers.PaymentRequest,
@@ -83,7 +83,7 @@ func (e *RuntimeProviderExecutor) Collect(
 }
 
 // Disburse executes a disbursement through a ready provider that supports the request country.
-func (e *RuntimeProviderExecutor) Disburse(
+func (e *Executor) Disburse(
 	ctx context.Context,
 	id string,
 	req providers.PaymentRequest,
@@ -98,7 +98,7 @@ func (e *RuntimeProviderExecutor) Disburse(
 }
 
 // QueryTransaction retrieves a provider transaction's current status.
-func (e *RuntimeProviderExecutor) QueryTransaction(
+func (e *Executor) QueryTransaction(
 	ctx context.Context,
 	id string,
 	ref string,
@@ -116,7 +116,7 @@ func (e *RuntimeProviderExecutor) QueryTransaction(
 // QueryBalance retrieves a provider balance for a country, inferring the country
 // for single-country providers and querying without one for a provider that
 // declares no countries.
-func (e *RuntimeProviderExecutor) QueryBalance(ctx context.Context, id, country string) (*providers.ProviderBalance, error) {
+func (e *Executor) QueryBalance(ctx context.Context, id, country string) (*providers.ProviderBalance, error) {
 	p, err := e.ready(id, "", country)
 	if err != nil {
 		return nil, err
@@ -135,7 +135,7 @@ func (e *RuntimeProviderExecutor) QueryBalance(ctx context.Context, id, country 
 }
 
 // Health runs the health check for a loaded provider.
-func (e *RuntimeProviderExecutor) Health(ctx context.Context, id string) error {
+func (e *Executor) Health(ctx context.Context, id string) error {
 	p, err := e.ready(id, "", "")
 	if err != nil {
 		return err
@@ -147,7 +147,7 @@ func (e *RuntimeProviderExecutor) Health(ctx context.Context, id string) error {
 }
 
 // VerifyWebhook delegates webhook payload verification to a loaded provider within the operation timeout.
-func (e *RuntimeProviderExecutor) VerifyWebhook(
+func (e *Executor) VerifyWebhook(
 	ctx context.Context,
 	id string,
 	payload []byte,
@@ -165,7 +165,7 @@ func (e *RuntimeProviderExecutor) VerifyWebhook(
 // ready returns a loaded runtime that can serve the requested operation. A country
 // is checked only against a provider that declares one: an account with no declared
 // countries is unrestricted, which is what a rail without a country notion needs.
-func (e *RuntimeProviderExecutor) ready(id, service, country string) (*RuntimeProvider, error) {
+func (e *Executor) ready(id, service, country string) (*Runtime, error) {
 	p, ok := e.runtime.Get(id)
 	if !ok || p.Adapter == nil {
 		return nil, errors.New("provider not initialized")
@@ -181,8 +181,8 @@ func (e *RuntimeProviderExecutor) ready(id, service, country string) (*RuntimePr
 
 func execute[T any](
 	ctx context.Context,
-	e *RuntimeProviderExecutor,
-	p *RuntimeProvider,
+	e *Executor,
+	p *Runtime,
 	op string,
 	call func(context.Context) (T, error),
 ) (T, error) {

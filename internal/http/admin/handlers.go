@@ -12,6 +12,7 @@ import (
 	"github.com/momobasehq/momobase/internal/http/apidoc"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/provider"
 	"github.com/momobasehq/momobase/internal/services"
 )
 
@@ -31,10 +32,10 @@ type Handler struct {
 	db        *gorm.DB
 	auth      *services.AdminAuthService
 	users     *services.AdminUserService
-	providers *services.ProviderAdminService
+	providers *provider.AdminService
 	routes    *services.RouteAdminService
 	apps      *services.AppService
-	runtime   *services.ProviderRuntimeManager
+	runtime   *provider.RuntimeManager
 	audit     *audit.Service
 	authz     *services.AuthzService
 	analytics *services.AnalyticsService
@@ -49,10 +50,10 @@ func NewHandler(
 	db *gorm.DB,
 	auth *services.AdminAuthService,
 	users *services.AdminUserService,
-	providers *services.ProviderAdminService,
+	providers *provider.AdminService,
 	routes *services.RouteAdminService,
 	apps *services.AppService,
-	runtime *services.ProviderRuntimeManager,
+	runtime *provider.RuntimeManager,
 	audit *audit.Service,
 	authz *services.AuthzService,
 	analytics *services.AnalyticsService,

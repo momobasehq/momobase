@@ -1,4 +1,4 @@
-package services
+package provider
 
 import (
 	"context"
@@ -14,13 +14,13 @@ import (
 // HealthService checks active provider adapters and persists their latest health state.
 type HealthService struct {
 	db       *gorm.DB
-	runtime  *ProviderRuntimeManager
-	executor *RuntimeProviderExecutor
+	runtime  *RuntimeManager
+	executor *Executor
 }
 
 // NewHealthService creates a provider health-check service.
-func NewHealthService(db *gorm.DB, runtime *ProviderRuntimeManager) *HealthService {
-	return &HealthService{db, runtime, NewProviderExecutor(runtime)}
+func NewHealthService(db *gorm.DB, runtime *RuntimeManager) *HealthService {
+	return &HealthService{db, runtime, NewExecutor(runtime)}
 }
 
 // CheckAll checks every loaded provider, records each result, and joins any failures.

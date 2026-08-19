@@ -17,6 +17,7 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/http/apidoc"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/provider"
 	"github.com/momobasehq/momobase/internal/services"
 	"github.com/momobasehq/momobase/providers"
 )
@@ -60,14 +61,14 @@ func testHandlerWithProviders(t *testing.T, registry providers.Registry) *Handle
 		t.Fatalf("NewEncryptor() error = %v", err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	runtime := services.NewProviderRuntimeManager(db, registry, encryptor, log)
+	runtime := provider.NewRuntimeManager(db, registry, encryptor, log)
 	audit := audit.New(db, log)
 	apps := services.NewAppService(db, nil, nil)
 	return NewHandler(
 		db,
 		nil,
 		nil,
-		services.NewProviderAdminService(db, audit, encryptor, registry, runtime),
+		provider.NewAdminService(db, audit, encryptor, registry, runtime),
 		nil,
 		apps,
 		runtime,

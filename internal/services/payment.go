@@ -12,6 +12,7 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/provider"
 	"github.com/momobasehq/momobase/internal/store"
 	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
@@ -85,11 +86,11 @@ type CreatePaymentResponse struct {
 type PaymentOrchestrator struct {
 	db       *gorm.DB
 	router   *RouteEngine
-	executor *RuntimeProviderExecutor
+	executor *provider.Executor
 }
 
 // NewPaymentOrchestrator creates a payment orchestrator.
-func NewPaymentOrchestrator(db *gorm.DB, router *RouteEngine, executor *RuntimeProviderExecutor) *PaymentOrchestrator {
+func NewPaymentOrchestrator(db *gorm.DB, router *RouteEngine, executor *provider.Executor) *PaymentOrchestrator {
 	return &PaymentOrchestrator{db, router, executor}
 }
 func paymentParty(service string, req *CreatePaymentRequest) *PartyPayload {

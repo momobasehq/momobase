@@ -19,6 +19,7 @@ import (
 	publich "github.com/momobasehq/momobase/internal/http/public"
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/provider"
 	"github.com/momobasehq/momobase/internal/services"
 	"github.com/momobasehq/momobase/internal/workers"
 )
@@ -27,7 +28,7 @@ import (
 type App struct {
 	Logger     *slog.Logger
 	DB         *gorm.DB
-	Runtime    *services.ProviderRuntimeManager
+	Runtime    *provider.RuntimeManager
 	Workers    *workers.Manager
 	Server     *http.Server
 	AdminUsers *services.AdminUserService
@@ -88,7 +89,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		return nil, err
 	}
 
-	runtime := services.NewProviderRuntimeManager(db, registry, enc, log)
+	runtime := provider.NewRuntimeManager(db, registry, enc, log)
 
 	audit := audit.New(db, log)
 
@@ -117,12 +118,12 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		appTokens,
 	)
 	apps := services.NewAppService(db, appAuth, audit)
-	providerAdmin := services.NewProviderAdminService(db, audit, enc, registry, runtime)
+	providerAdmin := provider.NewAdminService(db, audit, enc, registry, runtime)
 	routeAdmin := services.NewRouteAdminService(db, audit)
 	routeEngine := services.NewRouteEngine(db, runtime)
-	payments := services.NewPaymentOrchestrator(db, routeEngine, services.NewProviderExecutor(runtime))
+	payments := services.NewPaymentOrchestrator(db, routeEngine, provider.NewExecutor(runtime))
 	webhooks := services.NewWebhookService(db, runtime)
-	health := services.NewHealthService(db, runtime)
+	health := provider.NewHealthService(db, runtime)
 	recon := services.NewReconciliationService(db, runtime, webhooks, log)
 	manager := workers.NewManager(log, workerTasks(cfg, db, health, recon)...)
 
@@ -186,7 +187,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	return app, nil
 }
 
-func workerTasks(c Config, db *gorm.DB, health *services.HealthService, recon *services.ReconciliationService) []workers.Task {
+func workerTasks(c Config, db *gorm.DB, health *provider.HealthService, recon *services.ReconciliationService) []workers.Task {
 	if !c.Workers.Enabled {
 		return nil
 	}

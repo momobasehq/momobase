@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/provider"
 	"github.com/momobasehq/momobase/internal/store"
 	"github.com/momobasehq/momobase/providers"
 )
@@ -17,7 +18,7 @@ import (
 // ReconciliationService refreshes non-terminal transaction states and retries pending webhook processing.
 type ReconciliationService struct {
 	db       *gorm.DB
-	executor *RuntimeProviderExecutor
+	executor *provider.Executor
 	webhook  *WebhookService
 	logger   *slog.Logger
 }
@@ -25,11 +26,11 @@ type ReconciliationService struct {
 // NewReconciliationService creates a transaction reconciliation service.
 func NewReconciliationService(
 	db *gorm.DB,
-	runtime *ProviderRuntimeManager,
+	runtime *provider.RuntimeManager,
 	webhook *WebhookService,
 	logger *slog.Logger,
 ) *ReconciliationService {
-	return &ReconciliationService{db, NewProviderExecutor(runtime), webhook, logger}
+	return &ReconciliationService{db, provider.NewExecutor(runtime), webhook, logger}
 }
 
 // RunOnce reconciles up to limit eligible transactions and reprocesses pending webhooks.

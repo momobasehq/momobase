@@ -11,6 +11,7 @@ import (
 	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/provider"
 	"github.com/momobasehq/momobase/internal/store"
 	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
@@ -106,17 +107,17 @@ type SelectedProvider struct {
 	// Account is the active persisted provider account.
 	Account domain.ProviderAccount
 	// Runtime is the account's loaded provider runtime.
-	Runtime *RuntimeProvider
+	Runtime *provider.Runtime
 }
 
 // RouteEngine selects an eligible provider for a payment request.
 type RouteEngine struct {
 	db      *gorm.DB
-	runtime *ProviderRuntimeManager
+	runtime *provider.RuntimeManager
 }
 
 // NewRouteEngine creates a provider route-selection engine.
-func NewRouteEngine(db *gorm.DB, runtime *ProviderRuntimeManager) *RouteEngine {
+func NewRouteEngine(db *gorm.DB, runtime *provider.RuntimeManager) *RouteEngine {
 	return &RouteEngine{db, runtime}
 }
 

@@ -1,4 +1,4 @@
-package services
+package provider
 
 import (
 	"context"
@@ -17,34 +17,34 @@ import (
 	"github.com/momobasehq/momobase/providers"
 )
 
-// ProviderAdminService manages provider accounts, encrypted configuration, and runtime activation.
-type ProviderAdminService struct {
+// AdminService manages provider accounts, encrypted configuration, and runtime activation.
+type AdminService struct {
 	db        *gorm.DB
 	audit     *audit.Service
 	encryptor *platform.Encryptor
 	registry  providers.Registry
-	runtime   *ProviderRuntimeManager
+	runtime   *RuntimeManager
 }
 
-// NewProviderAdminService creates a provider administration service.
-func NewProviderAdminService(
+// NewAdminService creates a provider administration service.
+func NewAdminService(
 	db *gorm.DB,
 	audit *audit.Service,
 	enc *platform.Encryptor,
 	registry providers.Registry,
-	runtime *ProviderRuntimeManager,
-) *ProviderAdminService {
-	return &ProviderAdminService{db: db, audit: audit, encryptor: enc, registry: registry, runtime: runtime}
+	runtime *RuntimeManager,
+) *AdminService {
+	return &AdminService{db: db, audit: audit, encryptor: enc, registry: registry, runtime: runtime}
 }
 
 // RegisteredProviders returns the provider codes this build can create accounts
 // for, in ascending order.
-func (s *ProviderAdminService) RegisteredProviders() []string {
+func (s *AdminService) RegisteredProviders() []string {
 	return s.registry.List()
 }
 
 // CreateAccount validates and persists an inactive provider account with encrypted configuration.
-func (s *ProviderAdminService) CreateAccount(
+func (s *AdminService) CreateAccount(
 	ctx context.Context,
 	actor *domain.AdminUser,
 	code string,
@@ -98,7 +98,7 @@ func (s *ProviderAdminService) CreateAccount(
 }
 
 // UpdateCountries replaces a provider account's supported countries and reloads an active runtime.
-func (s *ProviderAdminService) UpdateCountries(ctx context.Context, actor *domain.AdminUser, id string, countries []string) error {
+func (s *AdminService) UpdateCountries(ctx context.Context, actor *domain.AdminUser, id string, countries []string) error {
 	countries, err := utils.NormalizeProviderCountries(countries)
 	if err != nil {
 		return err
@@ -149,7 +149,7 @@ func updateProviderCountries(db *gorm.DB, id string, countries []string) error {
 }
 
 // UpdateConfig validates and encrypts replacement provider configuration and reloads an active runtime.
-func (s *ProviderAdminService) UpdateConfig(ctx context.Context, actor *domain.AdminUser, id string, config map[string]any) error {
+func (s *AdminService) UpdateConfig(ctx context.Context, actor *domain.AdminUser, id string, config map[string]any) error {
 	var account domain.ProviderAccount
 	db := s.db.WithContext(ctx)
 	if err := db.First(&account, "id = ?", id).Error; err != nil {
@@ -189,7 +189,7 @@ func (s *ProviderAdminService) UpdateConfig(ctx context.Context, actor *domain.A
 }
 
 // Activate marks a configured provider account active and loads its runtime adapter.
-func (s *ProviderAdminService) Activate(ctx context.Context, actor *domain.AdminUser, id string) error {
+func (s *AdminService) Activate(ctx context.Context, actor *domain.AdminUser, id string) error {
 	var account domain.ProviderAccount
 	db := s.db.WithContext(ctx)
 	if err := db.First(&account, "id = ?", id).Error; err != nil {
@@ -207,7 +207,7 @@ func (s *ProviderAdminService) Activate(ctx context.Context, actor *domain.Admin
 }
 
 // Deactivate marks a provider account inactive and removes its runtime adapter.
-func (s *ProviderAdminService) Deactivate(ctx context.Context, actor *domain.AdminUser, id string) error {
+func (s *AdminService) Deactivate(ctx context.Context, actor *domain.AdminUser, id string) error {
 	if err := store.Affected(s.db.WithContext(ctx).Model(&domain.ProviderAccount{}).Where("id = ?", id).Update("active", false)); err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func (s *ProviderAdminService) Deactivate(ctx context.Context, actor *domain.Adm
 	return nil
 }
 
-func (s *ProviderAdminService) encode(config map[string]any) (string, string, error) {
+func (s *AdminService) encode(config map[string]any) (string, string, error) {
 	plain, err := json.Marshal(config)
 	if err != nil {
 		return "", "", err

@@ -183,8 +183,8 @@ type Worker struct {
 	State      string `json:"state" example:"managed_by_single_binary"`
 }
 
-// RuntimeProvider describes an initialized provider runtime.
-type RuntimeProvider struct {
+// Runtime describes an initialized provider runtime.
+type Runtime struct {
 	ProviderAccountID string                         `json:"provider_account_id" example:"pacc_123"`
 	ProviderCode      string                         `json:"provider_code" example:"dummy"`
 	ConfigVersion     int                            `json:"config_version" example:"1"`
