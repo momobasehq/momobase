@@ -75,6 +75,13 @@ Each runtime carries its own circuit breaker: 3 consecutive failures open it, it
 
 These are load-bearing; breaking one is a silent correctness bug.
 
+- **The package layering is enforced, not reviewed.** `.golangci.yml` carries a
+  `depguard` rule per `internal/` package naming what it must never import. The
+  direction is: `utils`/`domain` are leaves → `audit` → `provider` → `routing` →
+  `payment`; `webhook` and `reconciliation` are separate entry points over `provider`;
+  `services` (identity and tenancy) depends on none of them. Test files are exempt, so
+  an external test package may reach across the boundary it verifies.
+
 - **Every** transaction status change goes through `(*domain.Transaction).Transition`, which enforces the legal state graph. Never assign `Status` directly. Use `domain.Terminal()` rather than comparing status strings.
 - `store.Within` is the only place a DB transaction starts. **Never** wrap a provider network call in one.
 - Zero-row writes are errors: wrap updates in `store.Affected` so they become `gorm.ErrRecordNotFound`.

@@ -7,6 +7,213 @@ run:
 
 linters:
   default: standard
+  enable:
+    - depguard
+  # The layering below is the architecture, enforced rather than reviewed. Each
+  # package names what it must never import; test files are exempt, because an
+  # external test package legitimately reaches across the boundary it verifies.
+  settings:
+    depguard:
+      rules:
+        utils:
+          files:
+            - "**/internal/utils/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/momobasehq/momobase/internal/audit
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/domain
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/provider
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/routing
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/payment
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/webhook
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/reconciliation
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/services
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/http
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/bootstrap
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/workers
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/store
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/platform
+              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
+        domain:
+          files:
+            - "**/internal/domain/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/momobasehq/momobase/internal/audit
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/utils
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/provider
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/routing
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/payment
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/webhook
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/reconciliation
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/services
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/http
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/bootstrap
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/workers
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/store
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+            - pkg: github.com/momobasehq/momobase/internal/platform
+              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
+        audit:
+          files:
+            - "**/internal/audit/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/momobasehq/momobase/internal/provider
+              desc: "internal/audit is a leaf recorder that must not know its callers"
+            - pkg: github.com/momobasehq/momobase/internal/routing
+              desc: "internal/audit is a leaf recorder that must not know its callers"
+            - pkg: github.com/momobasehq/momobase/internal/payment
+              desc: "internal/audit is a leaf recorder that must not know its callers"
+            - pkg: github.com/momobasehq/momobase/internal/webhook
+              desc: "internal/audit is a leaf recorder that must not know its callers"
+            - pkg: github.com/momobasehq/momobase/internal/reconciliation
+              desc: "internal/audit is a leaf recorder that must not know its callers"
+            - pkg: github.com/momobasehq/momobase/internal/services
+              desc: "internal/audit is a leaf recorder that must not know its callers"
+            - pkg: github.com/momobasehq/momobase/internal/http
+              desc: "internal/audit is a leaf recorder that must not know its callers"
+            - pkg: github.com/momobasehq/momobase/internal/bootstrap
+              desc: "internal/audit is a leaf recorder that must not know its callers"
+            - pkg: github.com/momobasehq/momobase/internal/workers
+              desc: "internal/audit is a leaf recorder that must not know its callers"
+        provider:
+          files:
+            - "**/internal/provider/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/momobasehq/momobase/internal/routing
+              desc: "internal/provider owns the adapters; routing and the payment path build on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/payment
+              desc: "internal/provider owns the adapters; routing and the payment path build on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/webhook
+              desc: "internal/provider owns the adapters; routing and the payment path build on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/reconciliation
+              desc: "internal/provider owns the adapters; routing and the payment path build on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/services
+              desc: "internal/provider owns the adapters; routing and the payment path build on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/http
+              desc: "internal/provider owns the adapters; routing and the payment path build on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/bootstrap
+              desc: "internal/provider owns the adapters; routing and the payment path build on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/workers
+              desc: "internal/provider owns the adapters; routing and the payment path build on it, never the reverse"
+        routing:
+          files:
+            - "**/internal/routing/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/momobasehq/momobase/internal/payment
+              desc: "internal/routing selects a provider account; the payment path builds on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/webhook
+              desc: "internal/routing selects a provider account; the payment path builds on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/reconciliation
+              desc: "internal/routing selects a provider account; the payment path builds on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/services
+              desc: "internal/routing selects a provider account; the payment path builds on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/http
+              desc: "internal/routing selects a provider account; the payment path builds on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/bootstrap
+              desc: "internal/routing selects a provider account; the payment path builds on it, never the reverse"
+            - pkg: github.com/momobasehq/momobase/internal/workers
+              desc: "internal/routing selects a provider account; the payment path builds on it, never the reverse"
+        payment:
+          files:
+            - "**/internal/payment/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/momobasehq/momobase/internal/webhook
+              desc: "internal/payment is the request path; webhook and reconciliation are separate entry points"
+            - pkg: github.com/momobasehq/momobase/internal/reconciliation
+              desc: "internal/payment is the request path; webhook and reconciliation are separate entry points"
+            - pkg: github.com/momobasehq/momobase/internal/services
+              desc: "internal/payment is the request path; webhook and reconciliation are separate entry points"
+            - pkg: github.com/momobasehq/momobase/internal/http
+              desc: "internal/payment is the request path; webhook and reconciliation are separate entry points"
+            - pkg: github.com/momobasehq/momobase/internal/bootstrap
+              desc: "internal/payment is the request path; webhook and reconciliation are separate entry points"
+            - pkg: github.com/momobasehq/momobase/internal/workers
+              desc: "internal/payment is the request path; webhook and reconciliation are separate entry points"
+        webhook:
+          files:
+            - "**/internal/webhook/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/momobasehq/momobase/internal/routing
+              desc: "internal/webhook applies provider callbacks and must not reach into the request path"
+            - pkg: github.com/momobasehq/momobase/internal/payment
+              desc: "internal/webhook applies provider callbacks and must not reach into the request path"
+            - pkg: github.com/momobasehq/momobase/internal/reconciliation
+              desc: "internal/webhook applies provider callbacks and must not reach into the request path"
+            - pkg: github.com/momobasehq/momobase/internal/services
+              desc: "internal/webhook applies provider callbacks and must not reach into the request path"
+            - pkg: github.com/momobasehq/momobase/internal/http
+              desc: "internal/webhook applies provider callbacks and must not reach into the request path"
+            - pkg: github.com/momobasehq/momobase/internal/bootstrap
+              desc: "internal/webhook applies provider callbacks and must not reach into the request path"
+            - pkg: github.com/momobasehq/momobase/internal/workers
+              desc: "internal/webhook applies provider callbacks and must not reach into the request path"
+        reconciliation:
+          files:
+            - "**/internal/reconciliation/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/momobasehq/momobase/internal/routing
+              desc: "internal/reconciliation is the settle path and must not reach into the request path"
+            - pkg: github.com/momobasehq/momobase/internal/payment
+              desc: "internal/reconciliation is the settle path and must not reach into the request path"
+            - pkg: github.com/momobasehq/momobase/internal/services
+              desc: "internal/reconciliation is the settle path and must not reach into the request path"
+            - pkg: github.com/momobasehq/momobase/internal/http
+              desc: "internal/reconciliation is the settle path and must not reach into the request path"
+            - pkg: github.com/momobasehq/momobase/internal/bootstrap
+              desc: "internal/reconciliation is the settle path and must not reach into the request path"
+            - pkg: github.com/momobasehq/momobase/internal/workers
+              desc: "internal/reconciliation is the settle path and must not reach into the request path"
+        services:
+          files:
+            - "**/internal/services/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/momobasehq/momobase/internal/provider
+              desc: "internal/services is identity and tenancy, and must not depend on the payment packages"
+            - pkg: github.com/momobasehq/momobase/internal/routing
+              desc: "internal/services is identity and tenancy, and must not depend on the payment packages"
+            - pkg: github.com/momobasehq/momobase/internal/payment
+              desc: "internal/services is identity and tenancy, and must not depend on the payment packages"
+            - pkg: github.com/momobasehq/momobase/internal/webhook
+              desc: "internal/services is identity and tenancy, and must not depend on the payment packages"
+            - pkg: github.com/momobasehq/momobase/internal/reconciliation
+              desc: "internal/services is identity and tenancy, and must not depend on the payment packages"
+            - pkg: github.com/momobasehq/momobase/internal/http
+              desc: "internal/services is identity and tenancy, and must not depend on the payment packages"
+            - pkg: github.com/momobasehq/momobase/internal/bootstrap
+              desc: "internal/services is identity and tenancy, and must not depend on the payment packages"
+            - pkg: github.com/momobasehq/momobase/internal/workers
+              desc: "internal/services is identity and tenancy, and must not depend on the payment packages"
   exclusions:
     generated: strict
 
