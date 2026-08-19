@@ -25,6 +25,8 @@ go test -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
 
 CI gates (`.github/workflows/tests.yml`): `gofmt -l`, `go mod tidy -diff`, `go mod verify`, vet, tests with **≥55% total coverage** (measured with `-coverpkg=./...`, so a test credits every package it exercises, not just its own), race detector, golangci-lint (version pinned in `.golangci-lint-version`), Staticcheck, and govulncheck.
 
+**The toolchain is pinned.** `go.mod` carries `toolchain go1.26.6` alongside `go 1.25.0`. The `go` line stays at the compatibility floor for applications embedding momobase as a library; the `toolchain` line is what this repository builds and ships with, and it is there because govulncheck's findings are almost all standard-library ones that only a patch release closes. Every workflow resolves its Go through `go-version-file: go.mod`, so raising the pin is the one edit that moves CI, the release build, and the vulnerability scan together — with the Docker base image (`golang:1.26-bookworm`) kept in step.
+
 **cgo is required.** SQLite is linked through cgo; a `CGO_ENABLED=0` binary compiles and even prints `version`, then fails on its first query. Release and Docker builds use `CGO_ENABLED=1` with a static link.
 
 `docs/README.md` is the long-form operational reference (workflows, env vars, curl examples, deployment notes) — read it rather than re-deriving that material.
