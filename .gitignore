@@ -11,6 +11,10 @@
 # Test binary, built with `go test -c`
 *.test
 
+# `go build ./examples/...` drops its binary in the working directory, named for the
+# package. The Makefile targets build into bin/; nothing should land at the repo root.
+/customprovider
+
 # Code coverage profiles and other test artifacts
 *.out
 coverage.*
