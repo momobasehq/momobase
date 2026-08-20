@@ -122,5 +122,5 @@ jobs:
       - name: Run Staticcheck
         uses: dominikh/staticcheck-action@v1.4.1
         with:
-          version: "2026.1"
-          cache-key: staticcheck-2026.1
+          version: "2025.1"
+          cache-key: staticcheck-2025.1
