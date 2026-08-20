@@ -1,3 +1,5 @@
+<img width=75 height=75 src='./web/dashboard/public/logo.svg' />
+
 # Momobase
 
 Momobase is a compact, single-instance payment orchestration service.
