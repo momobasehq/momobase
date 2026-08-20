@@ -1,141 +1,5 @@
 basePath: /
 definitions:
-  admin.RoleRequest:
-    properties:
-      description:
-        description: Description explains the role in an operator-facing list.
-        example: Read transactions and reissue credentials
-        type: string
-      name:
-        description: Name identifies the role. It is ignored when updating, since
-          the path carries it.
-        example: support
-        type: string
-      permissions:
-        description: Permissions are the codes the role grants, from GET /api/admin/permissions.
-        example:
-        - transactions:read
-        - credentials:update
-        items:
-          type: string
-        type: array
-    type: object
-  apidoc.ChangePasswordRequest:
-    properties:
-      password:
-        example: change-me-now
-        format: password
-        type: string
-    type: object
-  apidoc.ChangeRoleRequest:
-    properties:
-      role:
-        description: Role names a seeded or operator-created role; list them with
-          GET /api/admin/roles.
-        example: operations
-        type: string
-    type: object
-  apidoc.ChangeStatusRequest:
-    properties:
-      status:
-        example: active
-        type: string
-    type: object
-  apidoc.CreateAdminRequest:
-    properties:
-      email:
-        example: ops@example.com
-        format: email
-        type: string
-      name:
-        example: Operations Admin
-        type: string
-      password:
-        example: change-me-now
-        format: password
-        type: string
-      role:
-        description: Role names a seeded or operator-created role; list them with
-          GET /api/admin/roles.
-        example: operations
-        type: string
-    type: object
-  apidoc.CreateAppRequest:
-    properties:
-      description:
-        example: Checkout payment application
-        type: string
-      environment:
-        enum:
-        - sandbox
-        - production
-        example: sandbox
-        type: string
-      name:
-        example: Checkout
-        type: string
-    type: object
-  apidoc.CreateCredentialRequest:
-    properties:
-      expires_at:
-        example: "2030-01-02T03:04:05Z"
-        format: date-time
-        type: string
-      name:
-        example: Backend credential
-        type: string
-      scopes:
-        example: collections:create transactions:read
-        type: string
-    type: object
-  apidoc.CreateProviderAccountRequest:
-    properties:
-      config:
-        type: object
-      countries:
-        description: |-
-          Countries restricts the account to the listed ISO 3166-1 alpha-2 countries. An
-          empty list leaves it unrestricted, which suits a rail with no country notion.
-        example:
-        - UG
-        items:
-          type: string
-        type: array
-      environment:
-        enum:
-        - sandbox
-        - production
-        example: sandbox
-        type: string
-      name:
-        example: Sandbox provider
-        type: string
-      provider_code:
-        example: dummy
-        type: string
-    type: object
-  apidoc.CreateRouteRequest:
-    properties:
-      active:
-        example: true
-        type: boolean
-      payment_method:
-        example: momo
-        type: string
-      priority:
-        example: 1
-        minimum: 1
-        type: integer
-      provider_account_id:
-        example: pacc_123
-        type: string
-      service_type:
-        enum:
-        - collection
-        - disbursement
-        example: collection
-        type: string
-    type: object
   apidoc.DocResponse:
     properties:
       data: {}
@@ -247,12 +111,88 @@ definitions:
       token_type:
         type: string
     type: object
-  apidoc.UpdateAppRequest:
+  dto.ChangeAdminStatusRequest:
+    properties:
+      status:
+        enum:
+        - active
+        - inactive
+        example: active
+        type: string
+    required:
+    - status
+    type: object
+  dto.ChangeAppStatusRequest:
+    properties:
+      status:
+        enum:
+        - active
+        - disabled
+        - suspended
+        example: active
+        type: string
+    required:
+    - status
+    type: object
+  dto.ChangePasswordRequest:
+    properties:
+      password:
+        example: change-me-now
+        format: password
+        minLength: 8
+        type: string
+    required:
+    - password
+    type: object
+  dto.ChangeRoleRequest:
+    properties:
+      role:
+        description: Role names a seeded or operator-created role; list them with
+          GET /api/admin/roles.
+        example: operations
+        maxLength: 64
+        type: string
+    required:
+    - role
+    type: object
+  dto.CreateAdminRequest:
+    properties:
+      email:
+        description: Email is stored lowercased, so it is matched case-insensitively
+          at sign-in.
+        example: ops@example.com
+        format: email
+        type: string
+      name:
+        example: Operations Admin
+        maxLength: 255
+        type: string
+      password:
+        example: change-me-now
+        format: password
+        minLength: 8
+        type: string
+      role:
+        description: |-
+          Role names a seeded or operator-created role; list them with GET /api/admin/roles.
+          It is checked against the roles table, which is why an empty value is allowed
+          here and defaulted there.
+        example: operations
+        maxLength: 64
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  dto.CreateAppRequest:
     properties:
       description:
         example: Checkout payment application
+        maxLength: 1000
         type: string
       environment:
+        description: Environment is defaulted by the service when omitted.
         enum:
         - sandbox
         - production
@@ -260,41 +200,36 @@ definitions:
         type: string
       name:
         example: Checkout
+        maxLength: 255
+        type: string
+    required:
+    - name
+    type: object
+  dto.CreateCredentialRequest:
+    properties:
+      expires_at:
+        example: "2030-01-02T03:04:05Z"
+        format: date-time
+        type: string
+      name:
+        example: Backend credential
+        maxLength: 255
+        type: string
+      scopes:
+        description: |-
+          Scopes is a space-separated list checked against the application permission
+          catalogue, so a typo fails here rather than at the first payment.
+        example: collections:create transactions:read
         type: string
     type: object
-  apidoc.UpdateCountriesRequest:
-    properties:
-      countries:
-        example:
-        - UG
-        - RW
-        items:
-          type: string
-        type: array
-    type: object
-  apidoc.UpdateProviderConfigRequest:
-    properties:
-      config:
-        type: object
-    type: object
-  apidoc.UpdateRouteRequest:
-    properties:
-      active:
-        example: true
-        type: boolean
-      priority:
-        example: 1
-        minimum: 1
-        type: integer
-    type: object
-  payment.CreatePaymentRequest:
+  dto.CreatePayment:
     properties:
       account:
         description: |-
           Account is the provider-specific account the payment is collected from or
           disbursed to: a mobile number, bank account, card token, or wallet address.
-          Momobase treats it as opaque and leaves its validation to the selected
-          provider, through providers.RequestValidator.
+          Momobase checks its shape only and leaves its meaning to the selected provider,
+          through providers.RequestValidator.
         type: string
       amount:
         description: Amount is the payment amount in the currency's minor unit.
@@ -309,10 +244,11 @@ definitions:
         type: string
       customer:
         allOf:
-        - $ref: '#/definitions/payment.PartyPayload'
+        - $ref: '#/definitions/dto.Party'
         description: Customer optionally identifies the collection customer.
       description:
         description: Description is optional payment context shown to downstream systems.
+        maxLength: 255
         type: string
       metadata:
         additionalProperties: {}
@@ -329,10 +265,11 @@ definitions:
         type: string
       recipient:
         allOf:
-        - $ref: '#/definitions/payment.PartyPayload'
+        - $ref: '#/definitions/dto.Party'
         description: Recipient optionally identifies the disbursement recipient.
       reference:
         description: Reference is the application's unique business reference.
+        maxLength: 128
         type: string
       scheme:
         description: |-
@@ -340,15 +277,151 @@ definitions:
           mobile network, bank, or card brand. Like PaymentMethod it is free-form; the
           selected provider interprets it and Momobase never matches on it.
         type: string
+    required:
+    - account
+    - payment_method
+    - reference
     type: object
-  payment.PartyPayload:
+  dto.CreateProviderAccountRequest:
+    properties:
+      config:
+        description: |-
+          Config is the provider's own settings and must carry a webhook_secret. It is
+          encrypted before it is stored and is never returned.
+        type: object
+      countries:
+        description: |-
+          Countries restricts the account to the listed ISO 3166-1 alpha-2 countries. An
+          empty list leaves it unrestricted, which suits a rail with no country notion.
+        example:
+        - UG
+        items:
+          type: string
+        type: array
+      environment:
+        enum:
+        - sandbox
+        - production
+        example: sandbox
+        type: string
+      name:
+        example: Sandbox provider
+        maxLength: 255
+        type: string
+      provider_code:
+        description: |-
+          ProviderCode names an adapter registered in the running build; list them with
+          GET /api/admin/providers/registry.
+        example: dummy
+        type: string
+    required:
+    - config
+    - name
+    - provider_code
+    type: object
+  dto.CreateRouteRequest:
+    properties:
+      active:
+        example: true
+        type: boolean
+      payment_method:
+        example: momo
+        type: string
+      priority:
+        example: 1
+        minimum: 1
+        type: integer
+      provider_account_id:
+        description: ProviderAccountID must name an existing account, which the service
+          checks.
+        example: pacc_123
+        type: string
+      service_type:
+        enum:
+        - collection
+        - disbursement
+        example: collection
+        type: string
+    required:
+    - payment_method
+    - provider_account_id
+    - service_type
+    type: object
+  dto.Party:
     properties:
       email:
         description: Email is the party's email address.
+        maxLength: 255
         type: string
       name:
         description: Name is the party's display name.
+        maxLength: 255
         type: string
+    type: object
+  dto.RoleRequest:
+    properties:
+      description:
+        description: Description explains what the role is for.
+        example: Read-only support access
+        maxLength: 255
+        type: string
+      name:
+        description: Name identifies the role and is what an administrator is assigned.
+        example: support
+        maxLength: 64
+        type: string
+      permissions:
+        description: Permissions are the codes the role grants; each is checked against
+          the catalogue.
+        example:
+        - transactions:read
+        items:
+          type: string
+        type: array
+    type: object
+  dto.UpdateAppRequest:
+    properties:
+      description:
+        example: Checkout payment application
+        maxLength: 1000
+        type: string
+      environment:
+        enum:
+        - sandbox
+        - production
+        example: sandbox
+        type: string
+      name:
+        example: Checkout
+        maxLength: 255
+        type: string
+    type: object
+  dto.UpdateCountriesRequest:
+    properties:
+      countries:
+        example:
+        - UG
+        - RW
+        items:
+          type: string
+        type: array
+    type: object
+  dto.UpdateProviderConfigRequest:
+    properties:
+      config:
+        type: object
+    required:
+    - config
+    type: object
+  dto.UpdateRouteRequest:
+    properties:
+      active:
+        example: true
+        type: boolean
+      priority:
+        example: 1
+        minimum: 1
+        type: integer
     type: object
   platform.APIError:
     properties:
@@ -461,7 +534,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.CreateAppRequest'
+          $ref: '#/definitions/dto.CreateAppRequest'
       produces:
       - application/json
       responses:
@@ -540,7 +613,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.UpdateAppRequest'
+          $ref: '#/definitions/dto.UpdateAppRequest'
       produces:
       - application/json
       responses:
@@ -632,7 +705,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.CreateCredentialRequest'
+          $ref: '#/definitions/dto.CreateCredentialRequest'
       produces:
       - application/json
       responses:
@@ -764,7 +837,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.ChangeStatusRequest'
+          $ref: '#/definitions/dto.ChangeAppStatusRequest'
       produces:
       - application/json
       responses:
@@ -1090,7 +1163,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.CreateProviderAccountRequest'
+          $ref: '#/definitions/dto.CreateProviderAccountRequest'
       produces:
       - application/json
       responses:
@@ -1214,7 +1287,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.UpdateProviderConfigRequest'
+          $ref: '#/definitions/dto.UpdateProviderConfigRequest'
       produces:
       - application/json
       responses:
@@ -1262,7 +1335,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.UpdateCountriesRequest'
+          $ref: '#/definitions/dto.UpdateCountriesRequest'
       produces:
       - application/json
       responses:
@@ -1421,7 +1494,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/admin.RoleRequest'
+          $ref: '#/definitions/dto.RoleRequest'
       produces:
       - application/json
       responses:
@@ -1496,7 +1569,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/admin.RoleRequest'
+          $ref: '#/definitions/dto.RoleRequest'
       produces:
       - application/json
       responses:
@@ -1572,7 +1645,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.CreateRouteRequest'
+          $ref: '#/definitions/dto.CreateRouteRequest'
       produces:
       - application/json
       responses:
@@ -1620,7 +1693,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.UpdateRouteRequest'
+          $ref: '#/definitions/dto.UpdateRouteRequest'
       produces:
       - application/json
       responses:
@@ -1908,7 +1981,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.CreateAdminRequest'
+          $ref: '#/definitions/dto.CreateAdminRequest'
       produces:
       - application/json
       responses:
@@ -1956,7 +2029,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.ChangePasswordRequest'
+          $ref: '#/definitions/dto.ChangePasswordRequest'
       produces:
       - application/json
       responses:
@@ -2004,7 +2077,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.ChangeRoleRequest'
+          $ref: '#/definitions/dto.ChangeRoleRequest'
       produces:
       - application/json
       responses:
@@ -2048,7 +2121,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apidoc.ChangeStatusRequest'
+          $ref: '#/definitions/dto.ChangeAdminStatusRequest'
       produces:
       - application/json
       responses:
@@ -2131,7 +2204,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/payment.CreatePaymentRequest'
+          $ref: '#/definitions/dto.CreatePayment'
       produces:
       - application/json
       responses:
@@ -2184,7 +2257,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/payment.CreatePaymentRequest'
+          $ref: '#/definitions/dto.CreatePayment'
       produces:
       - application/json
       responses:

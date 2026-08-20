@@ -3,7 +3,6 @@ package identity
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/momobasehq/momobase/internal/domain"
@@ -44,12 +43,8 @@ func (s *AppService) GetApp(ctx context.Context, id string) (*domain.App, error)
 
 // CreateApp validates and persists an active application.
 func (s *AppService) CreateApp(ctx context.Context, actor *domain.AdminUser, name, description, env string) (*domain.App, error) {
-	name, env = strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(env))
 	if env == "" {
 		env = "production"
-	}
-	if name == "" || len(name) > 255 || len(description) > 1000 || env != "sandbox" && env != "production" {
-		return nil, errors.New("invalid app name, description, or environment")
 	}
 	app := &domain.App{
 		BaseModel:   domain.BaseModel{ID: platform.NewID("app")},
@@ -70,10 +65,6 @@ func (s *AppService) CreateApp(ctx context.Context, actor *domain.AdminUser, nam
 
 // UpdateApp validates and applies mutable application attributes, then returns the updated application.
 func (s *AppService) UpdateApp(ctx context.Context, actor *domain.AdminUser, id, name, description, env string) (*domain.App, error) {
-	name, env = strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(env))
-	if len(name) > 255 || len(description) > 1000 || env != "" && env != "sandbox" && env != "production" {
-		return nil, errors.New("invalid app name, description, or environment")
-	}
 	updates := map[string]any{"description": description}
 	if name != "" {
 		updates["name"] = name
@@ -90,9 +81,6 @@ func (s *AppService) UpdateApp(ctx context.Context, actor *domain.AdminUser, id,
 
 // ChangeAppStatus updates an application's status and revokes its sessions when it is no longer active.
 func (s *AppService) ChangeAppStatus(ctx context.Context, actor *domain.AdminUser, id, status string) error {
-	if status != "active" && status != "disabled" && status != "suspended" {
-		return errors.New("invalid app status")
-	}
 	err := s.repos.Within(ctx, func(r *repository.Set) error {
 		if err := r.Apps.SetStatus(ctx, id, status); err != nil {
 			return err

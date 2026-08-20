@@ -7,24 +7,24 @@ import (
 	"testing"
 
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/service/payment"
+	"github.com/momobasehq/momobase/internal/dto"
 	"github.com/momobasehq/momobase/internal/testsupport"
 	"github.com/momobasehq/momobase/providers"
 )
 
-func TestValidatePaymentPayload(t *testing.T) {
+func TestCreatePaymentPayloadRules(t *testing.T) {
 	t.Run("normalizes the method, currency, country, and scheme", func(t *testing.T) {
-		req := &payment.CreatePaymentRequest{
+		req := &dto.CreatePayment{
 			PaymentMethod: "  MOMO ",
 			Amount:        100,
 			Currency:      " ugx ",
 			Country:       " ug ",
 			Reference:     "ORDER-1",
 			Account:       "  256770000000 ", Scheme: " MTN ",
-			Customer: &payment.PartyPayload{Name: "  Ada  "},
+			Customer: &dto.Party{Name: "  Ada  "},
 		}
-		if err := payment.ValidatePaymentPayload(domain.ServiceCollection, req); err != nil {
-			t.Fatalf("payment.ValidatePaymentPayload() error = %v", err)
+		if err := dto.Check(req); err != nil {
+			t.Fatalf("dto.Check() error = %v", err)
 		}
 		if req.PaymentMethod != "momo" || req.Currency != "UGX" || req.Country != "UG" {
 			t.Errorf("normalized request = %+v, want a lowercase method and uppercase currency and country", req)
@@ -39,8 +39,8 @@ func TestValidatePaymentPayload(t *testing.T) {
 
 	t.Run("accepts an opaque account without a country or a party", func(t *testing.T) {
 		req := testsupport.PaymentRequest("ORDER-2", "", "GB33BUKB20201555555555")
-		if err := payment.ValidatePaymentPayload(domain.ServiceCollection, req); err != nil {
-			t.Fatalf("payment.ValidatePaymentPayload() error = %v, want a rail-agnostic account accepted", err)
+		if err := dto.Check(req); err != nil {
+			t.Fatalf("dto.Check() error = %v, want a rail-agnostic account accepted", err)
 		}
 		if req.Country != "" {
 			t.Errorf("Country = %q, want it left empty", req.Country)
@@ -48,7 +48,7 @@ func TestValidatePaymentPayload(t *testing.T) {
 	})
 
 	t.Run("rejects a malformed request", func(t *testing.T) {
-		tests := map[string]*payment.CreatePaymentRequest{
+		tests := map[string]*dto.CreatePayment{
 			"missing account":  {PaymentMethod: testsupport.Method, Amount: 1, Currency: "UGX", Reference: "R"},
 			"blank account":    testsupport.PaymentRequest("R", "", "   "),
 			"control account":  testsupport.PaymentRequest("R", "", "2567700\x0000"),
@@ -72,8 +72,8 @@ func TestValidatePaymentPayload(t *testing.T) {
 			"zero amount": {PaymentMethod: testsupport.Method, Currency: "UGX", Reference: "R", Account: "1"},
 		}
 		for name, req := range tests {
-			if err := payment.ValidatePaymentPayload(domain.ServiceCollection, req); err == nil {
-				t.Errorf("payment.ValidatePaymentPayload(%s) = nil, want an error", name)
+			if err := dto.Check(req); err == nil {
+				t.Errorf("dto.Check(%s) = nil, want an error", name)
 			}
 		}
 	})
@@ -154,6 +154,64 @@ func TestProviderRequestValidation(t *testing.T) {
 		testsupport.NoError(s.DB.Model(&domain.Transaction{}).Count(&count).Error)
 		if count != 0 {
 			t.Errorf("transactions = %d, want none for a guarded request", count)
+		}
+	})
+}
+
+// TestIdempotencyIsDecidedAfterNormalizationAndBeforeTheProvider pins the ordering the
+// whole create path depends on. The request hash is taken over the normalized payload
+// and before the selected provider's RequestValidator runs, which decides two things
+// that would otherwise be silent: two spellings of one request are the same request,
+// and a provider rewriting the account afterwards cannot change the identity of a
+// request that was already made.
+func TestIdempotencyIsDecidedAfterNormalizationAndBeforeTheProvider(t *testing.T) {
+	t.Run("a differently spelled body replays rather than erroring", func(t *testing.T) {
+		s := testsupport.New(t)
+		// The validator rewrites the account, so if the hash were taken after it ran,
+		// the second call would hash a different payload and be refused as a reuse.
+		s.RegisterValidator("normalizing", func(req *providers.PaymentRequest) error {
+			req.Account, req.Scheme = "256"+strings.TrimPrefix(req.Account, "0"), "mtn"
+			return nil
+		})
+		account := s.ProviderFor(t, "normalizing", testsupport.DummyConfig(nil), "UG")
+		s.Route(t, account.ID, 1)
+		app, _, _ := s.App(t)
+
+		spelled := testsupport.PaymentRequest("ORDER-IDEM", " ug ", "0770000000")
+		spelled.Currency, spelled.PaymentMethod = " ugx ", strings.ToUpper(testsupport.Method)
+		first := testsupport.Must(s.Payments.Create(
+			context.Background(), app.ID, domain.ServiceCollection, "idem-spelling", spelled,
+		))
+
+		// Same request, written the way it normalizes to.
+		canonical := testsupport.PaymentRequest("ORDER-IDEM", "UG", "0770000000")
+		second, err := s.Payments.Create(
+			context.Background(), app.ID, domain.ServiceCollection, "idem-spelling", canonical,
+		)
+		if err != nil {
+			t.Fatalf("Create(same request, other spelling) error = %v, want a replay", err)
+		}
+		if second.TransactionID != first.TransactionID {
+			t.Errorf("replay transaction = %q, want the original %q", second.TransactionID, first.TransactionID)
+		}
+	})
+
+	t.Run("a genuinely different body is refused", func(t *testing.T) {
+		s := testsupport.New(t)
+		account := s.Provider(t, testsupport.DummyConfig(nil), "UG")
+		s.Route(t, account.ID, 1)
+		app, _, _ := s.App(t)
+
+		testsupport.Must(s.Payments.Create(
+			context.Background(), app.ID, domain.ServiceCollection, "idem-differs",
+			testsupport.PaymentRequest("ORDER-A", "UG", "256770000000"),
+		))
+		_, err := s.Payments.Create(
+			context.Background(), app.ID, domain.ServiceCollection, "idem-differs",
+			testsupport.PaymentRequest("ORDER-B", "UG", "256770000000"),
+		)
+		if err == nil || !strings.Contains(err.Error(), "different request") {
+			t.Fatalf("Create(different body, same key) error = %v, want a reuse refusal", err)
 		}
 	})
 }

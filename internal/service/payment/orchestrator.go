@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/dto"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/provider"
@@ -16,50 +17,6 @@ import (
 	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
-
-// PartyPayload contains the identifying details of a payment party.
-type PartyPayload struct {
-	// Name is the party's display name.
-	Name string `json:"name"`
-	// Email is the party's email address.
-	Email string `json:"email"`
-}
-
-// CreatePaymentRequest contains the common fields used to initiate a collection or disbursement.
-type CreatePaymentRequest struct {
-	// PaymentMethod identifies the requested payment rail. It is free-form and must
-	// match an active payment route.
-	PaymentMethod string `json:"payment_method"`
-	// Amount is the payment amount in the currency's minor unit.
-	Amount int64 `json:"amount"`
-	// Currency is the three-letter currency code.
-	Currency string `json:"currency"`
-	// Country is the optional ISO 3166-1 alpha-2 transaction country. Providers that
-	// declare supported countries are only eligible when it is present and matches.
-	Country string `json:"country,omitempty"`
-	// Reference is the application's unique business reference.
-	Reference string `json:"reference"`
-	// Description is optional payment context shown to downstream systems.
-	Description string `json:"description"`
-	// Account is the provider-specific account the payment is collected from or
-	// disbursed to: a mobile number, bank account, card token, or wallet address.
-	// Momobase treats it as opaque and leaves its validation to the selected
-	// provider, through providers.RequestValidator.
-	Account string `json:"account"`
-	// Scheme optionally names the account's provider-specific scheme, such as a
-	// mobile network, bank, or card brand. Like PaymentMethod it is free-form; the
-	// selected provider interprets it and Momobase never matches on it.
-	Scheme string `json:"scheme,omitempty"`
-	// Metadata optionally carries provider-specific payment details, such as a bank
-	// branch code. It reaches the selected provider and is never persisted, so it
-	// cannot become a free-form store of identifiers Momobase would then have to
-	// protect. It is part of the idempotency hash.
-	Metadata map[string]any `json:"metadata,omitempty"`
-	// Customer optionally identifies the collection customer.
-	Customer *PartyPayload `json:"customer,omitempty"`
-	// Recipient optionally identifies the disbursement recipient.
-	Recipient *PartyPayload `json:"recipient,omitempty"`
-}
 
 // CreatePaymentResponse describes the transaction created for a payment request.
 type CreatePaymentResponse struct {
@@ -103,9 +60,11 @@ func (o *Orchestrator) Create(
 	appID string,
 	service string,
 	key string,
-	req *CreatePaymentRequest,
+	req *dto.CreatePayment,
 ) (*CreatePaymentResponse, error) {
-	if err := ValidatePaymentPayload(service, req); err != nil {
+	// The payload validates itself, and normalizes before it does: the hash below is
+	// taken over the normalized request, so what counts as a replay is decided here.
+	if err := dto.Check(req); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(key) == "" {
@@ -122,7 +81,7 @@ func (o *Orchestrator) Create(
 		return nil, err
 	}
 	var name, email string
-	if party := paymentParty(service, req); party != nil {
+	if party := req.Party(service); party != nil {
 		name, email = party.Name, party.Email
 	}
 	// The provider request is assembled before the transaction row so that the
@@ -260,7 +219,7 @@ func (o *Orchestrator) find(ctx context.Context, appID, key string) (*domain.Tra
 	return o.repos.Transactions.ByIdempotencyKey(ctx, appID, key)
 }
 
-func replay(tx *domain.Transaction, hash, _ string, _ *CreatePaymentRequest) (*CreatePaymentResponse, error) {
+func replay(tx *domain.Transaction, hash, _ string, _ *dto.CreatePayment) (*CreatePaymentResponse, error) {
 	if tx.RequestHash != hash {
 		return nil, errors.New("idempotency key reused with a different request")
 	}

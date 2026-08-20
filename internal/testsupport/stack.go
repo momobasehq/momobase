@@ -9,8 +9,10 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/dto"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
@@ -82,7 +84,13 @@ func NoError(err error) {
 // registry, so tests never observe one another.
 func New(t *testing.T) *Stack {
 	t.Helper()
-	db := Must(gorm.Open(sqlite.Open("file:"+platform.NewID("test")+"?mode=memory&cache=shared"), &gorm.Config{}))
+	// Silent, because a not-found read is an ordinary outcome here — an idempotency
+	// miss, a provider that has never been probed — and GORM logs each one at error
+	// level, which buries a real failure in the noise.
+	db := Must(gorm.Open(
+		sqlite.Open("file:"+platform.NewID("test")+"?mode=memory&cache=shared"),
+		&gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)},
+	))
 	NoError(db.AutoMigrate(
 		&domain.AdminUser{},
 		&domain.Permission{},
@@ -196,8 +204,8 @@ func (p *requestValidator) ValidateRequest(_ context.Context, req *providers.Pay
 
 // PaymentRequest builds a minimal collection request on Method, which most payment
 // and routing tests only need to vary by reference, country, and account.
-func PaymentRequest(reference, country, account string) *payment.CreatePaymentRequest {
-	return &payment.CreatePaymentRequest{
+func PaymentRequest(reference, country, account string) *dto.CreatePayment {
+	return &dto.CreatePayment{
 		PaymentMethod: Method,
 		Amount:        1500,
 		Currency:      "UGX",

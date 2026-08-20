@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/dto"
 	httpcommon "github.com/momobasehq/momobase/internal/http/common"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
@@ -126,7 +127,7 @@ func (h *Handler) ListPaymentMethods(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param Idempotency-Key header string true "Unique idempotency key"
-// @Param request body payment.CreatePaymentRequest true "Collection request"
+// @Param request body dto.CreatePayment true "Collection request"
 // @Success 201 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -149,7 +150,7 @@ func (h *Handler) CreateCollection(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param Idempotency-Key header string true "Unique idempotency key"
-// @Param request body payment.CreatePaymentRequest true "Disbursement request"
+// @Param request body dto.CreatePayment true "Disbursement request"
 // @Success 201 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -166,7 +167,7 @@ func (h *Handler) create(c fiber.Ctx, service string) error {
 	if id == nil {
 		return platform.Error(c, 401, "UNAUTHORIZED", "missing app identity")
 	}
-	req, err := platform.DecodeJSON[payment.CreatePaymentRequest](c)
+	req, err := platform.DecodeJSON[dto.CreatePayment](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}

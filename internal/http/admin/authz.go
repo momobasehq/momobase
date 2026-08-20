@@ -5,18 +5,9 @@ import (
 
 	"strings"
 
+	"github.com/momobasehq/momobase/internal/dto"
 	"github.com/momobasehq/momobase/internal/platform"
 )
-
-// RoleRequest creates or replaces a role's description and permissions.
-type RoleRequest struct {
-	// Name identifies the role. It is ignored when updating, since the path carries it.
-	Name string `json:"name" example:"support"`
-	// Description explains the role in an operator-facing list.
-	Description string `json:"description" example:"Read transactions and reissue credentials"`
-	// Permissions are the codes the role grants, from GET /api/admin/permissions.
-	Permissions []string `json:"permissions" example:"transactions:read,credentials:update"`
-}
 
 // ListPermissions writes the seeded permission catalogue.
 //
@@ -64,14 +55,14 @@ func (h *Handler) ListRoles(c fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body RoleRequest true "Role definition"
+// @Param request body dto.RoleRequest true "Role definition"
 // @Success 201 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 403 {object} apidoc.ErrorResponse
 // @Router /api/admin/roles [post]
 func (h *Handler) CreateRole(c fiber.Ctx) error {
-	body, err := platform.DecodeJSON[RoleRequest](c)
+	body, err := bind[dto.RoleRequest](c)
 	if err != nil {
 		return platform.Error(c, fiber.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 	}
@@ -88,7 +79,7 @@ func (h *Handler) CreateRole(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param name path string true "Role name"
-// @Param request body RoleRequest true "Replacement description and permissions"
+// @Param request body dto.RoleRequest true "Replacement description and permissions"
 // @Success 200 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -96,7 +87,7 @@ func (h *Handler) CreateRole(c fiber.Ctx) error {
 // @Failure 404 {object} apidoc.ErrorResponse
 // @Router /api/admin/roles/{name} [patch]
 func (h *Handler) UpdateRole(c fiber.Ctx) error {
-	body, err := platform.DecodeJSON[RoleRequest](c)
+	body, err := bind[dto.RoleRequest](c)
 	if err != nil {
 		return platform.Error(c, fiber.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 	}

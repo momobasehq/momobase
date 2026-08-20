@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/dto"
 	"github.com/momobasehq/momobase/internal/http/apidoc"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
@@ -93,6 +94,24 @@ func NewHandler(deps Deps) *Handler {
 		analytics: deps.Analytics,
 		system:    deps.System,
 	}
+}
+
+// bind decodes a request body and lets the payload validate itself, which is the only
+// validation an administrative handler does: everything past this point is a question
+// about the database or the caller, and belongs to a service.
+func bind[T any, P interface {
+	*T
+	dto.Payload
+}](c fiber.Ctx) (P, error) {
+	body, err := platform.DecodeJSON[T](c)
+	if err != nil {
+		return nil, err
+	}
+	payload := P(body)
+	if err := dto.Check(payload); err != nil {
+		return nil, err
+	}
+	return payload, nil
 }
 
 func actor(c fiber.Ctx) *domain.AdminUser { return authmw.AdminUser(c) }
@@ -199,7 +218,7 @@ func (h *Handler) ListAdmins(c fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body apidoc.CreateAdminRequest true "Administrator"
+// @Param request body dto.CreateAdminRequest true "Administrator"
 // @Success 201 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -208,7 +227,7 @@ func (h *Handler) ListAdmins(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/users [post]
 func (h *Handler) CreateAdminUser(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.CreateAdminRequest](c)
+	req, err := bind[dto.CreateAdminRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
@@ -225,7 +244,7 @@ func (h *Handler) CreateAdminUser(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Administrator ID"
-// @Param request body apidoc.ChangePasswordRequest true "New password"
+// @Param request body dto.ChangePasswordRequest true "New password"
 // @Success 200 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -234,7 +253,7 @@ func (h *Handler) CreateAdminUser(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/users/{id}/password [patch]
 func (h *Handler) ChangeAdminPassword(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.ChangePasswordRequest](c)
+	req, err := bind[dto.ChangePasswordRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
@@ -251,7 +270,7 @@ func (h *Handler) ChangeAdminPassword(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Administrator ID"
-// @Param request body apidoc.ChangeStatusRequest true "Status" SchemaExample({"status":"active"})
+// @Param request body dto.ChangeAdminStatusRequest true "Status" SchemaExample({"status":"active"})
 // @Success 200 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -260,7 +279,7 @@ func (h *Handler) ChangeAdminPassword(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/users/{id}/status [patch]
 func (h *Handler) ChangeAdminStatus(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.ChangeStatusRequest](c)
+	req, err := bind[dto.ChangeAdminStatusRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
@@ -277,7 +296,7 @@ func (h *Handler) ChangeAdminStatus(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Administrator ID"
-// @Param request body apidoc.ChangeRoleRequest true "Replacement role"
+// @Param request body dto.ChangeRoleRequest true "Replacement role"
 // @Success 200 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -285,7 +304,7 @@ func (h *Handler) ChangeAdminStatus(c fiber.Ctx) error {
 // @Failure 404 {object} apidoc.ErrorResponse
 // @Router /api/admin/users/{id}/role [patch]
 func (h *Handler) ChangeAdminRole(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.ChangeRoleRequest](c)
+	req, err := bind[dto.ChangeRoleRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
@@ -318,7 +337,7 @@ func (h *Handler) ListApps(c fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body apidoc.CreateAppRequest true "Application"
+// @Param request body dto.CreateAppRequest true "Application"
 // @Success 201 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -327,7 +346,7 @@ func (h *Handler) ListApps(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/apps [post]
 func (h *Handler) CreateApp(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.CreateAppRequest](c)
+	req, err := bind[dto.CreateAppRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
@@ -344,7 +363,7 @@ func (h *Handler) CreateApp(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Application ID"
-// @Param request body apidoc.UpdateAppRequest true "Application changes"
+// @Param request body dto.UpdateAppRequest true "Application changes"
 // @Success 200 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -353,7 +372,7 @@ func (h *Handler) CreateApp(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/apps/{id} [patch]
 func (h *Handler) UpdateApp(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.UpdateAppRequest](c)
+	req, err := bind[dto.UpdateAppRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
@@ -370,7 +389,7 @@ func (h *Handler) UpdateApp(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Application ID"
-// @Param request body apidoc.ChangeStatusRequest true "Status" SchemaExample({"status":"disabled"})
+// @Param request body dto.ChangeAppStatusRequest true "Status" SchemaExample({"status":"disabled"})
 // @Success 200 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -379,7 +398,7 @@ func (h *Handler) UpdateApp(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/apps/{id}/status [patch]
 func (h *Handler) ChangeAppStatus(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.ChangeStatusRequest](c)
+	req, err := bind[dto.ChangeAppStatusRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
@@ -418,7 +437,7 @@ func (h *Handler) ListCredentials(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Application ID"
-// @Param request body apidoc.CreateCredentialRequest true "Credential"
+// @Param request body dto.CreateCredentialRequest true "Credential"
 // @Success 201 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -427,7 +446,7 @@ func (h *Handler) ListCredentials(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/apps/{id}/credentials [post]
 func (h *Handler) CreateCredential(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.CreateCredentialRequest](c)
+	req, err := bind[dto.CreateCredentialRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
@@ -522,7 +541,7 @@ func (h *Handler) ProviderRegistry(c fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body apidoc.CreateProviderAccountRequest true "Provider account"
+// @Param request body dto.CreateProviderAccountRequest true "Provider account"
 // @Success 201 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -531,7 +550,7 @@ func (h *Handler) ProviderRegistry(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/providers/accounts [post]
 func (h *Handler) CreateProvider(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.CreateProviderAccountRequest](c)
+	req, err := bind[dto.CreateProviderAccountRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
@@ -548,7 +567,7 @@ func (h *Handler) CreateProvider(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Provider account ID"
-// @Param request body apidoc.UpdateCountriesRequest true "Countries"
+// @Param request body dto.UpdateCountriesRequest true "Countries"
 // @Success 200 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -557,7 +576,7 @@ func (h *Handler) CreateProvider(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/providers/accounts/{id}/countries [patch]
 func (h *Handler) UpdateProviderCountries(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.UpdateCountriesRequest](c)
+	req, err := bind[dto.UpdateCountriesRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
@@ -574,7 +593,7 @@ func (h *Handler) UpdateProviderCountries(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Provider account ID"
-// @Param request body apidoc.UpdateProviderConfigRequest true "Provider configuration"
+// @Param request body dto.UpdateProviderConfigRequest true "Provider configuration"
 // @Success 200 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -583,7 +602,7 @@ func (h *Handler) UpdateProviderCountries(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/providers/accounts/{id}/config [patch]
 func (h *Handler) UpdateProviderConfig(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.UpdateProviderConfigRequest](c)
+	req, err := bind[dto.UpdateProviderConfigRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
@@ -687,7 +706,7 @@ func (h *Handler) ListRoutes(c fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body apidoc.CreateRouteRequest true "Payment route"
+// @Param request body dto.CreateRouteRequest true "Payment route"
 // @Success 201 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -696,7 +715,7 @@ func (h *Handler) ListRoutes(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/routes [post]
 func (h *Handler) CreateRoute(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.CreateRouteRequest](c)
+	req, err := bind[dto.CreateRouteRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
@@ -713,7 +732,7 @@ func (h *Handler) CreateRoute(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Payment route ID"
-// @Param request body apidoc.UpdateRouteRequest true "Route changes"
+// @Param request body dto.UpdateRouteRequest true "Route changes"
 // @Success 200 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
@@ -722,7 +741,7 @@ func (h *Handler) CreateRoute(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/routes/{id} [patch]
 func (h *Handler) UpdateRoute(c fiber.Ctx) error {
-	req, err := platform.DecodeJSON[apidoc.UpdateRouteRequest](c)
+	req, err := bind[dto.UpdateRouteRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}

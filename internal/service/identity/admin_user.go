@@ -27,12 +27,10 @@ func NewAdminUserService(repos *repository.UnitOfWork, audit *audit.Service, aut
 
 // Create validates and persists an administrator account, subject to the actor's role.
 func (s *AdminUserService) Create(ctx context.Context, actor *domain.AdminUser, name, email, password, role string) (*domain.AdminUser, error) {
-	name, email, role = strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(email)), strings.ToLower(strings.TrimSpace(role))
+	// The payload arrives normalized and structurally checked; what is left is the
+	// question only the database can answer.
 	if role == "" {
 		role = domain.RoleOperations
-	}
-	if name == "" || len(name) > 255 || len(password) < 8 || strings.Count(email, "@") != 1 {
-		return nil, errors.New("invalid admin name, email, or password")
 	}
 	// Any seeded or operator-created role is assignable. Checking the roles table
 	// rather than a literal list is the point: a custom role was unusable before,
@@ -86,9 +84,6 @@ func (s *AdminUserService) ChangePassword(ctx context.Context, actor *domain.Adm
 	// route's middleware has already enforced by the time this runs.
 	if actor == nil {
 		return errors.New("not allowed")
-	}
-	if len(password) < 8 {
-		return errors.New("password must be at least 8 characters")
 	}
 	hash, err := platform.HashPassword(password)
 	if err != nil {
@@ -148,9 +143,6 @@ func (s *AdminUserService) ChangeRole(ctx context.Context, actor *domain.AdminUs
 func (s *AdminUserService) ChangeStatus(ctx context.Context, actor *domain.AdminUser, id, status string) error {
 	if actor == nil {
 		return errors.New("not allowed")
-	}
-	if status != "active" && status != "inactive" {
-		return errors.New("invalid status")
 	}
 	err := s.repos.Within(ctx, func(r *repository.Set) error {
 		if err := r.AdminUsers.SetStatus(ctx, id, status); err != nil {

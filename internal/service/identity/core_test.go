@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/service/payment"
+	"github.com/momobasehq/momobase/internal/dto"
 	"github.com/momobasehq/momobase/internal/service/reconciliation"
 	"github.com/momobasehq/momobase/internal/service/routing"
 	"github.com/momobasehq/momobase/internal/service/webhook"
@@ -34,14 +34,14 @@ func TestCoreFlows(t *testing.T) {
 		account := s.Provider(t, testsupport.DummyConfig(nil), "UG")
 		s.Route(t, account.ID, 1)
 		app, _, _ := s.App(t)
-		req := &payment.CreatePaymentRequest{
+		req := &dto.CreatePayment{
 			PaymentMethod: testsupport.Method,
 			Amount:        50000,
 			Currency:      "UGX",
 			Country:       "UG",
 			Reference:     "ORDER-1",
 			Account:       "256770000000",
-			Customer:      &payment.PartyPayload{Name: "Test Customer"},
+			Customer:      &dto.Party{Name: "Test Customer"},
 		}
 		first := testsupport.Must(s.Payments.Create(context.Background(), app.ID, domain.ServiceCollection, "idem", req))
 		second := testsupport.Must(s.Payments.Create(context.Background(), app.ID, domain.ServiceCollection, "idem", req))
@@ -60,14 +60,14 @@ func TestCoreFlows(t *testing.T) {
 		s.Route(t, account.ID, 1)
 		app, _, _ := s.App(t)
 		created := testsupport.Must(
-			s.Payments.Create(context.Background(), app.ID, domain.ServiceCollection, "idem-recon", &payment.CreatePaymentRequest{
+			s.Payments.Create(context.Background(), app.ID, domain.ServiceCollection, "idem-recon", &dto.CreatePayment{
 				PaymentMethod: testsupport.Method,
 				Amount:        1500,
 				Currency:      "UGX",
 				Country:       "UG",
 				Reference:     "ORDER-RECON",
 				Account:       "256770000000",
-				Customer:      &payment.PartyPayload{Name: "Test Customer"},
+				Customer:      &dto.Party{Name: "Test Customer"},
 			}),
 		)
 		if created.Status != domain.TxProcessing {
