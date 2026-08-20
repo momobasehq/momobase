@@ -14,12 +14,12 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/http/apidoc"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/provider"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/audit"
+	"github.com/momobasehq/momobase/internal/service/identity"
+	"github.com/momobasehq/momobase/internal/service/provider"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -64,15 +64,15 @@ func testHandlerWithProviders(t *testing.T, registry providers.Registry) *Handle
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	runtime := provider.NewRuntimeManager(db, registry, encryptor, log)
 	audit := audit.New(db, log)
-	apps := services.NewAppService(db, nil, nil)
+	apps := identity.NewAppService(db, nil, nil)
 	return NewHandler(Deps{
 		DB:        db,
 		Providers: provider.NewAdminService(db, audit, encryptor, registry, runtime),
 		Apps:      apps,
 		Runtime:   runtime,
 		Audit:     audit,
-		Authz:     services.NewAuthzService(db, audit),
-		Analytics: services.NewAnalyticsService(db),
+		Authz:     identity.NewAuthzService(db, audit),
+		Analytics: identity.NewAnalyticsService(db),
 		System: SystemInfo{
 			AppName:        "momobase-test",
 			AppEnv:         "test",

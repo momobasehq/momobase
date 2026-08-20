@@ -16,8 +16,8 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/provider"
-	"github.com/momobasehq/momobase/internal/webhook"
+	"github.com/momobasehq/momobase/internal/service/provider"
+	"github.com/momobasehq/momobase/internal/service/webhook"
 	"github.com/momobasehq/momobase/providers"
 )
 

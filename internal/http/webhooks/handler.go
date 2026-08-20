@@ -4,7 +4,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/webhook"
+	"github.com/momobasehq/momobase/internal/service/webhook"
 )
 
 // Handler serves incoming provider webhook requests.

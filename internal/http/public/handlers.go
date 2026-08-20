@@ -11,10 +11,10 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	httpcommon "github.com/momobasehq/momobase/internal/http/common"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
-	"github.com/momobasehq/momobase/internal/payment"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/routing"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/identity"
+	"github.com/momobasehq/momobase/internal/service/payment"
+	"github.com/momobasehq/momobase/internal/service/routing"
 )
 
 // Ping writes a plain 200 response for the liveness endpoint.
@@ -51,8 +51,8 @@ func Health(c fiber.Ctx) error {
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/v1/token [post]
-func ClientToken(auth *services.AppAuthService) fiber.Handler {
-	return httpcommon.Token("client_credentials", func(c fiber.Ctx) (*services.TokenResponse, error) {
+func ClientToken(auth *identity.AppAuthService) fiber.Handler {
+	return httpcommon.Token("client_credentials", func(c fiber.Ctx) (*identity.TokenResponse, error) {
 		return auth.IssueClientToken(c, c.FormValue("client_id"), c.FormValue("client_secret"))
 	})
 }
@@ -70,8 +70,8 @@ func ClientToken(auth *services.AppAuthService) fiber.Handler {
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/v1/token/refresh [post]
-func AppRefreshToken(auth *services.AppAuthService) fiber.Handler {
-	return httpcommon.Token("refresh_token", func(c fiber.Ctx) (*services.TokenResponse, error) {
+func AppRefreshToken(auth *identity.AppAuthService) fiber.Handler {
+	return httpcommon.Token("refresh_token", func(c fiber.Ctx) (*identity.TokenResponse, error) {
 		return auth.RefreshToken(c, c.FormValue("refresh_token"))
 	})
 }

@@ -5,4 +5,4 @@
 // transaction reporting. The payment path lives in internal/payment, routing in
 // internal/routing, adapters in internal/provider, callbacks in internal/webhook,
 // and settlement in internal/reconciliation.
-package services
+package identity

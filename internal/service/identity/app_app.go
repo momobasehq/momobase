@@ -1,4 +1,4 @@
-package services
+package identity
 
 import (
 	"context"
@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/service/audit"
 	"github.com/momobasehq/momobase/internal/store"
 	"gorm.io/gorm"
 )

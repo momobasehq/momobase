@@ -16,7 +16,7 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
 // serve runs a chain against req on a throwaway app. A fiber.Ctx cannot be built
@@ -157,7 +157,7 @@ func TestRequirePermissionHonorsTheWildcard(t *testing.T) {
 }
 
 func TestRequireAppScope(t *testing.T) {
-	identity := &services.AppIdentity{
+	identity := &identity.AppIdentity{
 		Credential: domain.AppCredential{Scopes: "transactions:read collections:create"},
 	}
 	guarded := func(c fiber.Ctx) error {

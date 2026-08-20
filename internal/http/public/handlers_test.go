@@ -18,10 +18,10 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
-func authenticatedHandler(t *testing.T) (*Handler, *services.AppAuthService, string) {
+func authenticatedHandler(t *testing.T) (*Handler, *identity.AppAuthService, string) {
 	t.Helper()
 	db, err := gorm.Open(
 		sqlite.Open("file:"+strings.ReplaceAll(t.Name(), "/", "-")+"?mode=memory&cache=shared"),
@@ -57,7 +57,7 @@ func authenticatedHandler(t *testing.T) (*Handler, *services.AppAuthService, str
 	if err != nil {
 		t.Fatalf("NewTokenManager() error = %v", err)
 	}
-	auth := services.NewAppAuthService(db, "client", "secret", time.Minute, time.Hour, manager)
+	auth := identity.NewAppAuthService(db, "client", "secret", time.Minute, time.Hour, manager)
 	tokens, err := auth.IssueClientToken(context.Background(), "client-1", "client-secret")
 	if err != nil {
 		t.Fatalf("IssueClientToken() error = %v", err)
@@ -97,7 +97,7 @@ func serve(t *testing.T, pattern string, handler fiber.Handler, req *http.Reques
 
 func serveAuthenticated(
 	t *testing.T,
-	auth *services.AppAuthService,
+	auth *identity.AppAuthService,
 	token, pattern string,
 	handler fiber.Handler,
 	req *http.Request,

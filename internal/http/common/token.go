@@ -4,11 +4,11 @@ import (
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
 // Token wraps a form-encoded grant handler with shared validation and JSON response handling.
-func Token(grant string, issue func(fiber.Ctx) (*services.TokenResponse, error)) fiber.Handler {
+func Token(grant string, issue func(fiber.Ctx) (*identity.TokenResponse, error)) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		actual := c.FormValue("grant_type")
 		if actual != grant && (grant != "password" || actual != "") {

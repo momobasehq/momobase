@@ -8,7 +8,7 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
 type key uint8
@@ -37,8 +37,8 @@ func AdminUser(c fiber.Ctx) *domain.AdminUser {
 
 // App returns the authenticated application identity stored on the request, or nil
 // when no application identity is present.
-func App(c fiber.Ctx) *services.AppIdentity {
-	value, _ := c.Locals(appKey).(*services.AppIdentity)
+func App(c fiber.Ctx) *identity.AppIdentity {
+	value, _ := c.Locals(appKey).(*identity.AppIdentity)
 	return value
 }
 
@@ -68,13 +68,13 @@ func authenticate[T any](
 
 // WithAdminBearer authenticates an administrator bearer token and stores the
 // resulting administrator on the request.
-func WithAdminBearer(auth *services.AdminAuthService) fiber.Handler {
+func WithAdminBearer(auth *identity.AdminAuthService) fiber.Handler {
 	return authenticate(adminKey, auth.Verify, auth.AuthenticateClaims)
 }
 
 // WithAppBearer authenticates an application bearer token and stores the resulting
 // application identity on the request.
-func WithAppBearer(auth *services.AppAuthService) fiber.Handler {
+func WithAppBearer(auth *identity.AppAuthService) fiber.Handler {
 	return authenticate(appKey, auth.Verify, auth.AuthenticateClaims)
 }
 

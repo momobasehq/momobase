@@ -1,4 +1,4 @@
-package services_test
+package identity_test
 
 import (
 	"context"
@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/payment"
-	"github.com/momobasehq/momobase/internal/reconciliation"
-	"github.com/momobasehq/momobase/internal/routing"
+	"github.com/momobasehq/momobase/internal/service/payment"
+	"github.com/momobasehq/momobase/internal/service/reconciliation"
+	"github.com/momobasehq/momobase/internal/service/routing"
+	"github.com/momobasehq/momobase/internal/service/webhook"
 	"github.com/momobasehq/momobase/internal/testsupport"
-	"github.com/momobasehq/momobase/internal/webhook"
 )
 
 func TestCoreFlows(t *testing.T) {

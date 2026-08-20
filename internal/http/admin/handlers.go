@@ -8,14 +8,14 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/http/apidoc"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/provider"
-	"github.com/momobasehq/momobase/internal/routing"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/audit"
+	"github.com/momobasehq/momobase/internal/service/identity"
+	"github.com/momobasehq/momobase/internal/service/provider"
+	"github.com/momobasehq/momobase/internal/service/routing"
 )
 
 // SystemInfo describes application and worker metadata exposed by the
@@ -32,15 +32,15 @@ type SystemInfo struct {
 // Handler serves authenticated administrative HTTP endpoints.
 type Handler struct {
 	db        *gorm.DB
-	auth      *services.AdminAuthService
-	users     *services.AdminUserService
+	auth      *identity.AdminAuthService
+	users     *identity.AdminUserService
 	providers *provider.AdminService
 	routes    *routing.AdminService
-	apps      *services.AppService
+	apps      *identity.AppService
 	runtime   *provider.RuntimeManager
 	audit     *audit.Service
-	authz     *services.AuthzService
-	analytics *services.AnalyticsService
+	authz     *identity.AuthzService
+	analytics *identity.AnalyticsService
 	system    SystemInfo
 }
 
@@ -56,23 +56,23 @@ type Deps struct {
 	// DB is the database handle used by read-only listing endpoints.
 	DB *gorm.DB
 	// Auth issues and validates administrator sessions.
-	Auth *services.AdminAuthService
+	Auth *identity.AdminAuthService
 	// Users administers administrator accounts.
-	Users *services.AdminUserService
+	Users *identity.AdminUserService
 	// Providers administers provider accounts and their encrypted configuration.
 	Providers *provider.AdminService
 	// Routes administers payment routes.
 	Routes *routing.AdminService
 	// Apps administers applications and their credentials.
-	Apps *services.AppService
+	Apps *identity.AppService
 	// Runtime exposes loaded adapters for status and balance endpoints.
 	Runtime *provider.RuntimeManager
 	// Audit records administrative actions.
 	Audit *audit.Service
 	// Authz resolves and maintains roles and permissions.
-	Authz *services.AuthzService
+	Authz *identity.AuthzService
 	// Analytics answers transaction reporting queries.
-	Analytics *services.AnalyticsService
+	Analytics *identity.AnalyticsService
 	// System describes the running build for the status endpoint.
 	System SystemInfo
 }
@@ -432,7 +432,7 @@ func (h *Handler) CreateCredential(c fiber.Ctx) error {
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
-	return reply(c, 201, "APP_CREDENTIAL_CREATE_FAILED", func() (*services.CreatedCredential, error) {
+	return reply(c, 201, "APP_CREDENTIAL_CREATE_FAILED", func() (*identity.CreatedCredential, error) {
 		return h.apps.CreateCredential(c.Context(), actor(c), id(c), req.Name, req.Scopes, expires)
 	})
 }
@@ -473,7 +473,7 @@ func (h *Handler) RevokeCredential(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/apps/{id}/credentials/{credentialID}/rotate [post]
 func (h *Handler) RotateCredential(c fiber.Ctx) error {
-	return reply(c, 200, "APP_CREDENTIAL_ROTATE_FAILED", func() (*services.CreatedCredential, error) {
+	return reply(c, 200, "APP_CREDENTIAL_ROTATE_FAILED", func() (*identity.CreatedCredential, error) {
 		return h.apps.RotateCredential(c.Context(), actor(c), id(c), c.Params("credentialID"))
 	})
 }

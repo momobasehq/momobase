@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
 // TransactionAnalytics writes a bucketed transaction series for the dashboard charts.
@@ -35,7 +35,7 @@ func (h *Handler) TransactionAnalytics(c fiber.Ctx) error {
 	if err != nil {
 		return platform.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", "to must be an RFC3339 timestamp")
 	}
-	result, err := h.analytics.Transactions(c.Context(), services.AnalyticsFilter{
+	result, err := h.analytics.Transactions(c.Context(), identity.AnalyticsFilter{
 		From:              from,
 		To:                to,
 		Interval:          c.Query("interval"),

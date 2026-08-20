@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/payment"
+	"github.com/momobasehq/momobase/internal/service/payment"
 	"github.com/momobasehq/momobase/internal/testsupport"
 	"github.com/momobasehq/momobase/providers"
 )

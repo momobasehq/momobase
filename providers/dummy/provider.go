@@ -117,7 +117,7 @@ func Sign(credential string, payload []byte) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// Capabilities returns the configured services.
+// Capabilities returns the configured identity.
 func (p *Provider) Capabilities() []providers.Capability {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

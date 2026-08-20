@@ -16,7 +16,7 @@ import (
 	httpcommon "github.com/momobasehq/momobase/internal/http/common"
 	publich "github.com/momobasehq/momobase/internal/http/public"
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
 func testRouter() *fiber.App {
@@ -144,11 +144,11 @@ func TestRequestIDIsEchoed(t *testing.T) {
 func TestTokenHandlerValidatesGrantAndReportsErrors(t *testing.T) {
 	called := false
 	app := fiber.New()
-	app.Post("/token", httpcommon.Token("client_credentials", func(c fiber.Ctx) (*services.TokenResponse, error) {
+	app.Post("/token", httpcommon.Token("client_credentials", func(c fiber.Ctx) (*identity.TokenResponse, error) {
 		called = true
-		return &services.TokenResponse{AccessToken: c.FormValue("client_id")}, nil
+		return &identity.TokenResponse{AccessToken: c.FormValue("client_id")}, nil
 	}))
-	app.Post("/failing", httpcommon.Token("password", func(fiber.Ctx) (*services.TokenResponse, error) {
+	app.Post("/failing", httpcommon.Token("password", func(fiber.Ctx) (*identity.TokenResponse, error) {
 		return nil, errors.New("invalid credentials")
 	}))
 

@@ -1,4 +1,4 @@
-package services_test
+package identity_test
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/audit"
+	"github.com/momobasehq/momobase/internal/service/identity"
 	"github.com/momobasehq/momobase/internal/testsupport"
 )
 
@@ -106,14 +106,14 @@ func TestRoleGuards(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("a system role cannot be shadowed, edited, or deleted", func(t *testing.T) {
-		if _, err := s.Authz.CreateRole(ctx, s.Actor, domain.RoleOperations, "", nil); !errors.Is(err, services.ErrSystemRole) {
-			t.Errorf("CreateRole(operations) error = %v, want %v", err, services.ErrSystemRole)
+		if _, err := s.Authz.CreateRole(ctx, s.Actor, domain.RoleOperations, "", nil); !errors.Is(err, identity.ErrSystemRole) {
+			t.Errorf("CreateRole(operations) error = %v, want %v", err, identity.ErrSystemRole)
 		}
-		if err := s.Authz.UpdateRole(ctx, s.Actor, domain.RoleSuperAdmin, "", nil); !errors.Is(err, services.ErrSystemRole) {
-			t.Errorf("UpdateRole(super_admin) error = %v, want %v", err, services.ErrSystemRole)
+		if err := s.Authz.UpdateRole(ctx, s.Actor, domain.RoleSuperAdmin, "", nil); !errors.Is(err, identity.ErrSystemRole) {
+			t.Errorf("UpdateRole(super_admin) error = %v, want %v", err, identity.ErrSystemRole)
 		}
-		if err := s.Authz.DeleteRole(ctx, s.Actor, domain.RoleReadOnly); !errors.Is(err, services.ErrSystemRole) {
-			t.Errorf("DeleteRole(read_only) error = %v, want %v", err, services.ErrSystemRole)
+		if err := s.Authz.DeleteRole(ctx, s.Actor, domain.RoleReadOnly); !errors.Is(err, identity.ErrSystemRole) {
+			t.Errorf("DeleteRole(read_only) error = %v, want %v", err, identity.ErrSystemRole)
 		}
 	})
 
@@ -153,12 +153,12 @@ func TestRoleGuards(t *testing.T) {
 
 func TestValidateAppScopes(t *testing.T) {
 	for _, scopes := range []string{"transactions:read", "*", " COLLECTIONS:CREATE  transactions:read "} {
-		if _, err := services.ValidateAppScopes(scopes); err != nil {
-			t.Errorf("services.ValidateAppScopes(%q) error = %v", scopes, err)
+		if _, err := identity.ValidateAppScopes(scopes); err != nil {
+			t.Errorf("identity.ValidateAppScopes(%q) error = %v", scopes, err)
 		}
 	}
-	if got := testsupport.Must(services.ValidateAppScopes("transactions:read transactions:read")); got != "transactions:read" {
-		t.Errorf("services.ValidateAppScopes() = %q, want duplicates collapsed", got)
+	if got := testsupport.Must(identity.ValidateAppScopes("transactions:read transactions:read")); got != "transactions:read" {
+		t.Errorf("identity.ValidateAppScopes() = %q, want duplicates collapsed", got)
 	}
 	for name, scopes := range map[string]string{
 		"empty":        "   ",
@@ -166,8 +166,8 @@ func TestValidateAppScopes(t *testing.T) {
 		"admin scope":  "users:create",
 		"partly wrong": "transactions:read users:create",
 	} {
-		if _, err := services.ValidateAppScopes(scopes); err == nil {
-			t.Errorf("services.ValidateAppScopes(%s) = nil, want an error", name)
+		if _, err := identity.ValidateAppScopes(scopes); err == nil {
+			t.Errorf("identity.ValidateAppScopes(%s) = nil, want an error", name)
 		}
 	}
 }
@@ -188,7 +188,7 @@ func TestListPermissionsFiltersByAudience(t *testing.T) {
 func TestChangeRole(t *testing.T) {
 	s := testsupport.New(t)
 	ctx := context.Background()
-	users := services.NewAdminUserService(s.DB, audit.New(s.DB, nil), s.Authz)
+	users := identity.NewAdminUserService(s.DB, audit.New(s.DB, nil), s.Authz)
 
 	target := testsupport.Must(users.Create(ctx, s.Actor, "Target", "target@example.com", "password123", domain.RoleReadOnly))
 

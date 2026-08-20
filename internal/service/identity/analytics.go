@@ -1,4 +1,4 @@
-package services
+package identity
 
 import (
 	"context"
@@ -75,7 +75,7 @@ type TransactionAnalytics struct {
 	Buckets []AnalyticsBucket `json:"buckets"`
 	// Total is every transaction in the range.
 	Total int64 `json:"total"`
-	// ByService splits Total across the two services.
+	// ByService splits Total across the two identity.
 	ByService ServiceCounts `json:"by_service"`
 	// Volume is the amount moved, per currency.
 	//

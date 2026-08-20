@@ -5,7 +5,7 @@ import (
 
 	httpcommon "github.com/momobasehq/momobase/internal/http/common"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
 // Me writes the authenticated administrator stored in the request context.
@@ -37,7 +37,7 @@ func (h *Handler) Me(c fiber.Ctx) error { return platform.JSON(c, 200, actor(c))
 // @Router /api/admin/token [post]
 // @Router /api/admin/login [post]
 func (h *Handler) Token(c fiber.Ctx) error {
-	return httpcommon.Token("password", func(c fiber.Ctx) (*services.TokenResponse, error) {
+	return httpcommon.Token("password", func(c fiber.Ctx) (*identity.TokenResponse, error) {
 		return h.auth.IssuePasswordToken(c.Context(), c.FormValue("username"), c.FormValue("password"), c.IP(), c.Get(fiber.HeaderUserAgent))
 	})(c)
 }
@@ -56,7 +56,7 @@ func (h *Handler) Token(c fiber.Ctx) error {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/token/refresh [post]
 func (h *Handler) RefreshToken(c fiber.Ctx) error {
-	return httpcommon.Token("refresh_token", func(c fiber.Ctx) (*services.TokenResponse, error) {
+	return httpcommon.Token("refresh_token", func(c fiber.Ctx) (*identity.TokenResponse, error) {
 		return h.auth.RefreshToken(c.Context(), c.FormValue("refresh_token"), c.IP(), c.Get(fiber.HeaderUserAgent))
 	})(c)
 }

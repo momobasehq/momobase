@@ -10,13 +10,13 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/payment"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/provider"
-	"github.com/momobasehq/momobase/internal/routing"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/audit"
+	"github.com/momobasehq/momobase/internal/service/identity"
+	"github.com/momobasehq/momobase/internal/service/payment"
+	"github.com/momobasehq/momobase/internal/service/provider"
+	"github.com/momobasehq/momobase/internal/service/routing"
 	"github.com/momobasehq/momobase/providers"
 	"github.com/momobasehq/momobase/providers/dummy"
 )
@@ -46,15 +46,15 @@ func DummyConfig(overrides map[string]any) map[string]any {
 // Stack is a wired set of services sharing one throwaway database.
 type Stack struct {
 	DB            *gorm.DB
-	Auth          *services.AppAuthService
-	Apps          *services.AppService
+	Auth          *identity.AppAuthService
+	Apps          *identity.AppService
 	ProviderAdmin *provider.AdminService
 	Runtime       *provider.RuntimeManager
 	Routes        *routing.AdminService
 	Routing       *routing.Engine
 	Payments      *payment.Orchestrator
-	Authz         *services.AuthzService
-	Analytics     *services.AnalyticsService
+	Authz         *identity.AuthzService
+	Analytics     *identity.AnalyticsService
 	Registry      providers.Registry
 	Actor         *domain.AdminUser
 }
@@ -102,10 +102,10 @@ func New(t *testing.T) *Stack {
 	registry.Register(ProviderCode, dummy.New)
 	runtime, recorder := provider.NewRuntimeManager(db, registry, enc, log), audit.New(db, log)
 	tokens := Must(platform.NewTokenManager("test-app-token-secret-must-be-long-1234567890"))
-	auth := services.NewAppAuthService(db, "app_test", "secret_test", 30*time.Minute, 24*time.Hour, tokens)
-	apps, routes := services.NewAppService(db, auth, recorder), routing.NewAdminService(db, recorder)
+	auth := identity.NewAppAuthService(db, "app_test", "secret_test", 30*time.Minute, 24*time.Hour, tokens)
+	apps, routes := identity.NewAppService(db, auth, recorder), routing.NewAdminService(db, recorder)
 	routing := routing.NewEngine(db, runtime)
-	authz := services.NewAuthzService(db, recorder)
+	authz := identity.NewAuthzService(db, recorder)
 	NoError(authz.Seed(context.Background()))
 	return &Stack{
 		db,
@@ -117,7 +117,7 @@ func New(t *testing.T) *Stack {
 		routing,
 		payment.NewOrchestrator(db, routing, provider.NewExecutor(runtime)),
 		authz,
-		services.NewAnalyticsService(db),
+		identity.NewAnalyticsService(db),
 		registry,
 		&domain.AdminUser{
 			BaseModel: domain.BaseModel{ID: "admin"},

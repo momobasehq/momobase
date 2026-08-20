@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/routing"
+	"github.com/momobasehq/momobase/internal/service/routing"
 	"github.com/momobasehq/momobase/internal/testsupport"
 )
 

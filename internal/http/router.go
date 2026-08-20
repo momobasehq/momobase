@@ -19,7 +19,7 @@ import (
 	publich "github.com/momobasehq/momobase/internal/http/public"
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
 // Request and body limits. maxRequestBytes bounds every route; webhooks are allowed
@@ -43,8 +43,8 @@ const (
 // the application HTTP router.
 type RouterDeps struct {
 	Logger    *slog.Logger
-	AdminAuth *services.AdminAuthService
-	AppAuth   *services.AppAuthService
+	AdminAuth *identity.AdminAuthService
+	AppAuth   *identity.AppAuthService
 	// DashboardEnabled serves the administration dashboard at /dashboard/. It only
 	// takes effect in a binary built with the dashboard tag, which is what carries
 	// the assets; see web/dashboard.

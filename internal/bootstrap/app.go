@@ -12,19 +12,19 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 
-	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	httpx "github.com/momobasehq/momobase/internal/http"
 	adminh "github.com/momobasehq/momobase/internal/http/admin"
 	publich "github.com/momobasehq/momobase/internal/http/public"
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
-	"github.com/momobasehq/momobase/internal/payment"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/provider"
-	"github.com/momobasehq/momobase/internal/reconciliation"
-	"github.com/momobasehq/momobase/internal/routing"
-	"github.com/momobasehq/momobase/internal/services"
-	"github.com/momobasehq/momobase/internal/webhook"
+	"github.com/momobasehq/momobase/internal/service/audit"
+	"github.com/momobasehq/momobase/internal/service/identity"
+	"github.com/momobasehq/momobase/internal/service/payment"
+	"github.com/momobasehq/momobase/internal/service/provider"
+	"github.com/momobasehq/momobase/internal/service/reconciliation"
+	"github.com/momobasehq/momobase/internal/service/routing"
+	"github.com/momobasehq/momobase/internal/service/webhook"
 	"github.com/momobasehq/momobase/internal/workers"
 )
 
@@ -36,7 +36,7 @@ type App struct {
 	Workers    *workers.Manager
 	Fiber      *fiber.App
 	Addr       string
-	AdminUsers *services.AdminUserService
+	AdminUsers *identity.AdminUserService
 
 	lifecycleMu sync.Mutex
 	serveCancel context.CancelFunc
@@ -101,11 +101,11 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	// Seeded before anything can authenticate: the catalogue and the system roles are
 	// what every authorization check resolves against, so a boot that skipped this
 	// would authorize nothing.
-	authz := services.NewAuthzService(db, audit)
+	authz := identity.NewAuthzService(db, audit)
 	if err = authz.Seed(context.Background()); err != nil {
 		return nil, err
 	}
-	adminAuth := services.NewAdminAuthService(
+	adminAuth := identity.NewAdminAuthService(
 		db,
 		cfg.Security.AdminAccessTTL,
 		cfg.Security.AdminRefreshTTL,
@@ -113,8 +113,8 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		adminTokens,
 		authz,
 	)
-	adminUsers := services.NewAdminUserService(db, audit, authz)
-	appAuth := services.NewAppAuthService(
+	adminUsers := identity.NewAdminUserService(db, audit, authz)
+	appAuth := identity.NewAppAuthService(
 		db,
 		cfg.Security.AppClientIDPrefix,
 		cfg.Security.AppClientSecretPrefix,
@@ -122,7 +122,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		cfg.Security.AppRefreshTTL,
 		appTokens,
 	)
-	apps := services.NewAppService(db, appAuth, audit)
+	apps := identity.NewAppService(db, appAuth, audit)
 	providerAdmin := provider.NewAdminService(db, audit, enc, registry, runtime)
 	routeAdmin := routing.NewAdminService(db, audit)
 	routeEngine := routing.NewEngine(db, runtime)
@@ -152,7 +152,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		Runtime:   runtime,
 		Audit:     audit,
 		Authz:     authz,
-		Analytics: services.NewAnalyticsService(db),
+		Analytics: identity.NewAnalyticsService(db),
 		System:    info,
 	})
 	// Parsed here rather than in the router so a malformed CIDR fails at start-up with
