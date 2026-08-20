@@ -26,7 +26,7 @@ before:
   hooks:
     - go mod download
     - go mod verify
-    - pnpm -C web install --frozen-lockfile
+    - pnpm -C web ci
     - pnpm -C web --recursive run build
 
 # One build per architecture, each with a complete env. Build overrides would

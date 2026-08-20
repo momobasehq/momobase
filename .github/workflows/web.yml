@@ -45,10 +45,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
 
-      # --frozen-lockfile fails rather than resolving, so a package.json edited
-      # without regenerating the lockfile is caught here instead of drifting.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm ci
 
       - name: Typecheck
         run: pnpm -r run typecheck
