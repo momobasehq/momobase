@@ -15,12 +15,11 @@ import (
 // It is tagged !dashboard because a tagged build mounts the route by design, which
 // is what build.yml asserts against the real image.
 func TestRouterDoesNotServeDashboardWithoutAssets(t *testing.T) {
-	router := testRouterWith(true)
+	app := testRouterWith(true)
 	for _, target := range []string{"/dashboard/", "/dashboard"} {
-		recorder := httptest.NewRecorder()
-		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
-		if recorder.Code != http.StatusNotFound {
-			t.Errorf("GET %s = %d, want %d in a build without the dashboard tag", target, recorder.Code, http.StatusNotFound)
+		res := send(t, app, httptest.NewRequest(http.MethodGet, target, nil))
+		if res.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want %d in a build without the dashboard tag", target, res.Code, http.StatusNotFound)
 		}
 	}
 }

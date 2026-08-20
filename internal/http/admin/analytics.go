@@ -1,7 +1,8 @@
 package admin
 
 import (
-	"net/http"
+	"github.com/gofiber/fiber/v3"
+
 	"strings"
 	"time"
 
@@ -25,30 +26,26 @@ import (
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 403 {object} apidoc.ErrorResponse
 // @Router /api/admin/analytics/transactions [get]
-func (h *Handler) TransactionAnalytics(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	from, err := optionalTime(query.Get("from"))
+func (h *Handler) TransactionAnalytics(c fiber.Ctx) error {
+	from, err := optionalTime(c.Query("from"))
 	if err != nil {
-		platform.Error(w, http.StatusBadRequest, "BAD_REQUEST", "from must be an RFC3339 timestamp")
-		return
+		return platform.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", "from must be an RFC3339 timestamp")
 	}
-	to, err := optionalTime(query.Get("to"))
+	to, err := optionalTime(c.Query("to"))
 	if err != nil {
-		platform.Error(w, http.StatusBadRequest, "BAD_REQUEST", "to must be an RFC3339 timestamp")
-		return
+		return platform.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", "to must be an RFC3339 timestamp")
 	}
-	result, err := h.analytics.Transactions(r.Context(), services.AnalyticsFilter{
+	result, err := h.analytics.Transactions(c.Context(), services.AnalyticsFilter{
 		From:              from,
 		To:                to,
-		Interval:          query.Get("interval"),
-		AppID:             strings.TrimSpace(query.Get("app_id")),
-		ProviderAccountID: strings.TrimSpace(query.Get("provider_account_id")),
+		Interval:          c.Query("interval"),
+		AppID:             strings.TrimSpace(c.Query("app_id")),
+		ProviderAccountID: strings.TrimSpace(c.Query("provider_account_id")),
 	})
 	if err != nil {
-		platform.Error(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
-		return
+		return platform.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", err.Error())
 	}
-	platform.JSON(w, http.StatusOK, result)
+	return platform.JSON(c, fiber.StatusOK, result)
 }
 
 // optionalTime parses an RFC3339 timestamp, treating an absent value as unset rather

@@ -5,17 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
+	"net"
 	"sync"
 	"time"
 
+	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 
 	"github.com/momobasehq/momobase/internal/audit"
 	"github.com/momobasehq/momobase/internal/domain"
 	httpx "github.com/momobasehq/momobase/internal/http"
 	adminh "github.com/momobasehq/momobase/internal/http/admin"
-	middlewarex "github.com/momobasehq/momobase/internal/http/middleware"
 	publich "github.com/momobasehq/momobase/internal/http/public"
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
 	"github.com/momobasehq/momobase/internal/payment"
@@ -34,7 +34,8 @@ type App struct {
 	DB         *gorm.DB
 	Runtime    *provider.RuntimeManager
 	Workers    *workers.Manager
-	Server     *http.Server
+	Fiber      *fiber.App
+	Addr       string
 	AdminUsers *services.AdminUserService
 
 	lifecycleMu sync.Mutex
@@ -156,35 +157,25 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	})
 	// Parsed here rather than in the router so a malformed CIDR fails at start-up with
 	// a clear error instead of silently disabling forwarded-header trust.
-	clientIP, err := middlewarex.NewForwardedClientIP(cfg.App.TrustedProxyCIDRs)
-	if err != nil {
-		return nil, err
-	}
 	router := httpx.NewRouter(httpx.RouterDeps{
 		Logger:             log,
 		AdminAuth:          adminAuth,
 		AppAuth:            appAuth,
 		DashboardEnabled:   cfg.Features.DashboardEnabled,
 		CORSAllowedOrigins: cfg.App.CORSAllowedOrigins,
-		ClientIP:           clientIP,
+		TrustedProxyCIDRs:  cfg.App.TrustedProxyCIDRs,
 		Public:             publicHandler,
 		Admin:              adminHandler,
 		Webhooks:           webhookh.NewHandler(webhooks),
 	})
 
 	app := &App{
-		Logger:  log,
-		DB:      db,
-		Runtime: runtime,
-		Workers: manager,
-		Server: &http.Server{
-			Addr:              cfg.App.Addr,
-			Handler:           router,
-			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       65 * time.Second,
-			WriteTimeout:      65 * time.Second,
-			IdleTimeout:       120 * time.Second,
-		},
+		Logger:     log,
+		DB:         db,
+		Runtime:    runtime,
+		Workers:    manager,
+		Fiber:      router,
+		Addr:       cfg.App.Addr,
 		AdminUsers: adminUsers,
 	}
 	databaseOwned = false
@@ -261,22 +252,43 @@ func (a *App) Serve(ctx context.Context) error {
 	}
 	a.Workers.Start(serveCtx)
 	errCh := make(chan error, 1)
-	go func() { errCh <- a.Server.ListenAndServe() }()
-	a.Logger.Info("server starting", slog.String("addr", a.Server.Addr))
+	go func() {
+		errCh <- a.Fiber.Listen(a.Addr, fiber.ListenConfig{
+			DisableStartupMessage: true,
+			ListenerAddrFunc:      a.recordListenAddr,
+		})
+	}()
+	a.Logger.Info("server starting", slog.String("addr", a.Addr))
 	select {
 	case <-serveCtx.Done():
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if err := a.Server.Shutdown(shutdown); err != nil {
+		// Listen returns nil once the graceful shutdown completes, so the goroutine
+		// above is drained by the caller rather than left holding the channel.
+		if err := a.Fiber.ShutdownWithContext(shutdown); err != nil {
 			return err
 		}
 		return serveCtx.Err()
 	case err := <-errCh:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
 		return err
 	}
+}
+
+// recordListenAddr stores the address the listener actually bound. A configured port
+// of 0 asks the kernel to choose one, and an embedding application has no other way to
+// learn which.
+func (a *App) recordListenAddr(addr net.Addr) {
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
+	a.Addr = addr.String()
+}
+
+// ListenAddr returns the address the server is bound to, which is the configured one
+// until the listener resolves a port of 0.
+func (a *App) ListenAddr() string {
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
+	return a.Addr
 }
 
 // Close stops an active server and its workers before closing the database

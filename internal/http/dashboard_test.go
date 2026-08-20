@@ -1,11 +1,14 @@
 package httpx
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/gofiber/fiber/v3"
 )
 
 // bundle stands in for a real Vite build. Testing against a fixture rather than the
@@ -21,15 +24,31 @@ func bundle() fstest.MapFS {
 	}
 }
 
-func dashboardRequest(t *testing.T, handler http.Handler, target string, headers map[string]string) *httptest.ResponseRecorder {
+// recorded is one dashboard reply, in the shape the assertions below already use.
+type recorded struct {
+	Code   int
+	Body   string
+	Header http.Header
+}
+
+func dashboardRequest(t *testing.T, handler *dashboardHandler, target string, headers map[string]string) recorded {
 	t.Helper()
 	request := httptest.NewRequest(http.MethodGet, target, nil)
 	for name, value := range headers {
 		request.Header.Set(name, value)
 	}
-	recorder := httptest.NewRecorder()
-	http.StripPrefix("/dashboard/", handler).ServeHTTP(recorder, request)
-	return recorder
+	app := fiber.New()
+	app.Get("/dashboard/*", handler.serve)
+	res, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	raw, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	_ = res.Body.Close()
+	return recorded{Code: res.StatusCode, Body: string(raw), Header: res.Header}
 }
 
 func TestDashboardServesTheShellAndAssets(t *testing.T) {
@@ -51,16 +70,16 @@ func TestDashboardServesTheShellAndAssets(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			recorder := dashboardRequest(t, handler, test.path, nil)
-			if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), test.body) {
-				t.Fatalf("GET %s = %d %q", test.path, recorder.Code, recorder.Body.String())
+			if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body, test.body) {
+				t.Fatalf("GET %s = %d %q", test.path, recorder.Code, recorder.Body)
 			}
-			if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, test.contentType) {
+			if contentType := recorder.Header.Get("Content-Type"); !strings.Contains(contentType, test.contentType) {
 				t.Errorf("GET %s Content-Type = %q, want %q", test.path, contentType, test.contentType)
 			}
-			if cache := recorder.Header().Get("Cache-Control"); !strings.Contains(cache, test.cache) {
+			if cache := recorder.Header.Get("Cache-Control"); !strings.Contains(cache, test.cache) {
 				t.Errorf("GET %s Cache-Control = %q, want %q", test.path, cache, test.cache)
 			}
-			if recorder.Header().Get("ETag") == "" {
+			if recorder.Header.Get("ETag") == "" {
 				t.Errorf("GET %s served no ETag", test.path)
 			}
 		})
@@ -73,7 +92,7 @@ func TestDashboardServesTheShellAndAssets(t *testing.T) {
 func TestDashboardRevalidatesWithETag(t *testing.T) {
 	handler := newDashboardHandler(bundle())
 	first := dashboardRequest(t, handler, "/dashboard/assets/index-abc123.js", nil)
-	etag := first.Header().Get("ETag")
+	etag := first.Header.Get("ETag")
 	if etag == "" {
 		t.Fatal("no ETag on the first response")
 	}
@@ -82,8 +101,8 @@ func TestDashboardRevalidatesWithETag(t *testing.T) {
 	if second.Code != http.StatusNotModified {
 		t.Fatalf("conditional GET = %d, want %d", second.Code, http.StatusNotModified)
 	}
-	if second.Body.Len() != 0 {
-		t.Errorf("304 carried a %d-byte body", second.Body.Len())
+	if len(second.Body) != 0 {
+		t.Errorf("304 carried a %d-byte body", len(second.Body))
 	}
 }
 

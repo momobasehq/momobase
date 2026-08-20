@@ -1,8 +1,9 @@
 package public
 
 import (
+	"github.com/gofiber/fiber/v3"
+
 	"errors"
-	"net/http"
 	"strings"
 
 	"gorm.io/gorm"
@@ -22,7 +23,7 @@ import (
 // @Tags System
 // @Success 200
 // @Router /ping [get]
-func Ping(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }
+func Ping(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) }
 
 // Health writes the lightweight health payload.
 //
@@ -31,8 +32,8 @@ func Ping(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK)
 // @Produce json
 // @Success 200 {object} apidoc.DocResponse
 // @Router /healthz [get]
-func Health(w http.ResponseWriter, _ *http.Request) {
-	platform.JSON(w, 200, map[string]bool{"ok": true})
+func Health(c fiber.Ctx) error {
+	return platform.JSON(c, 200, map[string]bool{"ok": true})
 }
 
 // ClientToken documents application token issuance.
@@ -50,9 +51,9 @@ func Health(w http.ResponseWriter, _ *http.Request) {
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/v1/token [post]
-func ClientToken(auth *services.AppAuthService) http.HandlerFunc {
-	return httpcommon.Token("client_credentials", func(r *http.Request) (*services.TokenResponse, error) {
-		return auth.IssueClientToken(r.Context(), r.Form.Get("client_id"), r.Form.Get("client_secret"))
+func ClientToken(auth *services.AppAuthService) fiber.Handler {
+	return httpcommon.Token("client_credentials", func(c fiber.Ctx) (*services.TokenResponse, error) {
+		return auth.IssueClientToken(c, c.FormValue("client_id"), c.FormValue("client_secret"))
 	})
 }
 
@@ -69,9 +70,9 @@ func ClientToken(auth *services.AppAuthService) http.HandlerFunc {
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/v1/token/refresh [post]
-func AppRefreshToken(auth *services.AppAuthService) http.HandlerFunc {
-	return httpcommon.Token("refresh_token", func(r *http.Request) (*services.TokenResponse, error) {
-		return auth.RefreshToken(r.Context(), r.Form.Get("refresh_token"))
+func AppRefreshToken(auth *services.AppAuthService) fiber.Handler {
+	return httpcommon.Token("refresh_token", func(c fiber.Ctx) (*services.TokenResponse, error) {
+		return auth.RefreshToken(c, c.FormValue("refresh_token"))
 	})
 }
 
@@ -102,19 +103,18 @@ func NewHandler(p *payment.Orchestrator, routes *routing.Engine, db *gorm.DB) *H
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/v1/payment-methods [get]
-func (h *Handler) ListPaymentMethods(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListPaymentMethods(c fiber.Ctx) error {
 	methods, err := h.routes.AvailablePaymentMethods(
-		r.Context(),
-		strings.ToLower(strings.TrimSpace(r.URL.Query().Get("service_type"))),
-		r.URL.Query().Get("country"),
+		c.Context(),
+		strings.ToLower(strings.TrimSpace(c.Query("service_type"))),
+		c.Query("country"),
 	)
 	if err != nil {
-		platform.Error(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
-		return
+		return platform.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", err.Error())
 	}
 	// Always an array, never null: a checkout screen iterating the response should
 	// render "no methods available" rather than crash on a nil.
-	platform.JSON(w, http.StatusOK, map[string]any{"items": methods, "count": len(methods)})
+	return platform.JSON(c, fiber.StatusOK, map[string]any{"items": methods, "count": len(methods)})
 }
 
 // CreateCollection validates and creates a collection transaction for the
@@ -136,8 +136,8 @@ func (h *Handler) ListPaymentMethods(w http.ResponseWriter, r *http.Request) {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Failure 503 {object} apidoc.ErrorResponse
 // @Router /api/v1/collections [post]
-func (h *Handler) CreateCollection(w http.ResponseWriter, r *http.Request) {
-	h.create(w, r, domain.ServiceCollection)
+func (h *Handler) CreateCollection(c fiber.Ctx) error {
+	return h.create(c, domain.ServiceCollection)
 }
 
 // CreateDisbursement validates and creates a disbursement transaction for the
@@ -159,30 +159,26 @@ func (h *Handler) CreateCollection(w http.ResponseWriter, r *http.Request) {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Failure 503 {object} apidoc.ErrorResponse
 // @Router /api/v1/disbursements [post]
-func (h *Handler) CreateDisbursement(w http.ResponseWriter, r *http.Request) {
-	h.create(w, r, domain.ServiceDisbursement)
+func (h *Handler) CreateDisbursement(c fiber.Ctx) error {
+	return h.create(c, domain.ServiceDisbursement)
 }
-func (h *Handler) create(w http.ResponseWriter, r *http.Request, service string) {
-	id := authmw.App(r)
+func (h *Handler) create(c fiber.Ctx, service string) error {
+	id := authmw.App(c)
 	if id == nil {
-		platform.Error(w, 401, "UNAUTHORIZED", "missing app identity")
-		return
+		return platform.Error(c, 401, "UNAUTHORIZED", "missing app identity")
 	}
-	req, err := platform.DecodeJSON[payment.CreatePaymentRequest](r)
+	req, err := platform.DecodeJSON[payment.CreatePaymentRequest](c)
 	if err != nil {
-		platform.Error(w, 400, "VALIDATION_ERROR", err.Error())
-		return
+		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
-	out, err := h.payments.Create(r.Context(), id.App.ID, service, r.Header.Get("Idempotency-Key"), req)
+	out, err := h.payments.Create(c.Context(), id.App.ID, service, c.Get("Idempotency-Key"), req)
 	if errors.Is(err, routing.ErrNoRouteAvailable) {
-		platform.Error(w, 503, "ROUTE_UNAVAILABLE", "no active provider route is available")
-		return
+		return platform.Error(c, 503, "ROUTE_UNAVAILABLE", "no active provider route is available")
 	}
 	if err != nil {
-		platform.Error(w, 400, "PAYMENT_ERROR", err.Error())
-		return
+		return platform.Error(c, 400, "PAYMENT_ERROR", err.Error())
 	}
-	platform.JSON(w, 201, out)
+	return platform.JSON(c, 201, out)
 }
 
 // GetTransaction writes the transaction identified by the request path when it
@@ -199,8 +195,8 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request, service string)
 // @Failure 404 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/v1/transactions/{id} [get]
-func (h *Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
-	h.get(w, r, "id", r.PathValue("id"))
+func (h *Handler) GetTransaction(c fiber.Ctx) error {
+	return h.get(c, "id", c.Params("id"))
 }
 
 // GetTransactionByReference writes the transaction identified by the request
@@ -217,19 +213,17 @@ func (h *Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/v1/transactions/by-reference/{reference} [get]
-func (h *Handler) GetTransactionByReference(w http.ResponseWriter, r *http.Request) {
-	h.get(w, r, "reference", r.PathValue("reference"))
+func (h *Handler) GetTransactionByReference(c fiber.Ctx) error {
+	return h.get(c, "reference", c.Params("reference"))
 }
-func (h *Handler) get(w http.ResponseWriter, r *http.Request, field, value string) {
-	id := authmw.App(r)
+func (h *Handler) get(c fiber.Ctx, field, value string) error {
+	id := authmw.App(c)
 	if id == nil {
-		platform.Error(w, 401, "UNAUTHORIZED", "missing app identity")
-		return
+		return platform.Error(c, 401, "UNAUTHORIZED", "missing app identity")
 	}
 	var tx domain.Transaction
-	if h.db.WithContext(r.Context()).Where("app_id = ? AND "+field+" = ?", id.App.ID, value).First(&tx).Error != nil {
-		platform.Error(w, 404, "NOT_FOUND", "transaction not found")
-		return
+	if h.db.WithContext(c.Context()).Where("app_id = ? AND "+field+" = ?", id.App.ID, value).First(&tx).Error != nil {
+		return platform.Error(c, 404, "NOT_FOUND", "transaction not found")
 	}
-	platform.JSON(w, 200, &tx)
+	return platform.JSON(c, 200, &tx)
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gofiber/fiber/v3"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -90,13 +91,13 @@ func TestHandlerProviderRegistryListsRegisteredCodes(t *testing.T) {
 	}
 	h := testHandlerWithProviders(t, registry)
 
-	recorder := httptest.NewRecorder()
-	h.ProviderRegistry(recorder, httptest.NewRequest(http.MethodGet, "/providers/registry", nil))
+	res := serve(t, "/providers/registry", h.ProviderRegistry,
+		httptest.NewRequest(http.MethodGet, "/providers/registry", nil))
 
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("ProviderRegistry() status = %d, body = %s", recorder.Code, recorder.Body.String())
+	if res.Code != http.StatusOK {
+		t.Fatalf("ProviderRegistry() status = %d, body = %s", res.Code, res.Body)
 	}
-	if body := recorder.Body.String(); !strings.Contains(body, `"providers":["acme_pay","zeta_pay"]`) {
+	if body := res.Body; !strings.Contains(body, `"providers":["acme_pay","zeta_pay"]`) {
 		t.Fatalf("ProviderRegistry() body = %s, want the registered codes in ascending order", body)
 	}
 }
@@ -127,7 +128,7 @@ func TestHandlerSystemEndpoints(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		handler http.HandlerFunc
+		handler fiber.Handler
 		path    string
 		want    []string
 	}{
@@ -138,14 +139,13 @@ func TestHandlerSystemEndpoints(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			recorder := httptest.NewRecorder()
-			test.handler(recorder, httptest.NewRequest(http.MethodGet, test.path, nil))
-			if recorder.Code != http.StatusOK {
-				t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+			res := serve(t, "/*", test.handler, httptest.NewRequest(http.MethodGet, test.path, nil))
+			if res.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", res.Code, res.Body)
 			}
 			for _, want := range test.want {
-				if !strings.Contains(recorder.Body.String(), want) {
-					t.Fatalf("body %s does not contain %q", recorder.Body.String(), want)
+				if !strings.Contains(res.Body, want) {
+					t.Fatalf("body %s does not contain %q", res.Body, want)
 				}
 			}
 		})
@@ -162,28 +162,22 @@ func TestHandlerListAndGetApp(t *testing.T) {
 			t.Fatalf("create admin: %v", err)
 		}
 	}
-	recorder := httptest.NewRecorder()
-	h.ListAdmins(recorder, httptest.NewRequest(http.MethodGet, "/admins?per_page=1", nil))
-	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"total":2`) || !strings.Contains(recorder.Body.String(), `"count":1`) {
-		t.Fatalf("ListAdmins() response = %d %s", recorder.Code, recorder.Body.String())
+	res := serve(t, "/admins", h.ListAdmins, httptest.NewRequest(http.MethodGet, "/admins?per_page=1", nil))
+	if res.Code != http.StatusOK || !strings.Contains(res.Body, `"total":2`) || !strings.Contains(res.Body, `"count":1`) {
+		t.Fatalf("ListAdmins() response = %d %s", res.Code, res.Body)
 	}
 
 	app := domain.App{BaseModel: domain.BaseModel{ID: "app-1"}, Name: "App", Status: "active", Environment: "sandbox"}
 	if err := h.db.Create(&app).Error; err != nil {
 		t.Fatalf("create app: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/apps/app-1", nil)
-	req.SetPathValue("id", "app-1")
-	recorder = httptest.NewRecorder()
-	h.GetApp(recorder, req)
-	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "app-1") {
-		t.Fatalf("GetApp() response = %d %s", recorder.Code, recorder.Body.String())
+	res = serve(t, "/apps/:id", h.GetApp, httptest.NewRequest(http.MethodGet, "/apps/app-1", nil))
+	if res.Code != http.StatusOK || !strings.Contains(res.Body, "app-1") {
+		t.Fatalf("GetApp() response = %d %s", res.Code, res.Body)
 	}
-	req.SetPathValue("id", "missing")
-	recorder = httptest.NewRecorder()
-	h.GetApp(recorder, req)
-	if recorder.Code != http.StatusNotFound {
-		t.Fatalf("GetApp(missing) status = %d", recorder.Code)
+	res = serve(t, "/apps/:id", h.GetApp, httptest.NewRequest(http.MethodGet, "/apps/missing", nil))
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("GetApp(missing) status = %d", res.Code)
 	}
 }
 
@@ -191,41 +185,73 @@ func TestHandlerListHonorsCanceledContext(t *testing.T) {
 	h := testHandler(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	req := httptest.NewRequest(http.MethodGet, "/admins", nil).WithContext(ctx)
-	recorder := httptest.NewRecorder()
-	h.ListAdmins(recorder, req)
-	if recorder.Code != http.StatusInternalServerError {
-		t.Fatalf("ListAdmins() with canceled context status = %d", recorder.Code)
+	// The cancelled context is installed the way RequestContext installs the real one,
+	// which is the only way in: fiber.Ctx itself can never be cancelled.
+	cancelled := func(c fiber.Ctx) error {
+		c.SetContext(ctx)
+		return c.Next()
+	}
+	res := serve(t, "/admins", h.ListAdmins, httptest.NewRequest(http.MethodGet, "/admins", nil), cancelled)
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("ListAdmins() with canceled context status = %d", res.Code)
 	}
 }
 
 func TestHandlerCreateHandlersRejectInvalidJSON(t *testing.T) {
 	h := testHandler(t)
-	recorder := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/admin/users", strings.NewReader(`{"unknown":true}`))
-	h.CreateAdminUser(recorder, req)
-	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "VALIDATION_ERROR") {
-		t.Fatalf("CreateAdminUser(validation) response = %d %s", recorder.Code, recorder.Body.String())
+	res := serve(t, "/admin/users", h.CreateAdminUser, req)
+	if res.Code != http.StatusBadRequest || !strings.Contains(res.Body, "VALIDATION_ERROR") {
+		t.Fatalf("CreateAdminUser(validation) response = %d %s", res.Code, res.Body)
 	}
 
-	recorder = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/admin/apps", strings.NewReader(`{"unknown":true}`))
-	h.CreateApp(recorder, req)
-	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "VALIDATION_ERROR") {
-		t.Fatalf("CreateApp(validation) response = %d %s", recorder.Code, recorder.Body.String())
+	res = serve(t, "/admin/apps", h.CreateApp, req)
+	if res.Code != http.StatusBadRequest || !strings.Contains(res.Body, "VALIDATION_ERROR") {
+		t.Fatalf("CreateApp(validation) response = %d %s", res.Code, res.Body)
 	}
 }
 
 func TestReplySuccessAndError(t *testing.T) {
-	recorder := httptest.NewRecorder()
-	reply(recorder, http.StatusAccepted, "FAILED", func() (apidoc.OK, error) { return apidoc.OK{OK: true}, nil })
-	if recorder.Code != http.StatusAccepted || !strings.Contains(recorder.Body.String(), `"ok":true`) {
-		t.Fatalf("reply(success) = %d %s", recorder.Code, recorder.Body.String())
+	res := serve(t, "/", func(c fiber.Ctx) error {
+		return reply(c, http.StatusAccepted, "FAILED", func() (apidoc.OK, error) { return apidoc.OK{OK: true}, nil })
+	}, httptest.NewRequest(http.MethodGet, "/", nil))
+	if res.Code != http.StatusAccepted || !strings.Contains(res.Body, `"ok":true`) {
+		t.Fatalf("reply(success) = %d %s", res.Code, res.Body)
 	}
 
-	recorder = httptest.NewRecorder()
-	reply(recorder, http.StatusOK, "FAILED", func() (apidoc.OK, error) { return apidoc.OK{OK: true}, io.EOF })
-	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "FAILED") {
-		t.Fatalf("reply(error) = %d %s", recorder.Code, recorder.Body.String())
+	res = serve(t, "/", func(c fiber.Ctx) error {
+		return reply(c, http.StatusOK, "FAILED", func() (apidoc.OK, error) { return apidoc.OK{OK: true}, io.EOF })
+	}, httptest.NewRequest(http.MethodGet, "/", nil))
+	if res.Code != http.StatusBadRequest || !strings.Contains(res.Body, "FAILED") {
+		t.Fatalf("reply(error) = %d %s", res.Code, res.Body)
 	}
+}
+
+// response is one recorded reply. A fiber.Ctx cannot be built directly, so a handler is
+// exercised by mounting it on a throwaway app and driving a request through it.
+type response struct {
+	Code int
+	Body string
+}
+
+func serve(t *testing.T, pattern string, handler fiber.Handler, req *http.Request, guards ...fiber.Handler) response {
+	t.Helper()
+	app := fiber.New()
+	chain := append(append([]fiber.Handler{}, guards...), handler)
+	rest := make([]any, 0, len(chain)-1)
+	for _, link := range chain[1:] {
+		rest = append(rest, link)
+	}
+	app.All(pattern, chain[0], rest...)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	raw, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	_ = res.Body.Close()
+	return response{Code: res.StatusCode, Body: string(raw)}
 }
