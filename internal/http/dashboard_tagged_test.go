@@ -15,17 +15,14 @@ import (
 func TestRouterServesTheEmbeddedDashboard(t *testing.T) {
 	app := testRouterWith(true)
 
-	res := send(t, app, httptest.NewRequest(http.MethodGet, "/dashboard/", nil))
-	if res.Code != http.StatusOK || !strings.Contains(res.Body, "<title>Momobase Dashboard</title>") {
-		t.Fatalf("GET /dashboard/ = %d %q", res.Code, res.Body)
-	}
-	if cache := res.Header.Get("Cache-Control"); cache != "no-cache" {
-		t.Errorf("shell Cache-Control = %q, want no-cache", cache)
-	}
-
-	res = send(t, app, httptest.NewRequest(http.MethodGet, "/dashboard", nil))
-	if res.Code != http.StatusFound || res.Header.Get("Location") != "/dashboard/" {
-		t.Errorf("GET /dashboard = %d %q", res.Code, res.Header.Get("Location"))
+	for _, target := range []string{"/dashboard/", "/dashboard"} {
+		res := send(t, app, httptest.NewRequest(http.MethodGet, target, nil))
+		if res.Code != http.StatusOK || !strings.Contains(res.Body, "<title>Momobase Dashboard</title>") {
+			t.Fatalf("GET %s = %d %q", target, res.Code, res.Body)
+		}
+		if cache := res.Header.Get("Cache-Control"); cache != "no-cache" {
+			t.Errorf("GET %s Cache-Control = %q, want no-cache", target, cache)
+		}
 	}
 }
 

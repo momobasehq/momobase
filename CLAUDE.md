@@ -138,3 +138,4 @@ Note that `.env` autoload comes from a `godotenv/autoload` import in `cmd/momoba
 - Tests use in-memory or temp-dir SQLite (`internal/testsupport` `New(t)` is the shared fixture), no mocking framework, and `t.Fatalf("Method() error = %v", err)`-style messages.
 - Tests that use `testsupport` **must** be external (`package foo_test`): `testsupport` imports the packages under test, so an in-package test importing it is a cycle. A test covering an unexported helper stays in-package and builds its own fixtures — see `internal/service/identity/internal_test.go`, where all three cases are pure functions needing no database.
 - `momobase_test.go` is deliberately in `momobase_test` to prove the public API works from outside the module.
+- Commit messages are short and concise: a conventional-commit subject line, and a body only when it says something the diff cannot.

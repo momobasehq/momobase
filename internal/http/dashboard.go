@@ -100,15 +100,10 @@ func mountDashboard(app *fiber.App, enabled bool) {
 	}
 	handler := newDashboardHandler(dashboardweb.FS())
 	app.Get("/dashboard/*", handler.serve)
-	app.Get("/dashboard", func(c fiber.Ctx) error {
-		return c.Redirect().Status(fiber.StatusFound).To("/dashboard/")
-	})
 	// The panel that lived here was replaced by the dashboard. Redirecting permanently
 	// keeps existing bookmarks and runbooks working instead of answering them with a
 	// bare 404.
-	movedToDashboard := func(c fiber.Ctx) error {
+	app.Get("/admin/*", func(c fiber.Ctx) error {
 		return c.Redirect().Status(fiber.StatusMovedPermanently).To("/dashboard/")
-	}
-	app.Get("/admin", movedToDashboard)
-	app.Get("/admin/*", movedToDashboard)
+	})
 }
