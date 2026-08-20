@@ -63,7 +63,15 @@ type RouterDeps struct {
 // administrative, webhook, health, and optional dashboard routes.
 func NewRouter(d RouterDeps) *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName:          "momobase",
+		AppName: "momobase",
+		// Values read from a request are copies rather than views into fasthttp's
+		// pooled buffer. Without this a string taken from Params, Query or a header
+		// stays valid only until the handler returns, and anything that outlives the
+		// request — a provider account id used as a runtime map key, an id carried
+		// into a background retry — is silently rewritten when the buffer is reused
+		// by a later request. The failure is invisible in tests and looks like a
+		// routing outage in production, which is not a trade worth an allocation.
+		Immutable:        true,
 		BodyLimit:        maxRequestBytes,
 		ReadTimeout:      65 * time.Second,
 		WriteTimeout:     65 * time.Second,

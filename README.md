@@ -28,7 +28,9 @@ log.Fatal(instance.Run())
 
 Registering none is rejected at startup rather than booting a server that cannot execute a payment.
 
-`New` reads configuration from the environment unless `WithConfig` supplies it, opens the database, and prepares the HTTP server, providers, and background workers. `Run` serves until the process is interrupted; use `Serve(ctx)` to control shutdown yourself, or `Handler()` to mount Momobase in an existing HTTP server.
+`New` reads configuration from the environment unless `WithConfig` supplies it, opens the database, and prepares the HTTP server, providers, and background workers. `Run` serves until the process is interrupted; use `Serve(ctx)` to control shutdown yourself, or `App()` to reach the underlying [Fiber](https://gofiber.io) application and mount Momobase inside one of your own.
+
+Momobase serves on Fiber v3, which runs on fasthttp rather than `net/http`, so `App()` returns a `*fiber.App` and not an `http.Handler`. An application built around `net/http` adapts at its own boundary.
 
 ### Custom providers
 

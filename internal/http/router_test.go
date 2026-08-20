@@ -212,3 +212,39 @@ func TestRouterAnswers405ForAMethodMismatch(t *testing.T) {
 		t.Errorf("GET on an unknown path = %d, want %d", res.Code, http.StatusNotFound)
 	}
 }
+
+// TestRequestValuesSurviveTheRequestTheyCameFrom pins Immutable, and the reason for it.
+//
+// fasthttp pools the buffer a request is parsed into, so by default every string a
+// handler reads from the path, the query or a header is a view into memory the next
+// request overwrites. Anything that outlives the handler — a provider account id used
+// as a key in the runtime map, an id carried into a retry — is then silently rewritten
+// into a splice of two unrelated requests. Nothing fails at the point of the mistake:
+// the write succeeds, the map has an entry, and routing simply stops matching.
+func TestRequestValuesSurviveTheRequestTheyCameFrom(t *testing.T) {
+	app := NewRouter(RouterDeps{
+		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Public:   publich.NewHandler(nil, nil, nil),
+		Admin:    adminh.NewHandler(adminh.Deps{}),
+		Webhooks: webhookh.NewHandler(nil),
+	})
+
+	const want = "pacc_f505c8cc-927e-443a-9b68-ce32f5bd6afb"
+	var retained []string
+	app.Get("/retain/:id", func(c fiber.Ctx) error {
+		retained = append(retained, c.Params("id"))
+		return c.SendStatus(http.StatusNoContent)
+	})
+	send(t, app, httptest.NewRequest(http.MethodGet, "/retain/"+want, nil))
+
+	// Drive enough differently shaped requests through the same app to have the
+	// pooled buffer handed out and overwritten several times.
+	for i := range 25 {
+		target := "/retain/" + strings.Repeat("z", i) + "/../../api/admin/apps/" + strings.Repeat("q", i) + "/credentials"
+		send(t, app, httptest.NewRequest(http.MethodGet, target, nil))
+	}
+
+	if retained[0] != want {
+		t.Fatalf("retained path value = %q, want %q — request values are aliasing the pooled buffer", retained[0], want)
+	}
+}

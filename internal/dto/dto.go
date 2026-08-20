@@ -104,7 +104,9 @@ func describe(failure validator.FieldError) string {
 		return field + " must be exactly " + failure.Param() + " characters"
 	case "max":
 		return field + " must not exceed " + failure.Param() + " characters"
-	case "gt", "gte", "min":
+	case "gt":
+		return field + " must be greater than " + failure.Param()
+	case "gte", "min":
 		return field + " must be at least " + failure.Param()
 	case "oneof":
 		return field + " must be one of: " + strings.ReplaceAll(failure.Param(), " ", ", ")

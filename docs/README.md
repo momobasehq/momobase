@@ -2,13 +2,14 @@
 
 ## Architecture
 
-The backend is a modular monolith with six main areas:
+The backend is a modular monolith, layered so that each concern has one home:
 
-- `internal/http`: standard-library routing, middleware, public/admin/webhook handlers.
-- `internal/services`: authentication, payments, routing, provider runtime, health, webhooks, reconciliation, and auditing.
+- `internal/http`: Fiber routing, middleware, and the public, administrative, and webhook handlers.
+- `internal/dto`: every request body the API accepts, carrying its own validation rules and normalization.
+- `internal/service/*`: identity, payments, routing, provider runtime, health, webhooks, reconciliation, and auditing.
+- `internal/repository`: the only package that reaches the database — one repository per entity, and the single transaction boundary.
 - `providers`: the public provider contract and shared adapter helpers, plus the in-tree reference adapter in `providers/dummy`. Nothing here is registered automatically; a build chooses its providers through `momobase.WithProvider`.
-- `internal/store`: database helpers and transaction boundaries.
-- `internal/utils`: dependency-free helpers shared across services — validation, country normalization, and redaction.
+- `internal/utils`: dependency-free helpers shared across the module — validation, country normalization, and redaction.
 - `internal/workers`: bounded health, reconciliation, and session-cleanup loops.
 - `internal/bootstrap`: configuration, database initialization, dependency wiring, migration, and process lifecycle.
 - `internal/migrations`: ordered schema changes that `AutoMigrate` cannot express, and the ledger recording which have been applied.
@@ -118,6 +119,20 @@ Capabilities name the service only — `{"service_type": "collection"}`. Which p
 - Client secrets are returned only when created or rotated and are stored as password hashes.
 - Revocation invalidates existing sessions for that credential.
 - Access and refresh tokens are signed separately from admin tokens.
+
+### Token format
+
+Both audiences are issued HS256 JSON Web Tokens, signed with the audience's own
+secret — `APP_OAUTH_SECRET` for applications, `ADMIN_OAUTH_SECRET` for administrators.
+The registered claims carry what JWT already defines a name for (`sub`, `jti`, `iat`,
+`exp`) and everything else is a private claim, so a token is legible to any standard
+JWT tooling.
+
+A token proves only that it was signed by this deployment and has not expired. It
+authorizes nothing on its own: the session row must still be live, an administrator's
+permissions are read from their role on every request, and an application's scopes come
+from a fresh read of the credential. Revoking either takes effect on the next call
+rather than at the next refresh.
 
 ### Admin sessions
 
