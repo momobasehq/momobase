@@ -6,12 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
-
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
-	"github.com/momobasehq/momobase/internal/store"
 )
 
 // TokenResponse contains an issued OAuth-style access and refresh token pair.
@@ -47,7 +45,7 @@ func issueTokenPair(
 
 // AdminAuthService authenticates administrators and manages their token-backed sessions.
 type AdminAuthService struct {
-	db                    *gorm.DB
+	repos                 *repository.UnitOfWork
 	accessTTL, refreshTTL time.Duration
 	audit                 *audit.Service
 	tokens                *platform.TokenManager
@@ -56,14 +54,14 @@ type AdminAuthService struct {
 
 // NewAdminAuthService creates an administrator authentication service with the supplied token lifetimes.
 func NewAdminAuthService(
-	db *gorm.DB,
+	repos *repository.UnitOfWork,
 	accessTTL time.Duration,
 	refreshTTL time.Duration,
 	audit *audit.Service,
 	tokens *platform.TokenManager,
 	authz *AuthzService,
 ) *AdminAuthService {
-	return &AdminAuthService{db, accessTTL, refreshTTL, audit, tokens, authz}
+	return &AdminAuthService{repos, accessTTL, refreshTTL, audit, tokens, authz}
 }
 func (s *AdminAuthService) issue(ctx context.Context, user *domain.AdminUser, session *domain.AdminSession, ip, ua string) (*TokenResponse, error) {
 	base := platform.TokenClaims{SubjectType: "admin", SubjectID: user.ID, Email: user.Email, Role: user.Role}
@@ -81,34 +79,18 @@ func (s *AdminAuthService) issue(ctx context.Context, user *domain.AdminUser, se
 		UserAgent:        ua,
 		ExpiresAt:        now.Add(s.refreshTTL),
 	}
-	db := s.db.WithContext(ctx)
 	if session == nil {
-		err = db.Create(&values).Error
+		err = s.repos.AdminSessions.Create(ctx, &values)
 	} else {
-		err = store.Affected(
-			db.Model(&domain.AdminSession{}).
-				Where(
-					"id = ? AND refresh_token_hash = ?",
-					session.ID,
-					session.RefreshTokenHash,
-				).
-				Updates(map[string]any{
-					"token_hash":         values.TokenHash,
-					"refresh_token_hash": values.RefreshTokenHash,
-					"ip_address":         ip,
-					"user_agent":         ua,
-					"expires_at":         values.ExpiresAt,
-				}),
-		)
+		err = s.repos.AdminSessions.Rotate(ctx, session.ID, session.RefreshTokenHash, &values)
 	}
 	return response, err
 }
 
 // IssuePasswordToken validates administrator credentials and issues a new token pair and session.
 func (s *AdminAuthService) IssuePasswordToken(ctx context.Context, email, password, ip, ua string) (*TokenResponse, error) {
-	var user domain.AdminUser
-	db := s.db.WithContext(ctx)
-	if db.Where("email = ?", strings.ToLower(strings.TrimSpace(email))).First(&user).Error != nil || user.Status != "active" {
+	user, err := s.repos.AdminUsers.ByEmail(ctx, strings.ToLower(strings.TrimSpace(email)))
+	if err != nil || user.Status != "active" {
 		return nil, errors.New("invalid credentials")
 	}
 	now := time.Now().UTC()
@@ -116,22 +98,19 @@ func (s *AdminAuthService) IssuePasswordToken(ctx context.Context, email, passwo
 		return nil, errors.New("admin account is locked")
 	}
 	if !platform.VerifyPassword(user.PasswordHash, password) {
-		updates := map[string]any{"failed_login_attempts": gorm.Expr("failed_login_attempts + 1")}
+		var lockUntil *time.Time
 		if user.FailedLoginAttempts >= 4 {
-			updates["locked_until"] = now.Add(15 * time.Minute)
+			locked := now.Add(15 * time.Minute)
+			lockUntil = &locked
 		}
-		_ = db.Model(&user).Updates(updates).Error
+		_ = s.repos.AdminUsers.RecordFailedLogin(ctx, user.ID, lockUntil)
 		return nil, errors.New("invalid credentials")
 	}
-	if err := db.Model(&user).Updates(map[string]any{
-		"failed_login_attempts": 0,
-		"locked_until":          nil,
-		"last_login_at":         &now,
-	}).Error; err != nil {
+	if err := s.repos.AdminUsers.RecordLogin(ctx, user.ID, now); err != nil {
 		return nil, err
 	}
 	s.audit.RecordBestEffort(ctx, user.ID, "admin", "admin.login", "admin_user", user.ID, nil, ip, ua)
-	return s.issue(ctx, &user, nil, ip, ua)
+	return s.issue(ctx, user, nil, ip, ua)
 }
 
 // RefreshToken validates an administrator refresh token and rotates its session token pair.
@@ -140,25 +119,22 @@ func (s *AdminAuthService) RefreshToken(ctx context.Context, raw, ip, ua string)
 	if err != nil || claims.SubjectType != "admin" || claims.TokenType != "refresh" {
 		return nil, errors.New("invalid refresh token")
 	}
-	var session domain.AdminSession
 	now := time.Now().UTC()
-	if s.db.WithContext(ctx).Where(
-		"admin_user_id = ? AND refresh_token_hash = ? AND expires_at > ? AND revoked_at IS NULL",
-		claims.SubjectID,
-		platform.SHA256Hex(claims.TokenID),
-		now,
-	).First(&session).Error != nil {
+	session, err := s.repos.AdminSessions.LiveByRefresh(
+		ctx, claims.SubjectID, platform.SHA256Hex(claims.TokenID), now,
+	)
+	if err != nil {
 		return nil, errors.New("invalid refresh session")
 	}
 	user, err := s.activeUser(ctx, claims.SubjectID)
 	if err != nil {
 		return nil, err
 	}
-	return s.issue(ctx, user, &session, ip, ua)
+	return s.issue(ctx, user, session, ip, ua)
 }
 func (s *AdminAuthService) activeUser(ctx context.Context, id string) (*domain.AdminUser, error) {
-	var user domain.AdminUser
-	if s.db.WithContext(ctx).Where("id = ? AND status = ?", id, "active").First(&user).Error != nil {
+	user, err := s.repos.AdminUsers.ActiveByID(ctx, id)
+	if err != nil {
 		return nil, errors.New("admin inactive")
 	}
 	// Resolved per request rather than carried in the token, so revoking a permission
@@ -171,7 +147,7 @@ func (s *AdminAuthService) activeUser(ctx context.Context, id string) (*domain.A
 		}
 		user.Permissions = permissions
 	}
-	return &user, nil
+	return user, nil
 }
 
 // Verify authenticates an administrator token's signature and lifetime, without
@@ -202,13 +178,9 @@ func (s *AdminAuthService) AuthenticateClaims(
 	if claims == nil || claims.SubjectType != "admin" || claims.TokenType != "access" {
 		return nil, errors.New("invalid admin token")
 	}
-	var session domain.AdminSession
-	if s.db.WithContext(ctx).Where(
-		"admin_user_id = ? AND token_hash = ? AND expires_at > ? AND revoked_at IS NULL",
-		claims.SubjectID,
-		platform.SHA256Hex(claims.TokenID),
-		time.Now().UTC(),
-	).First(&session).Error != nil {
+	if _, err := s.repos.AdminSessions.Live(
+		ctx, claims.SubjectID, platform.SHA256Hex(claims.TokenID), time.Now().UTC(),
+	); err != nil {
 		return nil, errors.New("invalid admin session")
 	}
 	return s.activeUser(ctx, claims.SubjectID)
@@ -221,13 +193,9 @@ func (s *AdminAuthService) LogoutBearer(ctx context.Context, raw, ip, ua string)
 		return err
 	}
 	now := time.Now().UTC()
-	err = s.db.WithContext(ctx).Model(&domain.AdminSession{}).
-		Where(
-			"admin_user_id = ? AND token_hash = ? AND revoked_at IS NULL",
-			claims.SubjectID,
-			platform.SHA256Hex(claims.TokenID),
-		).
-		Update("revoked_at", &now).Error
+	err = s.repos.AdminSessions.RevokeByToken(
+		ctx, claims.SubjectID, platform.SHA256Hex(claims.TokenID), now,
+	)
 	if err == nil {
 		s.audit.RecordBestEffort(ctx, claims.SubjectID, "admin", "admin.logout", "admin_user", claims.SubjectID, nil, ip, ua)
 	}

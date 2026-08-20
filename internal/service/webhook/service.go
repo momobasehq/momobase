@@ -10,13 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
-
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/provider"
-	"github.com/momobasehq/momobase/internal/store"
 	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
@@ -33,14 +30,14 @@ type verifiedWebhook struct {
 
 // Service authenticates, verifies, stores, and applies provider webhook events.
 type Service struct {
-	db       *gorm.DB
+	repos    *repository.UnitOfWork
 	runtime  *provider.RuntimeManager
 	executor *provider.Executor
 }
 
 // New creates a provider webhook processing service.
-func New(db *gorm.DB, runtime *provider.RuntimeManager) *Service {
-	return &Service{db, runtime, provider.NewExecutor(runtime)}
+func New(repos *repository.UnitOfWork, runtime *provider.RuntimeManager) *Service {
+	return &Service{repos, runtime, provider.NewExecutor(runtime)}
 }
 func (s *Service) verify(
 	ctx context.Context,
@@ -93,23 +90,24 @@ func (s *Service) Handle(ctx context.Context, accountID string, payload []byte, 
 		PayloadHash:       event.PayloadHash,
 		PayloadJSON:       string(stored),
 	}
-	return store.Within(ctx, s.db, func(db *gorm.DB) error {
-		created := db.Clauses(clause.OnConflict{
-			Columns: []clause.Column{
-				{Name: "provider_account_id"},
-				{Name: "payload_hash"},
-			},
-			DoNothing: true,
-		}).Create(row)
-		if created.Error != nil || created.RowsAffected == 0 {
-			return created.Error
+	return s.repos.Within(ctx, func(r *repository.Set) error {
+		// A provider that delivers the same event twice inserts nothing the second
+		// time, and applying it again is exactly what must not happen.
+		inserted, err := r.WebhookEvents.Insert(ctx, row)
+		if err != nil || !inserted {
+			return err
 		}
-		return s.apply(db, row, event)
+		return s.apply(ctx, r, row, event)
 	})
 }
-func (s *Service) apply(db *gorm.DB, row *domain.WebhookEvent, event *verifiedWebhook) error {
-	tx, attempt, err := findWebhookTarget(db, event.ProviderAccountID, event.ProviderReference)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+func (s *Service) apply(
+	ctx context.Context,
+	r *repository.Set,
+	row *domain.WebhookEvent,
+	event *verifiedWebhook,
+) error {
+	tx, attempt, err := findWebhookTarget(ctx, r, event.ProviderAccountID, event.ProviderReference)
+	if repository.IsNotFound(err) {
 		return nil
 	}
 	if err != nil {
@@ -127,7 +125,7 @@ func (s *Service) apply(db *gorm.DB, row *domain.WebhookEvent, event *verifiedWe
 		next := now.Add(time.Minute)
 		txUpdates["next_reconcile_at"] = &next
 	}
-	if err := store.Affected(db.Model(&domain.Transaction{}).Where("id = ?", tx.ID).Updates(txUpdates)); err != nil {
+	if err := r.Transactions.Update(ctx, tx.ID, txUpdates); err != nil {
 		return err
 	}
 	raw, _ := json.Marshal(event.Raw)
@@ -135,10 +133,10 @@ func (s *Service) apply(db *gorm.DB, row *domain.WebhookEvent, event *verifiedWe
 	if domain.Terminal(tx.Status) {
 		attemptUpdates["completed_at"] = &now
 	}
-	if err := store.Affected(db.Model(attempt).Updates(attemptUpdates)); err != nil {
+	if err := r.TransactionAttempts.Update(ctx, attempt.ID, attemptUpdates); err != nil {
 		return err
 	}
-	return store.Affected(db.Model(row).Updates(map[string]any{"transaction_id": tx.ID, "processed": true}))
+	return r.WebhookEvents.MarkProcessed(ctx, row.ID, tx.ID)
 }
 
 // ReprocessPending retries applying up to limit stored webhook events that have not been processed.
@@ -146,8 +144,8 @@ func (s *Service) ReprocessPending(ctx context.Context, limit int) error {
 	if limit < 1 {
 		limit = 100
 	}
-	var rows []domain.WebhookEvent
-	if err := s.db.WithContext(ctx).Where("processed = ?", false).Order("created_at asc").Limit(limit).Find(&rows).Error; err != nil {
+	rows, err := s.repos.WebhookEvents.Pending(ctx, limit)
+	if err != nil {
 		return err
 	}
 	for i := range rows {
@@ -155,25 +153,32 @@ func (s *Service) ReprocessPending(ctx context.Context, limit int) error {
 		if json.Unmarshal([]byte(rows[i].PayloadJSON), &event) != nil {
 			continue
 		}
-		if err := store.Within(ctx, s.db, func(db *gorm.DB) error {
-			return s.apply(db, &rows[i], &event)
-		}); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := s.repos.Within(ctx, func(r *repository.Set) error {
+			return s.apply(ctx, r, &rows[i], &event)
+		}); err != nil && !repository.IsNotFound(err) {
 			return err
 		}
 	}
 	return nil
 }
-func findWebhookTarget(db *gorm.DB, accountID, ref string) (*domain.Transaction, *domain.TransactionAttempt, error) {
-	var attempt domain.TransactionAttempt
-	if err := db.Where(
-		"provider_account_id = ? AND provider_reference = ?",
-		accountID,
-		ref,
-	).Order("created_at desc").First(&attempt).Error; err != nil {
+
+// findWebhookTarget resolves the transaction an inbound event belongs to, through the
+// most recent attempt carrying the provider's reference, and locks it for the caller.
+// Without the lock two deliveries of the same outcome could both apply.
+func findWebhookTarget(
+	ctx context.Context,
+	r *repository.Set,
+	accountID, ref string,
+) (*domain.Transaction, *domain.TransactionAttempt, error) {
+	attempt, err := r.TransactionAttempts.LatestForReference(ctx, accountID, ref)
+	if err != nil {
 		return nil, nil, err
 	}
-	var tx domain.Transaction
-	return &tx, &attempt, db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&tx, "id = ?", attempt.TransactionID).Error
+	tx, err := r.Transactions.LockForUpdate(ctx, attempt.TransactionID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return tx, attempt, nil
 }
 
 // canonicalWebhookHash returns a stable SHA-256 hash of a verified webhook's identifying fields.

@@ -15,6 +15,22 @@ linters:
   settings:
     depguard:
       rules:
+        orm:
+          # The database is reachable only through internal/repository. bootstrap opens
+          # the handle and migrations own the schema, so both keep it; nothing else has
+          # any business holding one. Test files are exempt, because a fixture builds
+          # its own database before there is a repository to build it with.
+          files:
+            - "**/internal/service/**"
+            - "**/internal/http/**"
+            - "**/internal/platform/**"
+            - "**/internal/utils/**"
+            - "**/internal/domain/**"
+            - "**/internal/workers/**"
+            - "!$test"
+          deny:
+            - pkg: gorm.io/gorm
+              desc: "the database is reachable only through internal/repository; a service takes repositories, never a *gorm.DB"
         utils:
           files:
             - "**/internal/utils/**"
@@ -41,8 +57,6 @@ linters:
             - pkg: github.com/momobasehq/momobase/internal/bootstrap
               desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
             - pkg: github.com/momobasehq/momobase/internal/workers
-              desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
-            - pkg: github.com/momobasehq/momobase/internal/store
               desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
             - pkg: github.com/momobasehq/momobase/internal/platform
               desc: "internal/utils is a leaf holding pure helpers, so it takes no internal dependency"
@@ -72,8 +86,6 @@ linters:
             - pkg: github.com/momobasehq/momobase/internal/bootstrap
               desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
             - pkg: github.com/momobasehq/momobase/internal/workers
-              desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
-            - pkg: github.com/momobasehq/momobase/internal/store
               desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"
             - pkg: github.com/momobasehq/momobase/internal/platform
               desc: "internal/domain is a leaf holding the models and their behaviour, so it takes no internal dependency"

@@ -10,10 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"gorm.io/gorm"
-
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
@@ -84,7 +83,7 @@ type Runtime struct {
 // RuntimeManager loads provider accounts and exposes their initialized adapters safely across goroutines.
 type RuntimeManager struct {
 	mu        sync.RWMutex
-	db        *gorm.DB
+	repos     *repository.UnitOfWork
 	registry  providers.Registry
 	encryptor *platform.Encryptor
 	logger    *slog.Logger
@@ -93,12 +92,12 @@ type RuntimeManager struct {
 
 // NewRuntimeManager creates an empty provider runtime manager.
 func NewRuntimeManager(
-	db *gorm.DB,
+	repos *repository.UnitOfWork,
 	registry providers.Registry,
 	enc *platform.Encryptor,
 	log *slog.Logger,
 ) *RuntimeManager {
-	return &RuntimeManager{db: db, registry: registry, encryptor: enc, logger: log, items: map[string]*Runtime{}}
+	return &RuntimeManager{repos: repos, registry: registry, encryptor: enc, logger: log, items: map[string]*Runtime{}}
 }
 
 // Get returns the loaded runtime for a provider account ID.
@@ -130,8 +129,8 @@ func (m *RuntimeManager) CircuitState(id string) string {
 
 // LoadActive initializes every active provider account and joins any account-specific failures.
 func (m *RuntimeManager) LoadActive(ctx context.Context) error {
-	var rows []domain.ProviderAccount
-	if err := m.db.WithContext(ctx).Where("active = ?", true).Find(&rows).Error; err != nil {
+	rows, err := m.repos.ProviderAccounts.Active(ctx)
+	if err != nil {
 		return err
 	}
 	var errs []error
@@ -152,15 +151,15 @@ func (m *RuntimeManager) Disable(id string) {
 
 // Reload rebuilds an active provider runtime from persisted configuration or removes it when inactive.
 func (m *RuntimeManager) Reload(ctx context.Context, id string) error {
-	var account domain.ProviderAccount
-	if err := m.db.WithContext(ctx).First(&account, "id = ?", id).Error; err != nil {
+	account, err := m.repos.ProviderAccounts.ByID(ctx, id)
+	if err != nil {
 		return err
 	}
 	if !account.Active {
 		m.Disable(id)
 		return nil
 	}
-	plain, err := m.plain(&account)
+	plain, err := m.plain(account)
 	if err != nil {
 		return err
 	}
@@ -187,11 +186,11 @@ func (m *RuntimeManager) Reload(ctx context.Context, id string) error {
 
 // TestProviderConfig decrypts an account's configuration, initializes its adapter, and runs a health check.
 func (m *RuntimeManager) TestProviderConfig(ctx context.Context, id string) error {
-	var account domain.ProviderAccount
-	if err := m.db.WithContext(ctx).First(&account, "id = ?", id).Error; err != nil {
+	account, err := m.repos.ProviderAccounts.ByID(ctx, id)
+	if err != nil {
 		return err
 	}
-	plain, err := m.plain(&account)
+	plain, err := m.plain(account)
 	if err != nil {
 		return err
 	}

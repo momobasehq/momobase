@@ -5,22 +5,21 @@ import (
 	"errors"
 	"time"
 
-	"gorm.io/gorm"
-
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/providers"
 )
 
 // HealthService checks active provider adapters and persists their latest health state.
 type HealthService struct {
-	db       *gorm.DB
+	repos    *repository.UnitOfWork
 	runtime  *RuntimeManager
 	executor *Executor
 }
 
 // NewHealthService creates a provider health-check service.
-func NewHealthService(db *gorm.DB, runtime *RuntimeManager) *HealthService {
-	return &HealthService{db, runtime, NewExecutor(runtime)}
+func NewHealthService(repos *repository.UnitOfWork, runtime *RuntimeManager) *HealthService {
+	return &HealthService{repos, runtime, NewExecutor(runtime)}
 }
 
 // CheckAll checks every loaded provider, records each result, and joins any failures.
@@ -43,9 +42,15 @@ func (s *HealthService) CheckAll(ctx context.Context) error {
 }
 func (s *HealthService) save(ctx context.Context, id string, latency time.Duration, cause error) error {
 	now := time.Now().UTC()
-	var snap domain.ProviderHealthSnapshot
-	if err := s.db.WithContext(ctx).First(&snap, "provider_account_id = ?", id).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	// A provider that has never been probed has no snapshot, which is the first-run
+	// case rather than a failure.
+	stored, err := s.repos.ProviderHealth.ByAccount(ctx, id)
+	if err != nil && !repository.IsNotFound(err) {
 		return err
+	}
+	var snap domain.ProviderHealthSnapshot
+	if stored != nil {
+		snap = *stored
 	}
 	if snap.ProviderAccountID == "" {
 		snap.ProviderAccountID, snap.CreatedAt = id, now
@@ -78,5 +83,5 @@ func (s *HealthService) save(ctx context.Context, id string, latency time.Durati
 		snap.DisbursementsAvailable = providers.Supports(rp.Capabilities, domain.ServiceDisbursement)
 		snap.BalanceQueryAvailable = snap.CollectionsAvailable || snap.DisbursementsAvailable
 	}
-	return s.db.WithContext(ctx).Save(&snap).Error
+	return s.repos.ProviderHealth.Save(ctx, &snap)
 }

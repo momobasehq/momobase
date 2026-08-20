@@ -8,9 +8,8 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
-	"github.com/momobasehq/momobase/internal/store"
-	"gorm.io/gorm"
 )
 
 // CreatedCredential contains a persisted application credential and its one-time plaintext secret.
@@ -23,14 +22,14 @@ type CreatedCredential struct {
 
 // AppService manages applications and their client credentials.
 type AppService struct {
-	db    *gorm.DB
+	repos *repository.UnitOfWork
 	auth  *AppAuthService
 	audit *audit.Service
 }
 
 // NewAppService creates an application management service.
-func NewAppService(db *gorm.DB, auth *AppAuthService, audit *audit.Service) *AppService {
-	return &AppService{db, auth, audit}
+func NewAppService(repos *repository.UnitOfWork, auth *AppAuthService, audit *audit.Service) *AppService {
+	return &AppService{repos, auth, audit}
 }
 func (s *AppService) auditChange(ctx context.Context, actor *domain.AdminUser, action, resource, id string, meta map[string]any) {
 	if actor != nil {
@@ -40,8 +39,7 @@ func (s *AppService) auditChange(ctx context.Context, actor *domain.AdminUser, a
 
 // GetApp retrieves an application by ID.
 func (s *AppService) GetApp(ctx context.Context, id string) (*domain.App, error) {
-	var app domain.App
-	return &app, s.db.WithContext(ctx).First(&app, "id = ?", id).Error
+	return s.repos.Apps.ByID(ctx, id)
 }
 
 // CreateApp validates and persists an active application.
@@ -63,7 +61,7 @@ func (s *AppService) CreateApp(ctx context.Context, actor *domain.AdminUser, nam
 	if actor != nil {
 		app.CreatedBy = actor.ID
 	}
-	err := s.db.WithContext(ctx).Create(app).Error
+	err := s.repos.Apps.Create(ctx, app)
 	if err == nil {
 		s.auditChange(ctx, actor, "app.created", "app", app.ID, map[string]any{"name": name})
 	}
@@ -83,7 +81,7 @@ func (s *AppService) UpdateApp(ctx context.Context, actor *domain.AdminUser, id,
 	if env != "" {
 		updates["environment"] = env
 	}
-	if err := store.Affected(s.db.WithContext(ctx).Model(&domain.App{}).Where("id = ?", id).Updates(updates)); err != nil {
+	if err := s.repos.Apps.Update(ctx, id, updates); err != nil {
 		return nil, err
 	}
 	s.auditChange(ctx, actor, "app.updated", "app", id, updates)
@@ -95,15 +93,14 @@ func (s *AppService) ChangeAppStatus(ctx context.Context, actor *domain.AdminUse
 	if status != "active" && status != "disabled" && status != "suspended" {
 		return errors.New("invalid app status")
 	}
-	err := store.Within(ctx, s.db, func(tx *gorm.DB) error {
-		if err := store.Affected(tx.Model(&domain.App{}).Where("id = ?", id).Update("status", status)); err != nil {
+	err := s.repos.Within(ctx, func(r *repository.Set) error {
+		if err := r.Apps.SetStatus(ctx, id, status); err != nil {
 			return err
 		}
 		if status == "active" {
 			return nil
 		}
-		now := time.Now().UTC()
-		return tx.Model(&domain.AppSession{}).Where("app_id = ? AND revoked_at IS NULL", id).Update("revoked_at", &now).Error
+		return r.AppSessions.RevokeForApp(ctx, id, time.Now().UTC())
 	})
 	if err == nil {
 		s.auditChange(ctx, actor, "app.status_changed", "app", id, map[string]any{"status": status})
@@ -161,28 +158,22 @@ func (s *AppService) CreateCredential(
 	if actor != nil {
 		cred.CreatedBy = actor.ID
 	}
-	if err = s.db.WithContext(ctx).Create(&cred).Error; err != nil {
+	if err = s.repos.AppCredentials.Create(ctx, &cred); err != nil {
 		return nil, err
 	}
 	s.auditChange(ctx, actor, "app_credential.created", "app_credential", cred.ID, map[string]any{"app_id": appID})
 	return &CreatedCredential{cred, secret}, nil
 }
-func (s *AppService) revokeSessions(tx *gorm.DB, credentialID string) error {
-	now := time.Now().UTC()
-	return tx.Model(&domain.AppSession{}).Where("credential_id = ? AND revoked_at IS NULL", credentialID).Update("revoked_at", &now).Error
-}
 
 // RevokeCredential revokes an application credential and all sessions issued through it.
 func (s *AppService) RevokeCredential(ctx context.Context, actor *domain.AdminUser, appID, id string) error {
-	err := store.Within(ctx, s.db, func(tx *gorm.DB) error {
-		if err := store.Affected(
-			tx.Model(&domain.AppCredential{}).
-				Where("id = ? AND app_id = ?", id, appID).
-				Update("status", "revoked"),
-		); err != nil {
+	// Revoking the credential and its live sessions is one transaction: a credential
+	// marked revoked while its sessions survived would still authorize requests.
+	err := s.repos.Within(ctx, func(r *repository.Set) error {
+		if err := r.AppCredentials.Revoke(ctx, appID, id); err != nil {
 			return err
 		}
-		return s.revokeSessions(tx, id)
+		return r.AppSessions.RevokeForCredential(ctx, id, time.Now().UTC())
 	})
 	if err == nil {
 		s.auditChange(ctx, actor, "app_credential.revoked", "app_credential", id, map[string]any{"app_id": appID})
@@ -192,24 +183,24 @@ func (s *AppService) RevokeCredential(ctx context.Context, actor *domain.AdminUs
 
 // RotateCredential replaces an application credential's secret, reactivates it, and revokes its existing sessions.
 func (s *AppService) RotateCredential(ctx context.Context, actor *domain.AdminUser, appID, id string) (*CreatedCredential, error) {
-	var cred domain.AppCredential
-	if s.db.WithContext(ctx).Where("id = ? AND app_id = ?", id, appID).First(&cred).Error != nil {
-		return nil, gorm.ErrRecordNotFound
+	cred, err := s.repos.AppCredentials.InApp(ctx, appID, id)
+	if err != nil {
+		return nil, repository.ErrNotFound
 	}
 	secret, hash, err := s.newSecret()
 	if err != nil {
 		return nil, err
 	}
-	err = store.Within(ctx, s.db, func(tx *gorm.DB) error {
-		if err := store.Affected(tx.Model(&cred).Updates(map[string]any{"client_secret_hash": hash, "status": "active"})); err != nil {
+	err = s.repos.Within(ctx, func(r *repository.Set) error {
+		if err := r.AppCredentials.Rotate(ctx, id, hash); err != nil {
 			return err
 		}
-		return s.revokeSessions(tx, id)
+		return r.AppSessions.RevokeForCredential(ctx, id, time.Now().UTC())
 	})
 	if err != nil {
 		return nil, err
 	}
 	cred.ClientSecretHash, cred.Status = "", "active"
 	s.auditChange(ctx, actor, "app_credential.rotated", "app_credential", id, map[string]any{"app_id": appID})
-	return &CreatedCredential{cred, secret}, nil
+	return &CreatedCredential{*cred, secret}, nil
 }

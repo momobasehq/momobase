@@ -17,6 +17,7 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/http/apidoc"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
 	"github.com/momobasehq/momobase/internal/service/identity"
 	"github.com/momobasehq/momobase/internal/service/provider"
@@ -62,17 +63,18 @@ func testHandlerWithProviders(t *testing.T, registry providers.Registry) *Handle
 		t.Fatalf("NewEncryptor() error = %v", err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	runtime := provider.NewRuntimeManager(db, registry, encryptor, log)
-	audit := audit.New(db, log)
-	apps := identity.NewAppService(db, nil, nil)
+	repos := repository.New(db)
+	runtime := provider.NewRuntimeManager(repos, registry, encryptor, log)
+	audit := audit.New(repos, log)
+	apps := identity.NewAppService(repos, nil, nil)
 	return NewHandler(Deps{
-		DB:        db,
-		Providers: provider.NewAdminService(db, audit, encryptor, registry, runtime),
+		Repos:     repos,
+		Providers: provider.NewAdminService(repos, audit, encryptor, registry, runtime),
 		Apps:      apps,
 		Runtime:   runtime,
 		Audit:     audit,
-		Authz:     identity.NewAuthzService(db, audit),
-		Analytics: identity.NewAnalyticsService(db),
+		Authz:     identity.NewAuthzService(repos, audit),
+		Analytics: identity.NewAnalyticsService(repos),
 		System: SystemInfo{
 			AppName:        "momobase-test",
 			AppEnv:         "test",
@@ -117,12 +119,12 @@ func TestParseExpiry(t *testing.T) {
 
 func TestHandlerSystemEndpoints(t *testing.T) {
 	h := testHandler(t)
-	if err := h.db.Create(&domain.ProviderAccount{
+	if err := h.repos.ProviderAccounts.Create(context.Background(), &domain.ProviderAccount{
 		BaseModel:           domain.BaseModel{ID: "active"},
 		Name:                "Active",
 		Active:              true,
 		EncryptedConfigJSON: "encrypted",
-	}).Error; err != nil {
+	}); err != nil {
 		t.Fatalf("create provider: %v", err)
 	}
 
@@ -158,7 +160,7 @@ func TestHandlerListAndGetApp(t *testing.T) {
 		{BaseModel: domain.BaseModel{ID: "admin-1"}, Name: "One", Email: "one@example.com", Role: "operations", Status: "active"},
 		{BaseModel: domain.BaseModel{ID: "admin-2"}, Name: "Two", Email: "two@example.com", Role: "operations", Status: "active"},
 	} {
-		if err := h.db.Create(&user).Error; err != nil {
+		if err := h.repos.AdminUsers.Create(context.Background(), &user); err != nil {
 			t.Fatalf("create admin: %v", err)
 		}
 	}
@@ -168,7 +170,7 @@ func TestHandlerListAndGetApp(t *testing.T) {
 	}
 
 	app := domain.App{BaseModel: domain.BaseModel{ID: "app-1"}, Name: "App", Status: "active", Environment: "sandbox"}
-	if err := h.db.Create(&app).Error; err != nil {
+	if err := h.repos.Apps.Create(context.Background(), &app); err != nil {
 		t.Fatalf("create app: %v", err)
 	}
 	res = serve(t, "/apps/:id", h.GetApp, httptest.NewRequest(http.MethodGet, "/apps/app-1", nil))

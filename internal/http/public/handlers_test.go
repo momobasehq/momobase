@@ -18,6 +18,7 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
@@ -57,12 +58,12 @@ func authenticatedHandler(t *testing.T) (*Handler, *identity.AppAuthService, str
 	if err != nil {
 		t.Fatalf("NewTokenManager() error = %v", err)
 	}
-	auth := identity.NewAppAuthService(db, "client", "secret", time.Minute, time.Hour, manager)
+	auth := identity.NewAppAuthService(repository.New(db), "client", "secret", time.Minute, time.Hour, manager)
 	tokens, err := auth.IssueClientToken(context.Background(), "client-1", "client-secret")
 	if err != nil {
 		t.Fatalf("IssueClientToken() error = %v", err)
 	}
-	return NewHandler(nil, nil, db), auth, tokens.AccessToken
+	return NewHandler(nil, nil, repository.New(db)), auth, tokens.AccessToken
 }
 
 // response is one recorded reply. A fiber.Ctx cannot be built directly, so a handler is
@@ -121,7 +122,7 @@ func TestGetTransactionByIDAndReference(t *testing.T) {
 		IdempotencyKey: "idem-1",
 		Status:         domain.TxPending,
 	}
-	if err := h.db.Create(&tx).Error; err != nil {
+	if err := h.repos.Transactions.Create(context.Background(), &tx); err != nil {
 		t.Fatalf("create transaction: %v", err)
 	}
 

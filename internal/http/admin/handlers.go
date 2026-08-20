@@ -1,17 +1,17 @@
 package admin
 
 import (
-	"github.com/gofiber/fiber/v3"
-
+	"context"
 	"errors"
 	"time"
 
-	"gorm.io/gorm"
+	"github.com/gofiber/fiber/v3"
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/http/apidoc"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
 	"github.com/momobasehq/momobase/internal/service/identity"
 	"github.com/momobasehq/momobase/internal/service/provider"
@@ -31,7 +31,7 @@ type SystemInfo struct {
 
 // Handler serves authenticated administrative HTTP endpoints.
 type Handler struct {
-	db        *gorm.DB
+	repos     *repository.UnitOfWork
 	auth      *identity.AdminAuthService
 	users     *identity.AdminUserService
 	providers *provider.AdminService
@@ -54,7 +54,7 @@ type Response interface{}
 // wrong thing.
 type Deps struct {
 	// DB is the database handle used by read-only listing endpoints.
-	DB *gorm.DB
+	Repos *repository.UnitOfWork
 	// Auth issues and validates administrator sessions.
 	Auth *identity.AdminAuthService
 	// Users administers administrator accounts.
@@ -81,7 +81,7 @@ type Deps struct {
 // system metadata.
 func NewHandler(deps Deps) *Handler {
 	return &Handler{
-		db:        deps.DB,
+		repos:     deps.Repos,
 		auth:      deps.Auth,
 		users:     deps.Users,
 		providers: deps.Providers,
@@ -138,7 +138,7 @@ func (h *Handler) Logout(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/transactions [get]
 func (h *Handler) ListTransactions(c fiber.Ctx) error {
-	return page[domain.Transaction](c, h.db.WithContext(c.Context()).Model(&domain.Transaction{}), "created_at desc")
+	return page(c, h.repos.Transactions.Page)
 }
 
 // ListAuditLogs documents audit log administration.
@@ -155,7 +155,7 @@ func (h *Handler) ListTransactions(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/audit-logs [get]
 func (h *Handler) ListAuditLogs(c fiber.Ctx) error {
-	return page[domain.AuditLog](c, h.db.WithContext(c.Context()).Model(&domain.AuditLog{}), "created_at desc")
+	return page(c, h.repos.AuditLogs.Page)
 }
 
 // ListProviderHealth documents provider health administration.
@@ -172,7 +172,7 @@ func (h *Handler) ListAuditLogs(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/health/providers [get]
 func (h *Handler) ListProviderHealth(c fiber.Ctx) error {
-	return page[domain.ProviderHealthSnapshot](c, h.db.WithContext(c.Context()).Model(&domain.ProviderHealthSnapshot{}), "updated_at desc")
+	return page(c, h.repos.ProviderHealth.Page)
 }
 
 // ListAdmins documents administrator listing.
@@ -189,7 +189,7 @@ func (h *Handler) ListProviderHealth(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/users [get]
 func (h *Handler) ListAdmins(c fiber.Ctx) error {
-	return page[domain.AdminUser](c, h.db.WithContext(c.Context()).Model(&domain.AdminUser{}), "created_at desc")
+	return page(c, h.repos.AdminUsers.Page)
 }
 
 // CreateAdminUser documents administrator creation.
@@ -308,7 +308,7 @@ func (h *Handler) ChangeAdminRole(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/apps [get]
 func (h *Handler) ListApps(c fiber.Ctx) error {
-	return page[domain.App](c, h.db.WithContext(c.Context()).Model(&domain.App{}), "created_at desc")
+	return page(c, h.repos.Apps.Page)
 }
 
 // CreateApp documents application creation.
@@ -403,7 +403,10 @@ func (h *Handler) ChangeAppStatus(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/apps/{id}/credentials [get]
 func (h *Handler) ListCredentials(c fiber.Ctx) error {
-	return page[domain.AppCredential](c, h.db.WithContext(c.Context()).Model(&domain.AppCredential{}).Where("app_id = ?", id(c)), "created_at desc")
+	appID := id(c)
+	return page(c, func(ctx context.Context, number, size int) (repository.Page[domain.AppCredential], error) {
+		return h.repos.AppCredentials.PageForApp(ctx, appID, number, size)
+	})
 }
 
 // CreateCredential documents application credential creation.
@@ -492,7 +495,7 @@ func (h *Handler) RotateCredential(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/providers [get]
 func (h *Handler) ListProviders(c fiber.Ctx) error {
-	return page[domain.ProviderAccount](c, h.db.WithContext(c.Context()).Model(&domain.ProviderAccount{}), "created_at desc")
+	return page(c, h.repos.ProviderAccounts.Page)
 }
 
 // ProviderRegistry writes the provider codes registered in this build, including
@@ -674,7 +677,7 @@ func (h *Handler) TestProvider(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/routes [get]
 func (h *Handler) ListRoutes(c fiber.Ctx) error {
-	return page[domain.PaymentRoute](c, h.db.WithContext(c.Context()).Model(&domain.PaymentRoute{}), "service_type asc, payment_method asc, priority asc")
+	return page(c, h.repos.PaymentRoutes.Page)
 }
 
 // CreateRoute documents payment route creation.
@@ -739,17 +742,18 @@ func parseExpiry(raw string) (*time.Time, error) {
 	return &value, nil
 }
 
-// page is a generic helper for paginated queries.
-func page[T interface{}](c fiber.Ctx, query *gorm.DB, order string) error {
-	page, size := platform.Pagination(c)
-	var total int64
-	var items []T
-	err := query.Count(&total).Error
-	if err == nil {
-		err = query.Order(order).Limit(size).Offset((page - 1) * size).Find(&items).Error
-	}
+// page answers a listing from a repository's own paged reader. The bounds come from
+// the query string; the query itself stays inside the repository.
+func page[T any](c fiber.Ctx, read func(context.Context, int, int) (repository.Page[T], error)) error {
+	number, size := platform.Pagination(c)
+	result, err := read(c.Context(), number, size)
 	if err != nil {
 		return platform.Error(c, 500, "SERVER_ERROR", err.Error())
 	}
-	return platform.JSON(c, 200, platform.PageData[T]{Page: page, Total: int(total), Items: items, Count: len(items)})
+	return platform.JSON(c, 200, platform.PageData[T]{
+		Page:  number,
+		Total: int(result.Total),
+		Items: result.Items,
+		Count: len(result.Items),
+	})
 }

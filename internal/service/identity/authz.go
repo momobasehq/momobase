@@ -7,13 +7,10 @@ import (
 	"slices"
 	"strings"
 
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
-
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
-	"github.com/momobasehq/momobase/internal/store"
 	"github.com/momobasehq/momobase/internal/utils"
 )
 
@@ -22,13 +19,13 @@ var ErrSystemRole = errors.New("system roles cannot be changed or deleted")
 
 // AuthzService seeds the permission catalogue and manages roles.
 type AuthzService struct {
-	db    *gorm.DB
+	repos *repository.UnitOfWork
 	audit *audit.Service
 }
 
 // NewAuthzService creates a permission and role service.
-func NewAuthzService(db *gorm.DB, audit *audit.Service) *AuthzService {
-	return &AuthzService{db, audit}
+func NewAuthzService(repos *repository.UnitOfWork, audit *audit.Service) *AuthzService {
+	return &AuthzService{repos, audit}
 }
 
 // Seed converges the permission catalogue and the system roles with the code in
@@ -39,7 +36,6 @@ func NewAuthzService(db *gorm.DB, audit *audit.Service) *AuthzService {
 // anything. That is only safe because system roles cannot be edited; a custom role is
 // never touched here.
 func (s *AuthzService) Seed(ctx context.Context) error {
-	db := s.db.WithContext(ctx)
 	for _, definition := range domain.Permissions {
 		permission := domain.Permission{
 			BaseModel:   domain.BaseModel{ID: platform.NewID("perm")},
@@ -47,12 +43,9 @@ func (s *AuthzService) Seed(ctx context.Context) error {
 			Audience:    definition.Audience,
 			Description: definition.Description,
 		}
-		// Conflict on the natural key, not the generated ID, so a re-run updates the
-		// description in place instead of inserting a duplicate.
-		if err := db.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "code"}, {Name: "audience"}},
-			DoUpdates: clause.AssignmentColumns([]string{"description", "updated_at"}),
-		}).Create(&permission).Error; err != nil {
+		// Upsert rather than insert, so a re-run updates the description in place
+		// instead of failing on the natural key.
+		if err := s.repos.Permissions.Upsert(ctx, &permission); err != nil {
 			return fmt.Errorf("seed permission %s: %w", definition.Code, err)
 		}
 	}
@@ -69,24 +62,24 @@ func (s *AuthzService) seedRole(ctx context.Context, definition domain.SystemRol
 	if err != nil {
 		return fmt.Errorf("seed role %s: %w", definition.Name, err)
 	}
-	return store.Within(ctx, s.db, func(tx *gorm.DB) error {
+	return s.repos.Within(ctx, func(r *repository.Set) error {
 		role := domain.Role{
 			BaseModel:   domain.BaseModel{ID: platform.NewID("role")},
 			Name:        definition.Name,
 			Description: definition.Description,
 			System:      true,
 		}
-		if err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "name"}},
-			DoUpdates: clause.AssignmentColumns([]string{"description", "system", "updated_at"}),
-		}).Create(&role).Error; err != nil {
+		if err := r.Roles.Upsert(ctx, &role); err != nil {
 			return err
 		}
-		var stored domain.Role
-		if err := tx.Where("name = ?", definition.Name).First(&stored).Error; err != nil {
+		// Re-read rather than trusting the upsert's in-memory row: on a conflict the
+		// stored role keeps the id it was first seeded with, and the association has
+		// to attach to that one.
+		stored, err := r.Roles.ByName(ctx, definition.Name)
+		if err != nil {
 			return err
 		}
-		return tx.Model(&stored).Association("Permissions").Replace(permissions)
+		return r.Roles.ReplacePermissions(ctx, stored, permissions)
 	})
 }
 
@@ -100,27 +93,20 @@ func (s *AuthzService) resolve(ctx context.Context, audience string, codes []str
 			Audience:    audience,
 			Description: "Every permission, including ones added by later releases",
 		}
-		if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "code"}, {Name: "audience"}},
-			DoUpdates: clause.AssignmentColumns([]string{"description", "updated_at"}),
-		}).Create(&wildcard).Error; err != nil {
+		if err := s.repos.Permissions.Upsert(ctx, &wildcard); err != nil {
 			return nil, err
 		}
-		var stored domain.Permission
-		if err := s.db.WithContext(ctx).
-			Where("code = ? AND audience = ?", domain.PermissionWildcard, audience).
-			First(&stored).Error; err != nil {
+		stored, err := s.repos.Permissions.ByCode(ctx, audience, domain.PermissionWildcard)
+		if err != nil {
 			return nil, err
 		}
-		return []domain.Permission{stored}, nil
+		return []domain.Permission{*stored}, nil
 	}
 	if len(codes) == 0 {
 		return nil, nil
 	}
-	var permissions []domain.Permission
-	if err := s.db.WithContext(ctx).
-		Where("audience = ? AND code IN ?", audience, codes).
-		Find(&permissions).Error; err != nil {
+	permissions, err := s.repos.Permissions.ByCodes(ctx, audience, codes)
+	if err != nil {
 		return nil, err
 	}
 	// Refuse the whole set rather than silently granting a subset: a role that quietly
@@ -142,9 +128,8 @@ func (s *AuthzService) resolve(ctx context.Context, audience string, codes []str
 // EffectivePermissions returns the permission codes a role grants. An unknown role
 // resolves to none, so an administrator whose role was removed fails closed.
 func (s *AuthzService) EffectivePermissions(ctx context.Context, roleName string) ([]string, error) {
-	var role domain.Role
-	err := s.db.WithContext(ctx).Preload("Permissions").Where("name = ?", roleName).First(&role).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	role, err := s.repos.Roles.WithPermissions(ctx, roleName)
+	if repository.IsNotFound(err) {
 		return nil, nil
 	}
 	if err != nil {
@@ -159,24 +144,15 @@ func (s *AuthzService) EffectivePermissions(ctx context.Context, roleName string
 
 // ListPermissions returns the seeded catalogue, optionally for one audience only.
 func (s *AuthzService) ListPermissions(ctx context.Context, audience string) ([]domain.Permission, error) {
-	query := s.db.WithContext(ctx).Order("audience asc, code asc")
-	if audience != "" {
-		if audience != domain.AudienceAdmin && audience != domain.AudienceApp {
-			return nil, errors.New("audience must be admin or app")
-		}
-		query = query.Where("audience = ?", audience)
+	if audience != "" && audience != domain.AudienceAdmin && audience != domain.AudienceApp {
+		return nil, errors.New("audience must be admin or app")
 	}
-	var permissions []domain.Permission
-	return permissions, query.Find(&permissions).Error
+	return s.repos.Permissions.List(ctx, audience)
 }
 
 // ListRoles returns every role with its permissions, system roles first.
 func (s *AuthzService) ListRoles(ctx context.Context) ([]domain.Role, error) {
-	var roles []domain.Role
-	return roles, s.db.WithContext(ctx).
-		Preload("Permissions").
-		Order("system desc, name asc").
-		Find(&roles).Error
+	return s.repos.Roles.List(ctx)
 }
 
 // CreateRole persists a custom role holding the supplied permissions.
@@ -206,7 +182,7 @@ func (s *AuthzService) CreateRole(
 		System:      false,
 		Permissions: permissions,
 	}
-	if err := s.db.WithContext(ctx).Create(role).Error; err != nil {
+	if err := s.repos.Roles.Create(ctx, role); err != nil {
 		return nil, err
 	}
 	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "role.created", "role", role.ID, map[string]any{"permissions": codes}, "", "")
@@ -228,13 +204,11 @@ func (s *AuthzService) UpdateRole(
 	if err != nil {
 		return err
 	}
-	if err := store.Within(ctx, s.db, func(tx *gorm.DB) error {
-		if err := store.Affected(
-			tx.Model(&domain.Role{}).Where("id = ?", role.ID).Update("description", strings.TrimSpace(description)),
-		); err != nil {
+	if err := s.repos.Within(ctx, func(r *repository.Set) error {
+		if err := r.Roles.SetDescription(ctx, role.ID, strings.TrimSpace(description)); err != nil {
 			return err
 		}
-		return tx.Model(role).Association("Permissions").Replace(permissions)
+		return r.Roles.ReplacePermissions(ctx, role, permissions)
 	}); err != nil {
 		return err
 	}
@@ -250,18 +224,15 @@ func (s *AuthzService) DeleteRole(ctx context.Context, actor *domain.AdminUser, 
 	}
 	// Deleting a role an administrator still holds would leave them with no
 	// permissions at all, which reads as a broken account rather than a revoked one.
-	var holders int64
-	if err := s.db.WithContext(ctx).Model(&domain.AdminUser{}).Where("role = ?", role.Name).Count(&holders).Error; err != nil {
+	holders, err := s.repos.AdminUsers.CountWithRole(ctx, role.Name)
+	if err != nil {
 		return err
 	}
 	if holders > 0 {
 		return fmt.Errorf("role %q is still assigned to %d administrator(s)", role.Name, holders)
 	}
-	if err := store.Within(ctx, s.db, func(tx *gorm.DB) error {
-		if err := tx.Model(role).Association("Permissions").Clear(); err != nil {
-			return err
-		}
-		return store.Affected(tx.Where("id = ?", role.ID).Delete(&domain.Role{}))
+	if err := s.repos.Within(ctx, func(r *repository.Set) error {
+		return r.Roles.Delete(ctx, role)
 	}); err != nil {
 		return err
 	}
@@ -271,21 +242,19 @@ func (s *AuthzService) DeleteRole(ctx context.Context, actor *domain.AdminUser, 
 
 // customRole loads a role by name and refuses a seeded one.
 func (s *AuthzService) customRole(ctx context.Context, name string) (*domain.Role, error) {
-	var role domain.Role
-	if err := s.db.WithContext(ctx).Where("name = ?", normalizeRoleName(name)).First(&role).Error; err != nil {
+	role, err := s.repos.Roles.ByName(ctx, normalizeRoleName(name))
+	if err != nil {
 		return nil, err
 	}
 	if role.System {
 		return nil, ErrSystemRole
 	}
-	return &role, nil
+	return role, nil
 }
 
 // RoleExists reports whether a role name can be assigned to an administrator.
 func (s *AuthzService) RoleExists(ctx context.Context, name string) (bool, error) {
-	var count int64
-	err := s.db.WithContext(ctx).Model(&domain.Role{}).Where("name = ?", normalizeRoleName(name)).Count(&count).Error
-	return count == 1, err
+	return s.repos.Roles.Exists(ctx, normalizeRoleName(name))
 }
 
 // ValidateAppScopes checks a credential's requested scopes against the catalogue and

@@ -12,6 +12,7 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
 	"github.com/momobasehq/momobase/internal/service/identity"
 	"github.com/momobasehq/momobase/internal/service/payment"
@@ -46,6 +47,7 @@ func DummyConfig(overrides map[string]any) map[string]any {
 // Stack is a wired set of services sharing one throwaway database.
 type Stack struct {
 	DB            *gorm.DB
+	Repos         *repository.UnitOfWork
 	Auth          *identity.AppAuthService
 	Apps          *identity.AppService
 	ProviderAdmin *provider.AdminService
@@ -100,24 +102,26 @@ func New(t *testing.T) *Stack {
 	enc := Must(platform.NewEncryptor("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="))
 	registry := providers.NewRegistry()
 	registry.Register(ProviderCode, dummy.New)
-	runtime, recorder := provider.NewRuntimeManager(db, registry, enc, log), audit.New(db, log)
+	repos := repository.New(db)
+	runtime, recorder := provider.NewRuntimeManager(repos, registry, enc, log), audit.New(repos, log)
 	tokens := Must(platform.NewTokenManager("test-app-token-secret-must-be-long-1234567890"))
-	auth := identity.NewAppAuthService(db, "app_test", "secret_test", 30*time.Minute, 24*time.Hour, tokens)
-	apps, routes := identity.NewAppService(db, auth, recorder), routing.NewAdminService(db, recorder)
-	routing := routing.NewEngine(db, runtime)
-	authz := identity.NewAuthzService(db, recorder)
+	auth := identity.NewAppAuthService(repos, "app_test", "secret_test", 30*time.Minute, 24*time.Hour, tokens)
+	apps, routes := identity.NewAppService(repos, auth, recorder), routing.NewAdminService(repos, recorder)
+	routing := routing.NewEngine(repos, runtime)
+	authz := identity.NewAuthzService(repos, recorder)
 	NoError(authz.Seed(context.Background()))
 	return &Stack{
 		db,
+		repos,
 		auth,
 		apps,
-		provider.NewAdminService(db, recorder, enc, registry, runtime),
+		provider.NewAdminService(repos, recorder, enc, registry, runtime),
 		runtime,
 		routes,
 		routing,
-		payment.NewOrchestrator(db, routing, provider.NewExecutor(runtime)),
+		payment.NewOrchestrator(repos, routing, provider.NewExecutor(runtime)),
 		authz,
-		identity.NewAnalyticsService(db),
+		identity.NewAnalyticsService(repos),
 		registry,
 		&domain.AdminUser{
 			BaseModel: domain.BaseModel{ID: "admin"},

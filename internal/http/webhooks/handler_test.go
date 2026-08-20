@@ -16,6 +16,7 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/provider"
 	"github.com/momobasehq/momobase/internal/service/webhook"
 	"github.com/momobasehq/momobase/providers"
@@ -82,11 +83,12 @@ func webhookHandler(t *testing.T) (*Handler, *gorm.DB) {
 	}
 	registry := providers.NewRegistry()
 	registry.Register("test", func(*slog.Logger) providers.PaymentProvider { return &webhookProvider{} })
-	runtime := provider.NewRuntimeManager(db, registry, encryptor, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	repos := repository.New(db)
+	runtime := provider.NewRuntimeManager(repos, registry, encryptor, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err := runtime.LoadActive(context.Background()); err != nil {
 		t.Fatalf("LoadActive() error = %v", err)
 	}
-	return NewHandler(webhook.New(db, runtime)), db
+	return NewHandler(webhook.New(repos, runtime)), db
 }
 
 func TestProviderWebhookAcceptsVerifiedEvent(t *testing.T) {

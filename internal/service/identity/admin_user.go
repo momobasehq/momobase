@@ -9,21 +9,20 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
-	"github.com/momobasehq/momobase/internal/store"
-	"gorm.io/gorm"
 )
 
 // AdminUserService manages administrator accounts, passwords, and account status.
 type AdminUserService struct {
-	db    *gorm.DB
+	repos *repository.UnitOfWork
 	audit *audit.Service
 	authz *AuthzService
 }
 
 // NewAdminUserService creates an administrator account service.
-func NewAdminUserService(db *gorm.DB, audit *audit.Service, authz *AuthzService) *AdminUserService {
-	return &AdminUserService{db, audit, authz}
+func NewAdminUserService(repos *repository.UnitOfWork, audit *audit.Service, authz *AuthzService) *AdminUserService {
+	return &AdminUserService{repos, audit, authz}
 }
 
 // Create validates and persists an administrator account, subject to the actor's role.
@@ -64,7 +63,7 @@ func (s *AdminUserService) Create(ctx context.Context, actor *domain.AdminUser, 
 	if actor != nil {
 		user.CreatedBy = actor.ID
 	}
-	if err = s.db.WithContext(ctx).Create(user).Error; err == nil {
+	if err = s.repos.AdminUsers.Create(ctx, user); err == nil {
 		s.audit.RecordBestEffort(
 			ctx,
 			actor.ActorID(),
@@ -96,18 +95,14 @@ func (s *AdminUserService) ChangePassword(ctx context.Context, actor *domain.Adm
 		return err
 	}
 	now := time.Now().UTC()
-	err = store.Within(ctx, s.db, func(tx *gorm.DB) error {
-		if err := store.Affected(
-			tx.Model(&domain.AdminUser{}).
-				Where("id = ?", id).
-				Updates(map[string]any{
-					"password_hash":       hash,
-					"password_changed_at": &now,
-				}),
-		); err != nil {
+	// The password change and the session revocation are one transaction: an
+	// administrator whose password changed must not be left with live sessions
+	// authenticated by the old one.
+	err = s.repos.Within(ctx, func(r *repository.Set) error {
+		if err := r.AdminUsers.SetPassword(ctx, id, hash, now); err != nil {
 			return err
 		}
-		return tx.Model(&domain.AdminSession{}).Where("admin_user_id = ? AND revoked_at IS NULL", id).Update("revoked_at", &now).Error
+		return r.AdminSessions.RevokeAllFor(ctx, id, now)
 	})
 	if err == nil {
 		s.audit.RecordBestEffort(ctx, actor.ID, "admin", "admin.password_changed", "admin_user", id, nil, "", "")
@@ -142,9 +137,7 @@ func (s *AdminUserService) ChangeRole(ctx context.Context, actor *domain.AdminUs
 			return fmt.Errorf("unknown role %q", role)
 		}
 	}
-	if err := store.Affected(
-		s.db.WithContext(ctx).Model(&domain.AdminUser{}).Where("id = ?", id).Update("role", role),
-	); err != nil {
+	if err := s.repos.AdminUsers.SetRole(ctx, id, role); err != nil {
 		return err
 	}
 	s.audit.RecordBestEffort(ctx, actor.ID, "admin", "admin.role_changed", "admin_user", id, map[string]any{"role": role}, "", "")
@@ -159,15 +152,14 @@ func (s *AdminUserService) ChangeStatus(ctx context.Context, actor *domain.Admin
 	if status != "active" && status != "inactive" {
 		return errors.New("invalid status")
 	}
-	err := store.Within(ctx, s.db, func(tx *gorm.DB) error {
-		if err := store.Affected(tx.Model(&domain.AdminUser{}).Where("id = ?", id).Update("status", status)); err != nil {
+	err := s.repos.Within(ctx, func(r *repository.Set) error {
+		if err := r.AdminUsers.SetStatus(ctx, id, status); err != nil {
 			return err
 		}
 		if status == "active" {
 			return nil
 		}
-		now := time.Now().UTC()
-		return tx.Model(&domain.AdminSession{}).Where("admin_user_id = ? AND revoked_at IS NULL", id).Update("revoked_at", &now).Error
+		return r.AdminSessions.RevokeAllFor(ctx, id, time.Now().UTC())
 	})
 	if err == nil {
 		s.audit.RecordBestEffort(ctx, actor.ID, "admin", "admin.status_changed", "admin_user", id, map[string]any{"status": status}, "", "")

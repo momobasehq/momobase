@@ -6,19 +6,16 @@ import (
 	"log/slog"
 	"time"
 
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
-
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/provider"
 	"github.com/momobasehq/momobase/internal/service/webhook"
-	"github.com/momobasehq/momobase/internal/store"
 	"github.com/momobasehq/momobase/providers"
 )
 
 // Service refreshes non-terminal transaction states and retries pending webhook processing.
 type Service struct {
-	db       *gorm.DB
+	repos    *repository.UnitOfWork
 	executor *provider.Executor
 	webhook  *webhook.Service
 	logger   *slog.Logger
@@ -26,12 +23,12 @@ type Service struct {
 
 // New creates a transaction reconciliation service.
 func New(
-	db *gorm.DB,
+	repos *repository.UnitOfWork,
 	runtime *provider.RuntimeManager,
 	webhook *webhook.Service,
 	logger *slog.Logger,
 ) *Service {
-	return &Service{db, provider.NewExecutor(runtime), webhook, logger}
+	return &Service{repos, provider.NewExecutor(runtime), webhook, logger}
 }
 
 // RunOnce reconciles up to limit eligible transactions and reprocesses pending webhooks.
@@ -39,17 +36,8 @@ func (s *Service) RunOnce(ctx context.Context, limit int) error {
 	if limit < 1 {
 		limit = 100
 	}
-	var rows []domain.Transaction
-	now := time.Now().UTC()
-	if err := s.db.WithContext(ctx).
-		Where(
-			"status IN ? AND provider_reference <> '' AND (next_reconcile_at IS NULL OR next_reconcile_at <= ?)",
-			[]string{domain.TxPending, domain.TxProcessing, domain.TxUnknown},
-			now,
-		).
-		Order("created_at asc").
-		Limit(limit).
-		Find(&rows).Error; err != nil {
+	rows, err := s.repos.Transactions.DueForReconciliation(ctx, time.Now().UTC(), limit)
+	if err != nil {
 		return err
 	}
 	var errs []error
@@ -81,9 +69,11 @@ func (s *Service) reconcile(ctx context.Context, row *domain.Transaction) error 
 		return s.deferRetry(ctx, row, err)
 	}
 	target := providers.PaymentStatus(result.Status)
-	return store.Within(ctx, s.db, func(db *gorm.DB) error {
-		var tx domain.Transaction
-		if err := db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&tx, "id = ?", row.ID).Error; err != nil || domain.Terminal(tx.Status) {
+	return s.repos.Within(ctx, func(r *repository.Set) error {
+		// Re-read under a lock: the request path or a webhook may have settled this
+		// transaction between selecting it and asking the provider about it.
+		tx, err := r.Transactions.LockForUpdate(ctx, row.ID)
+		if err != nil || domain.Terminal(tx.Status) {
 			return err
 		}
 		previous := tx.Status
@@ -94,36 +84,34 @@ func (s *Service) reconcile(ctx context.Context, row *domain.Transaction) error 
 		updates := map[string]any{
 			"status":                  tx.Status,
 			"last_reconciled_at":      &now,
-			"reconciliation_attempts": gorm.Expr("reconciliation_attempts + 1"),
+			"reconciliation_attempts": repository.CountReconcileAttempt(),
 			"next_reconcile_at":       nil,
 		}
 		if !domain.Terminal(tx.Status) {
 			next := now.Add(backoff(tx.ReconciliationAttempts + 1))
 			updates["next_reconcile_at"] = &next
 		}
-		updated := db.Model(&domain.Transaction{}).Where("id = ? AND status = ?", tx.ID, previous).Updates(updates)
-		if updated.Error != nil || updated.RowsAffected == 0 {
-			return updated.Error
+		// Conditioned on the status the row was read at, so an outcome that landed
+		// first is never overwritten by this one.
+		applied, err := r.Transactions.UpdateFromStatus(ctx, tx.ID, previous, updates)
+		if err != nil || !applied {
+			return err
 		}
-		var attempt domain.TransactionAttempt
-		if err := db.Where(
-			"transaction_id = ? AND provider_account_id = ?",
-			tx.ID,
-			tx.SelectedProviderAccountID,
-		).Order("created_at desc").First(&attempt).Error; err != nil {
+		attempt, err := r.TransactionAttempts.LatestForTransaction(ctx, tx.ID, tx.SelectedProviderAccountID)
+		if err != nil {
 			return err
 		}
 		attemptUpdates := map[string]any{"status": tx.Status, "error_code": "", "error_message": ""}
 		if domain.Terminal(tx.Status) {
 			attemptUpdates["completed_at"] = &now
 		}
-		return store.Affected(db.Model(&attempt).Updates(attemptUpdates))
+		return r.TransactionAttempts.Update(ctx, attempt.ID, attemptUpdates)
 	})
 }
 func (s *Service) deferRetry(ctx context.Context, row *domain.Transaction, cause error) error {
-	err := store.Within(ctx, s.db, func(db *gorm.DB) error {
-		var tx domain.Transaction
-		if err := db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&tx, "id = ?", row.ID).Error; err != nil || domain.Terminal(tx.Status) {
+	err := s.repos.Within(ctx, func(r *repository.Set) error {
+		tx, err := r.Transactions.LockForUpdate(ctx, row.ID)
+		if err != nil || domain.Terminal(tx.Status) {
 			return err
 		}
 		previous, now := tx.Status, time.Now().UTC()
@@ -131,16 +119,13 @@ func (s *Service) deferRetry(ctx context.Context, row *domain.Transaction, cause
 			return err
 		}
 		next := now.Add(backoff(tx.ReconciliationAttempts + 1))
-		result := db.Model(&domain.Transaction{}).
-			Where("id = ? AND status = ?", tx.ID, previous).
-			Updates(map[string]any{
-				"status":                  tx.Status,
-				"last_reconciled_at":      &now,
-				"next_reconcile_at":       &next,
-				"reconciliation_attempts": gorm.Expr("reconciliation_attempts + 1"),
-			})
-		if result.Error != nil || result.RowsAffected == 0 {
-			return result.Error
+		if _, err := r.Transactions.UpdateFromStatus(ctx, tx.ID, previous, map[string]any{
+			"status":                  tx.Status,
+			"last_reconciled_at":      &now,
+			"next_reconcile_at":       &next,
+			"reconciliation_attempts": repository.CountReconcileAttempt(),
+		}); err != nil {
+			return err
 		}
 		return nil
 	})

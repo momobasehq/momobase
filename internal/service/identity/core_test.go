@@ -75,7 +75,7 @@ func TestCoreFlows(t *testing.T) {
 		}
 
 		log := slog.New(slog.NewTextHandler(io.Discard, nil))
-		recon := reconciliation.New(s.DB, s.Runtime, webhook.New(s.DB, s.Runtime), log)
+		recon := reconciliation.New(s.Repos, s.Runtime, webhook.New(s.Repos, s.Runtime), log)
 		// The orchestrator schedules the next attempt a minute out, so each pass
 		// clears the backoff to make the run deterministic.
 		for pass := range 2 {

@@ -18,6 +18,7 @@ import (
 	publich "github.com/momobasehq/momobase/internal/http/public"
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
 	"github.com/momobasehq/momobase/internal/service/identity"
 	"github.com/momobasehq/momobase/internal/service/payment"
@@ -94,43 +95,45 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		return nil, err
 	}
 
-	runtime := provider.NewRuntimeManager(db, registry, enc, log)
+	// One unit of work over the open handle: every service reaches the database only
+	// through the repositories it hands out, and Within is the sole transaction boundary.
+	repos := repository.New(db)
 
-	audit := audit.New(db, log)
+	runtime := provider.NewRuntimeManager(repos, registry, enc, log)
+
+	audit := audit.New(repos, log)
 
 	// Seeded before anything can authenticate: the catalogue and the system roles are
 	// what every authorization check resolves against, so a boot that skipped this
 	// would authorize nothing.
-	authz := identity.NewAuthzService(db, audit)
+	authz := identity.NewAuthzService(repos, audit)
 	if err = authz.Seed(context.Background()); err != nil {
 		return nil, err
 	}
-	adminAuth := identity.NewAdminAuthService(
-		db,
+	adminAuth := identity.NewAdminAuthService(repos,
 		cfg.Security.AdminAccessTTL,
 		cfg.Security.AdminRefreshTTL,
 		audit,
 		adminTokens,
 		authz,
 	)
-	adminUsers := identity.NewAdminUserService(db, audit, authz)
-	appAuth := identity.NewAppAuthService(
-		db,
+	adminUsers := identity.NewAdminUserService(repos, audit, authz)
+	appAuth := identity.NewAppAuthService(repos,
 		cfg.Security.AppClientIDPrefix,
 		cfg.Security.AppClientSecretPrefix,
 		cfg.Security.AppAccessTTL,
 		cfg.Security.AppRefreshTTL,
 		appTokens,
 	)
-	apps := identity.NewAppService(db, appAuth, audit)
-	providerAdmin := provider.NewAdminService(db, audit, enc, registry, runtime)
-	routeAdmin := routing.NewAdminService(db, audit)
-	routeEngine := routing.NewEngine(db, runtime)
-	payments := payment.NewOrchestrator(db, routeEngine, provider.NewExecutor(runtime))
-	webhooks := webhook.New(db, runtime)
-	health := provider.NewHealthService(db, runtime)
-	recon := reconciliation.New(db, runtime, webhooks, log)
-	manager := workers.NewManager(log, workerTasks(cfg, db, health, recon)...)
+	apps := identity.NewAppService(repos, appAuth, audit)
+	providerAdmin := provider.NewAdminService(repos, audit, enc, registry, runtime)
+	routeAdmin := routing.NewAdminService(repos, audit)
+	routeEngine := routing.NewEngine(repos, runtime)
+	payments := payment.NewOrchestrator(repos, routeEngine, provider.NewExecutor(runtime))
+	webhooks := webhook.New(repos, runtime)
+	health := provider.NewHealthService(repos, runtime)
+	recon := reconciliation.New(repos, runtime, webhooks, log)
+	manager := workers.NewManager(log, workerTasks(cfg, repos, health, recon)...)
 
 	info := adminh.SystemInfo{
 		AppName:        cfg.App.Name,
@@ -141,9 +144,9 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		WorkerNames:    manager.Names(),
 	}
 
-	publicHandler := publich.NewHandler(payments, routeEngine, db)
+	publicHandler := publich.NewHandler(payments, routeEngine, repos)
 	adminHandler := adminh.NewHandler(adminh.Deps{
-		DB:        db,
+		Repos:     repos,
 		Auth:      adminAuth,
 		Users:     adminUsers,
 		Providers: providerAdmin,
@@ -152,7 +155,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		Runtime:   runtime,
 		Audit:     audit,
 		Authz:     authz,
-		Analytics: identity.NewAnalyticsService(db),
+		Analytics: identity.NewAnalyticsService(repos),
 		System:    info,
 	})
 	// Parsed here rather than in the router so a malformed CIDR fails at start-up with
@@ -182,7 +185,12 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	return app, nil
 }
 
-func workerTasks(c Config, db *gorm.DB, health *provider.HealthService, recon *reconciliation.Service) []workers.Task {
+func workerTasks(
+	c Config,
+	repos *repository.UnitOfWork,
+	health *provider.HealthService,
+	recon *reconciliation.Service,
+) []workers.Task {
 	if !c.Workers.Enabled {
 		return nil
 	}
@@ -204,15 +212,20 @@ func workerTasks(c Config, db *gorm.DB, health *provider.HealthService, recon *r
 		})
 	}
 	if c.Workers.CleanupEnabled {
-		tasks = append(tasks, workers.Task{Name: "cleanup", Interval: c.Workers.CleanupInterval, Run: func(ctx context.Context) error {
-			now := time.Now().UTC()
-			return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-				if err := tx.Where("expires_at < ?", now).Delete(&domain.AdminSession{}).Error; err != nil {
+		tasks = append(tasks, workers.Task{
+			Name:     "cleanup",
+			Interval: c.Workers.CleanupInterval,
+			Run: func(ctx context.Context) error {
+				now := time.Now().UTC()
+				return repos.Within(ctx, func(r *repository.Set) error {
+					if _, err := r.AdminSessions.DeleteExpired(ctx, now); err != nil {
+						return err
+					}
+					_, err := r.AppSessions.DeleteExpired(ctx, now)
 					return err
-				}
-				return tx.Where("expires_at < ?", now).Delete(&domain.AppSession{}).Error
-			})
-		}})
+				})
+			},
+		})
 	}
 	return tasks
 }

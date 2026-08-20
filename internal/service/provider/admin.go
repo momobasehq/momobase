@@ -7,19 +7,17 @@ import (
 	"fmt"
 	"strings"
 
-	"gorm.io/gorm"
-
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
-	"github.com/momobasehq/momobase/internal/store"
 	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
 
 // AdminService manages provider accounts, encrypted configuration, and runtime activation.
 type AdminService struct {
-	db        *gorm.DB
+	repos     *repository.UnitOfWork
 	audit     *audit.Service
 	encryptor *platform.Encryptor
 	registry  providers.Registry
@@ -28,13 +26,13 @@ type AdminService struct {
 
 // NewAdminService creates a provider administration service.
 func NewAdminService(
-	db *gorm.DB,
+	repos *repository.UnitOfWork,
 	audit *audit.Service,
 	enc *platform.Encryptor,
 	registry providers.Registry,
 	runtime *RuntimeManager,
 ) *AdminService {
-	return &AdminService{db: db, audit: audit, encryptor: enc, registry: registry, runtime: runtime}
+	return &AdminService{repos: repos, audit: audit, encryptor: enc, registry: registry, runtime: runtime}
 }
 
 // RegisteredProviders returns the provider codes this build can create accounts
@@ -80,7 +78,7 @@ func (s *AdminService) CreateAccount(
 		Environment: environment, Countries: countries, ConfigVersion: 1,
 		EncryptedConfigJSON: cipher, ConfigHash: hash,
 	}
-	if err = s.db.WithContext(ctx).Create(account).Error; err != nil {
+	if err = s.repos.ProviderAccounts.Create(ctx, account); err != nil {
 		return nil, err
 	}
 	s.audit.RecordBestEffort(
@@ -103,24 +101,23 @@ func (s *AdminService) UpdateCountries(ctx context.Context, actor *domain.AdminU
 	if err != nil {
 		return err
 	}
-	var account domain.ProviderAccount
-	db := s.db.WithContext(ctx)
-	if err = db.First(&account, "id = ?", id).Error; err != nil {
+	account, err := s.repos.ProviderAccounts.ByID(ctx, id)
+	if err != nil {
 		return err
 	}
-	plain, err := s.runtime.plain(&account)
+	plain, err := s.runtime.plain(account)
 	if err != nil {
 		return err
 	}
 	if err = validateProviderConfig(plain); err != nil {
 		return err
 	}
-	if err = updateProviderCountries(db, id, countries); err != nil {
+	if err = s.updateCountries(ctx, id, countries); err != nil {
 		return err
 	}
 	if account.Active {
 		if err = s.runtime.Reload(ctx, id); err != nil {
-			if rollback := updateProviderCountries(db, id, account.Countries); rollback != nil {
+			if rollback := s.updateCountries(ctx, id, account.Countries); rollback != nil {
 				return errors.Join(err, rollback)
 			}
 			return err
@@ -140,19 +137,18 @@ func (s *AdminService) UpdateCountries(ctx context.Context, actor *domain.AdminU
 	return nil
 }
 
-func updateProviderCountries(db *gorm.DB, id string, countries []string) error {
+func (s *AdminService) updateCountries(ctx context.Context, id string, countries []string) error {
 	raw, err := json.Marshal(countries)
 	if err != nil {
 		return err
 	}
-	return store.Affected(db.Model(&domain.ProviderAccount{}).Where("id = ?", id).Update("countries", string(raw)))
+	return s.repos.ProviderAccounts.SetCountries(ctx, id, string(raw))
 }
 
 // UpdateConfig validates and encrypts replacement provider configuration and reloads an active runtime.
 func (s *AdminService) UpdateConfig(ctx context.Context, actor *domain.AdminUser, id string, config map[string]any) error {
-	var account domain.ProviderAccount
-	db := s.db.WithContext(ctx)
-	if err := db.First(&account, "id = ?", id).Error; err != nil {
+	account, err := s.repos.ProviderAccounts.ByID(ctx, id)
+	if err != nil {
 		return err
 	}
 	cleanProviderConfig(config)
@@ -163,12 +159,7 @@ func (s *AdminService) UpdateConfig(ctx context.Context, actor *domain.AdminUser
 	if err != nil {
 		return err
 	}
-	err = store.Affected(db.Model(&account).Updates(map[string]any{
-		"encrypted_config_json": cipher,
-		"config_hash":           hash,
-		"config_version":        gorm.Expr("config_version + 1"),
-	}))
-	if err != nil {
+	if err = s.repos.ProviderAccounts.SetConfig(ctx, id, cipher, hash); err != nil {
 		return err
 	}
 	if account.Active {
@@ -178,7 +169,7 @@ func (s *AdminService) UpdateConfig(ctx context.Context, actor *domain.AdminUser
 				"config_hash":           account.ConfigHash,
 				"config_version":        account.ConfigVersion,
 			}
-			if rollback := db.Model(&domain.ProviderAccount{}).Where("id = ?", id).Updates(restore).Error; rollback != nil {
+			if rollback := s.repos.ProviderAccounts.Restore(ctx, id, restore); rollback != nil {
 				return errors.Join(err, rollback)
 			}
 			return err
@@ -190,16 +181,17 @@ func (s *AdminService) UpdateConfig(ctx context.Context, actor *domain.AdminUser
 
 // Activate marks a configured provider account active and loads its runtime adapter.
 func (s *AdminService) Activate(ctx context.Context, actor *domain.AdminUser, id string) error {
-	var account domain.ProviderAccount
-	db := s.db.WithContext(ctx)
-	if err := db.First(&account, "id = ?", id).Error; err != nil {
+	if _, err := s.repos.ProviderAccounts.ByID(ctx, id); err != nil {
 		return err
 	}
-	if err := store.Affected(db.Model(&account).Update("active", true)); err != nil {
+	if err := s.repos.ProviderAccounts.SetActive(ctx, id, true); err != nil {
 		return err
 	}
 	if err := s.runtime.Reload(ctx, id); err != nil {
-		_ = db.Model(&domain.ProviderAccount{}).Where("id = ?", id).Update("active", false).Error
+		// The row is committed before the adapter is built, so a reload that fails has
+		// to put it back: an account marked active with no runtime would route to
+		// nothing.
+		_ = s.repos.ProviderAccounts.Restore(ctx, id, map[string]any{"active": false})
 		return err
 	}
 	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "provider.activated", "provider_account", id, nil, "", "")
@@ -208,7 +200,7 @@ func (s *AdminService) Activate(ctx context.Context, actor *domain.AdminUser, id
 
 // Deactivate marks a provider account inactive and removes its runtime adapter.
 func (s *AdminService) Deactivate(ctx context.Context, actor *domain.AdminUser, id string) error {
-	if err := store.Affected(s.db.WithContext(ctx).Model(&domain.ProviderAccount{}).Where("id = ?", id).Update("active", false)); err != nil {
+	if err := s.repos.ProviderAccounts.SetActive(ctx, id, false); err != nil {
 		return err
 	}
 	s.runtime.Disable(id)

@@ -5,24 +5,22 @@ import (
 	"errors"
 	"strings"
 
-	"gorm.io/gorm"
-
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
-	"github.com/momobasehq/momobase/internal/store"
 	"github.com/momobasehq/momobase/internal/utils"
 )
 
 // AdminService manages payment routing rules.
 type AdminService struct {
-	db    *gorm.DB
+	repos *repository.UnitOfWork
 	audit *audit.Service
 }
 
 // NewAdminService creates a payment route administration service.
-func NewAdminService(db *gorm.DB, audit *audit.Service) *AdminService {
-	return &AdminService{db, audit}
+func NewAdminService(repos *repository.UnitOfWork, audit *audit.Service) *AdminService {
+	return &AdminService{repos, audit}
 }
 
 // Create validates and persists a payment route for an existing provider account.
@@ -45,10 +43,11 @@ func (s *AdminService) Create(
 	if method == "" || !utils.ValidIdentifier(method) {
 		return nil, errors.New("payment_method is required and may contain only letters, digits, and _-. and must not exceed 64 characters")
 	}
-	var count int64
-	db := s.db.WithContext(ctx)
-	if err := db.Model(&domain.ProviderAccount{}).Where("id = ?", accountID).Count(&count).Error; err != nil || count != 1 {
-		return nil, gorm.ErrRecordNotFound
+	// A route pointing at an account that does not exist would select nothing at
+	// payment time, which is a failure the operator should see now instead.
+	exists, err := s.repos.ProviderAccounts.Exists(ctx, accountID)
+	if err != nil || !exists {
+		return nil, repository.ErrNotFound
 	}
 	if priority < 1 {
 		priority = 1
@@ -61,7 +60,7 @@ func (s *AdminService) Create(
 		Priority:          priority,
 		Active:            active,
 	}
-	if err := db.Create(route).Error; err != nil {
+	if err := s.repos.PaymentRoutes.Create(ctx, route); err != nil {
 		return nil, err
 	}
 	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "route.created", "payment_route", route.ID, nil, "", "")
@@ -73,11 +72,10 @@ func (s *AdminService) Update(ctx context.Context, actor *domain.AdminUser, id s
 	if priority < 1 {
 		return errors.New("priority must be at least 1")
 	}
-	if err := store.Affected(
-		s.db.WithContext(ctx).Model(&domain.PaymentRoute{}).
-			Where("id = ?", id).
-			Updates(map[string]any{"priority": priority, "active": active}),
-	); err != nil {
+	if err := s.repos.PaymentRoutes.Update(ctx, id, map[string]any{
+		"priority": priority,
+		"active":   active,
+	}); err != nil {
 		return err
 	}
 	s.audit.RecordBestEffort(

@@ -8,13 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
-
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/provider"
 	"github.com/momobasehq/momobase/internal/service/routing"
-	"github.com/momobasehq/momobase/internal/store"
 	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
@@ -85,14 +83,18 @@ type CreatePaymentResponse struct {
 
 // Orchestrator validates, routes, executes, and persists payment requests.
 type Orchestrator struct {
-	db       *gorm.DB
+	repos    *repository.UnitOfWork
 	router   *routing.Engine
 	executor *provider.Executor
 }
 
 // NewOrchestrator creates a payment orchestrator.
-func NewOrchestrator(db *gorm.DB, router *routing.Engine, executor *provider.Executor) *Orchestrator {
-	return &Orchestrator{db, router, executor}
+func NewOrchestrator(
+	repos *repository.UnitOfWork,
+	router *routing.Engine,
+	executor *provider.Executor,
+) *Orchestrator {
+	return &Orchestrator{repos, router, executor}
 }
 
 // Create idempotently creates, routes, executes, and records a collection or disbursement.
@@ -112,7 +114,7 @@ func (o *Orchestrator) Create(
 	hash := paymentRequestHash(service, req)
 	if tx, err := o.find(ctx, appID, key); err == nil {
 		return replay(tx, hash, service, req)
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+	} else if !repository.IsNotFound(err) {
 		return nil, err
 	}
 	selected, err := o.router.SelectProvider(ctx, service, req.PaymentMethod, req.Country)
@@ -172,11 +174,13 @@ func (o *Orchestrator) Create(
 		RequestHash:       hash,
 		StartedAt:         time.Now().UTC(),
 	}
-	if err := store.Within(ctx, o.db, func(db *gorm.DB) error {
-		if err := db.Create(tx).Error; err != nil {
+	// The transaction and its first attempt are written together: an attempt with no
+	// transaction, or a transaction with no attempt, is a row nothing can settle.
+	if err := o.repos.Within(ctx, func(r *repository.Set) error {
+		if err := r.Transactions.Create(ctx, tx); err != nil {
 			return err
 		}
-		return db.Create(attempt).Error
+		return r.TransactionAttempts.Create(ctx, attempt)
 	}); err != nil {
 		if existing, findErr := o.find(ctx, appID, key); findErr == nil {
 			return replay(existing, hash, service, req)
@@ -232,11 +236,11 @@ func (o *Orchestrator) persist(
 		next := now.Add(time.Minute)
 		txUpdates["next_reconcile_at"] = &next
 	}
-	if err := store.Within(ctx, o.db, func(db *gorm.DB) error {
-		if err := store.Affected(db.Model(&domain.TransactionAttempt{}).Where("id = ?", attempt.ID).Updates(attemptUpdates)); err != nil {
+	if err := o.repos.Within(ctx, func(r *repository.Set) error {
+		if err := r.TransactionAttempts.Update(ctx, attempt.ID, attemptUpdates); err != nil {
 			return err
 		}
-		return store.Affected(db.Model(&domain.Transaction{}).Where("id = ?", tx.ID).Updates(txUpdates))
+		return r.Transactions.Update(ctx, tx.ID, txUpdates)
 	}); err != nil {
 		return nil, fmt.Errorf("provider result persistence failed: %w", err)
 	}
@@ -253,8 +257,7 @@ func (o *Orchestrator) persist(
 }
 
 func (o *Orchestrator) find(ctx context.Context, appID, key string) (*domain.Transaction, error) {
-	var tx domain.Transaction
-	return &tx, o.db.WithContext(ctx).Where("app_id = ? AND idempotency_key = ?", appID, key).First(&tx).Error
+	return o.repos.Transactions.ByIdempotencyKey(ctx, appID, key)
 }
 
 func replay(tx *domain.Transaction, hash, _ string, _ *CreatePaymentRequest) (*CreatePaymentResponse, error) {

@@ -3,13 +3,11 @@ package admin
 import (
 	"github.com/gofiber/fiber/v3"
 
-	"errors"
 	"runtime"
 	"time"
 
-	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
-	"gorm.io/gorm"
+	"github.com/momobasehq/momobase/internal/repository"
 )
 
 // SystemInfo writes application, runtime, and worker metadata.
@@ -48,13 +46,9 @@ func (h *Handler) SystemInfo(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/system/health [get]
 func (h *Handler) SystemHealth(c fiber.Ctx) error {
-	sqlDB, err := h.db.DB()
+	dbOK := h.repos.Ping(c.Context()) == nil
+	active, err := h.repos.ProviderAccounts.CountActive(c.Context())
 	if err != nil {
-		return platform.Error(c, 500, "DB_ERROR", err.Error())
-	}
-	dbOK := sqlDB.PingContext(c) == nil
-	var active int64
-	if err = h.db.WithContext(c.Context()).Model(&domain.ProviderAccount{}).Where("active = ?", true).Count(&active).Error; err != nil {
 		return platform.Error(c, 500, "DB_ERROR", err.Error())
 	}
 	status := "error"
@@ -122,10 +116,11 @@ func (h *Handler) RuntimeProviders(c fiber.Ctx) error {
 			"capabilities":        runtime.Capabilities,
 			"countries":           runtime.Countries,
 		}
-		var health domain.ProviderHealthSnapshot
-		if err := h.db.WithContext(c.Context()).First(&health, "provider_account_id = ?", runtime.AccountID).Error; err == nil {
-			item["health"] = &health
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		// A provider that has never been probed simply has no snapshot to report.
+		health, err := h.repos.ProviderHealth.ByAccount(c.Context(), runtime.AccountID)
+		if err == nil {
+			item["health"] = health
+		} else if !repository.IsNotFound(err) {
 			return platform.Error(c, 500, "SERVER_ERROR", err.Error())
 		}
 		items = append(items, item)

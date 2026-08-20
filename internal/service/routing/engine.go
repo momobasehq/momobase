@@ -5,9 +5,8 @@ import (
 	"errors"
 	"slices"
 
-	"gorm.io/gorm"
-
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/provider"
 	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
@@ -28,13 +27,13 @@ type SelectedProvider struct {
 
 // Engine selects an eligible provider for a payment request.
 type Engine struct {
-	db      *gorm.DB
+	repos   *repository.UnitOfWork
 	runtime *provider.RuntimeManager
 }
 
 // NewEngine creates a provider route-selection engine.
-func NewEngine(db *gorm.DB, runtime *provider.RuntimeManager) *Engine {
-	return &Engine{db, runtime}
+func NewEngine(repos *repository.UnitOfWork, runtime *provider.RuntimeManager) *Engine {
+	return &Engine{repos, runtime}
 }
 
 // SelectProvider returns the highest-priority active provider that supports the
@@ -45,16 +44,8 @@ func (e *Engine) SelectProvider(ctx context.Context, service, method, country st
 	if err != nil {
 		return nil, err
 	}
-	var routes []domain.PaymentRoute
-	if err := e.db.WithContext(ctx).
-		Where(
-			"active = ? AND service_type = ? AND payment_method = ?",
-			true,
-			service,
-			method,
-		).
-		Order("priority asc, created_at asc").
-		Find(&routes).Error; err != nil {
+	routes, err := e.repos.PaymentRoutes.For(ctx, service, method)
+	if err != nil {
 		return nil, err
 	}
 	for _, route := range routes {
@@ -92,12 +83,8 @@ func (e *Engine) AvailablePaymentMethods(ctx context.Context, service, country s
 	if err != nil {
 		return nil, err
 	}
-	query := e.db.WithContext(ctx).Where("active = ?", true)
-	if service != "" {
-		query = query.Where("service_type = ?", service)
-	}
-	var routes []domain.PaymentRoute
-	if err := query.Order("service_type asc, payment_method asc, priority asc").Find(&routes).Error; err != nil {
+	routes, err := e.repos.PaymentRoutes.Candidates(ctx, service)
+	if err != nil {
 		return nil, err
 	}
 	// One method may have several routes; the first that passes makes it available,
@@ -119,28 +106,27 @@ func (e *Engine) AvailablePaymentMethods(ctx context.Context, service, country s
 }
 
 func (e *Engine) candidate(ctx context.Context, route domain.PaymentRoute, service, country string) (*SelectedProvider, bool) {
-	var account domain.ProviderAccount
-	if e.db.WithContext(ctx).
-		Where("id = ? AND active = ?", route.ProviderAccountID, true).
-		First(&account).Error != nil || !countryEligible(account.Countries, country) {
+	account, err := e.repos.ProviderAccounts.ActiveByID(ctx, route.ProviderAccountID)
+	if err != nil || !countryEligible(account.Countries, country) {
 		return nil, false
 	}
 	rp, ok := e.runtime.Get(account.ID)
 	if !ok || !providers.Supports(rp.Capabilities, service) || e.runtime.CircuitState(account.ID) == domain.CircuitOpen {
 		return nil, false
 	}
-	var health domain.ProviderHealthSnapshot
-	err := e.db.WithContext(ctx).First(&health, "provider_account_id = ?", account.ID).Error
+	health, err := e.repos.ProviderHealth.ByAccount(ctx, account.ID)
 	if err == nil && (health.Status == domain.ProviderDown ||
 		health.Status == domain.ProviderDisabled ||
 		health.Status == domain.ProviderMisconfigured ||
 		health.CircuitState == domain.CircuitOpen) {
 		return nil, false
 	}
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	// A provider that has never been probed has no snapshot, which is not a reason to
+	// route away from it; any other read failure is.
+	if err != nil && !repository.IsNotFound(err) {
 		return nil, false
 	}
-	return &SelectedProvider{route, account, rp}, true
+	return &SelectedProvider{route, *account, rp}, true
 }
 
 // countryEligible reports whether a provider account may serve a request country.

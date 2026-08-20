@@ -6,12 +6,11 @@ import (
 	"errors"
 	"strings"
 
-	"gorm.io/gorm"
-
 	"github.com/momobasehq/momobase/internal/domain"
 	httpcommon "github.com/momobasehq/momobase/internal/http/common"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/identity"
 	"github.com/momobasehq/momobase/internal/service/payment"
 	"github.com/momobasehq/momobase/internal/service/routing"
@@ -80,13 +79,13 @@ func AppRefreshToken(auth *identity.AppAuthService) fiber.Handler {
 type Handler struct {
 	payments *payment.Orchestrator
 	routes   *routing.Engine
-	db       *gorm.DB
+	repos    *repository.UnitOfWork
 }
 
 // NewHandler constructs a public API handler from a payment orchestrator, the
 // route engine backing method discovery, and a database connection.
-func NewHandler(p *payment.Orchestrator, routes *routing.Engine, db *gorm.DB) *Handler {
-	return &Handler{payments: p, routes: routes, db: db}
+func NewHandler(p *payment.Orchestrator, routes *routing.Engine, repos *repository.UnitOfWork) *Handler {
+	return &Handler{payments: p, routes: routes, repos: repos}
 }
 
 // ListPaymentMethods writes the payment methods this deployment can currently
@@ -221,9 +220,9 @@ func (h *Handler) get(c fiber.Ctx, field, value string) error {
 	if id == nil {
 		return platform.Error(c, 401, "UNAUTHORIZED", "missing app identity")
 	}
-	var tx domain.Transaction
-	if h.db.WithContext(c.Context()).Where("app_id = ? AND "+field+" = ?", id.App.ID, value).First(&tx).Error != nil {
+	tx, err := h.repos.Transactions.ForApp(c.Context(), id.App.ID, field, value)
+	if err != nil {
 		return platform.Error(c, 404, "NOT_FOUND", "transaction not found")
 	}
-	return platform.JSON(c, 200, &tx)
+	return platform.JSON(c, 200, tx)
 }

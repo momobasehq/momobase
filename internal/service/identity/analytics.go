@@ -7,9 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
-
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/repository"
 )
 
 // maxAnalyticsBuckets bounds a query by refusing a range that would produce more
@@ -87,12 +86,12 @@ type TransactionAnalytics struct {
 
 // AnalyticsService answers aggregate questions about transactions.
 type AnalyticsService struct {
-	db *gorm.DB
+	repos *repository.UnitOfWork
 }
 
 // NewAnalyticsService creates a transaction analytics service.
-func NewAnalyticsService(db *gorm.DB) *AnalyticsService {
-	return &AnalyticsService{db}
+func NewAnalyticsService(repos *repository.UnitOfWork) *AnalyticsService {
+	return &AnalyticsService{repos}
 }
 
 // Transactions returns a bucketed transaction series for the filtered range.
@@ -106,33 +105,19 @@ func (s *AnalyticsService) Transactions(ctx context.Context, filter AnalyticsFil
 	if err != nil {
 		return nil, err
 	}
-	expression, err := bucketExpression(s.db.Name(), filter.Interval)
+	expression, err := bucketExpression(s.repos.Dialect(), filter.Interval)
 	if err != nil {
 		return nil, err
 	}
 
-	type row struct {
-		Period      string
-		ServiceType string
-		Status      string
-		Currency    string
-		Count       int64
-		Amount      int64
-	}
-	var rows []row
-	query := s.db.WithContext(ctx).
-		Model(&domain.Transaction{}).
-		Select(expression+" AS period, service_type, status, currency, COUNT(*) AS count, SUM(amount) AS amount").
-		Where("created_at >= ? AND created_at < ?", filter.From, filter.To).
-		Group("period, service_type, status, currency").
-		Order("period asc")
-	if filter.AppID != "" {
-		query = query.Where("app_id = ?", filter.AppID)
-	}
-	if filter.ProviderAccountID != "" {
-		query = query.Where("selected_provider_account_id = ?", filter.ProviderAccountID)
-	}
-	if err := query.Find(&rows).Error; err != nil {
+	rows, err := s.repos.Transactions.Aggregate(ctx, repository.AggregateFilter{
+		Bucket:            expression,
+		From:              filter.From,
+		To:                filter.To,
+		AppID:             filter.AppID,
+		ProviderAccountID: filter.ProviderAccountID,
+	})
+	if err != nil {
 		return nil, err
 	}
 

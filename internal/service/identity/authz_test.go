@@ -188,7 +188,7 @@ func TestListPermissionsFiltersByAudience(t *testing.T) {
 func TestChangeRole(t *testing.T) {
 	s := testsupport.New(t)
 	ctx := context.Background()
-	users := identity.NewAdminUserService(s.DB, audit.New(s.DB, nil), s.Authz)
+	users := identity.NewAdminUserService(s.Repos, audit.New(s.Repos, nil), s.Authz)
 
 	target := testsupport.Must(users.Create(ctx, s.Actor, "Target", "target@example.com", "password123", domain.RoleReadOnly))
 
