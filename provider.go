@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -46,10 +47,6 @@ type (
 	// and normalize a payment request before Momobase persists a transaction.
 	// Account validation belongs here: the engine treats an account as opaque.
 	RequestValidator = providers.RequestValidator
-
-	// TokenCache serializes token loading and reuses tokens until shortly before expiry.
-	// The zero value is ready for use.
-	TokenCache = providers.TokenCache
 )
 
 // Service types and transaction statuses. A provider must report one of the Tx
@@ -105,37 +102,37 @@ func Redact(value string) string {
 
 // ConfigString returns a trimmed textual representation of a configuration value.
 func ConfigString(c ProviderConfig, key string) string {
-	return providers.String(c, key)
+	return utils.String(c, key)
 }
 
 // ConfigBool reports whether a configuration value is "true", case-insensitively, or "1".
 func ConfigBool(c ProviderConfig, key string) bool {
-	return providers.Bool(c, key)
+	return utils.Bool(c, key)
 }
 
 // ConfigInt converts a configuration value to an integer, returning zero when invalid.
 func ConfigInt(c ProviderConfig, key string) int {
-	return providers.Int(c, key)
+	return utils.Int(c, key)
 }
 
 // ConfigPath returns the textual value at a dot-separated path through nested maps.
 func ConfigPath(values map[string]any, path string) string {
-	return providers.Path(values, path)
+	return utils.Path(values, path)
 }
 
 // First returns the first nonblank value after trimming surrounding whitespace.
 func First(values ...string) string {
-	return providers.First(values...)
+	return utils.First(values...)
 }
 
 // Slash ensures value begins with a forward slash, for joining configured API paths.
 func Slash(value string) string {
-	return providers.Slash(value)
+	return utils.Slash(value)
 }
 
 // FirstError returns primary when it is non-nil and fallback otherwise.
 func FirstError(primary, fallback error) error {
-	return providers.FirstError(primary, fallback)
+	return utils.FirstError(primary, fallback)
 }
 
 // PaymentStatus maps a provider status string onto a normalized Tx status.

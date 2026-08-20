@@ -14,6 +14,7 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -175,7 +176,7 @@ func (m *RuntimeManager) Reload(ctx context.Context, id string) error {
 		ConfigVersion: account.ConfigVersion,
 		Adapter:       adapter,
 		Capabilities:  caps,
-		WebhookSecret: providers.String(plain, "webhook_secret"),
+		WebhookSecret: utils.String(plain, "webhook_secret"),
 		breaker:       &circuit{},
 	}
 	m.mu.Lock()

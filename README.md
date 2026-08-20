@@ -57,7 +57,7 @@ Register a factory for it under a provider code, then create, configure, and act
 
 The TypeScript SDK exposes it as `client.providers.registry()`, and the dashboard builds its provider dropdown from it, so an out-of-tree adapter appears without a client release.
 
-The package also exports the helpers the bundled adapters use, so a third-party provider does not have to reimplement them: `DoJSON`, `Redact`, `TokenCache`, `ConfigString`/`ConfigBool`/`ConfigInt`/`ConfigPath`, `ParseAmountToMinor`, `FormatAmountMinor`, `PaymentStatus`, and the `Service*`, `PaymentMethod*`, and `Tx*` constants. They are also importable directly from `github.com/momobasehq/momobase/providers`, which is the package the bundled adapters use.
+The root package also exports the helpers the bundled adapters use, so a third-party provider does not have to reimplement them: `DoJSON`, `Redact`, `ConfigString`/`ConfigBool`/`ConfigInt`/`ConfigPath`, `First`, `Slash`, `FirstError`, `ParseAmountToMinor`, `FormatAmountMinor`, `PaymentStatus`, and the `Service*` and `Tx*` constants. The root package is the surface an out-of-tree adapter uses: `github.com/momobasehq/momobase/providers` carries the contract and the provider-specific helpers, while the configuration accessors and the generic string and error helpers live in `internal/utils` and reach adapters only through the root re-exports.
 
 See [`examples/customprovider`](examples/customprovider) for a complete provider implementing the whole contract against an HTTP API, and [`providers/dummy`](providers/dummy) for the in-tree reference adapter, which simulates payments in memory so a deployment can be exercised end to end without provider credentials.
 

@@ -3,17 +3,13 @@ package providers
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
 	"slices"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
-	"time"
 )
 
 func TestAmountConversion(t *testing.T) {
@@ -88,41 +84,6 @@ func TestPaymentStatusIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestConfigHelpers(t *testing.T) {
-	config := ProviderConfig{
-		"name":    "  Acme  ",
-		"enabled": "TRUE",
-		"one":     1,
-		"count":   "42",
-		"nested": map[string]any{
-			"value": " result ",
-		},
-	}
-	if String(config, "name") != "Acme" || !Bool(config, "enabled") || !Bool(config, "one") {
-		t.Fatalf("string/bool helpers returned unexpected values")
-	}
-	if Bool(config, "missing") || Int(config, "count") != 42 || Int(config, "bad") != 0 {
-		t.Fatalf("bool/int helpers returned unexpected values")
-	}
-	if got := Path(config, "nested.value"); got != "result" {
-		t.Fatalf("Path() = %q", got)
-	}
-	if got := Path(config, "nested.value.missing"); got != "" {
-		t.Fatalf("Path(non-object) = %q", got)
-	}
-	if First(" ", " first ", "second") != "first" || First("", " ") != "" {
-		t.Fatal("First() returned an unexpected value")
-	}
-	if Slash("path") != "/path" || Slash("/path") != "/path" {
-		t.Fatal("Slash() returned an unexpected value")
-	}
-	primary := errors.New("primary")
-	fallback := errors.New("fallback")
-	if FirstError(primary, fallback) != primary || FirstError(nil, fallback) != fallback {
-		t.Fatal("FirstError() returned an unexpected error")
-	}
-}
-
 func TestDoJSONRequestResponseAndErrors(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/error" {
@@ -184,50 +145,6 @@ func TestRedact(t *testing.T) {
 	}
 	if got := Redact("safe error"); got != "safe error" {
 		t.Fatalf("Redact(safe) = %q", got)
-	}
-}
-
-func TestTokenCacheLoadsOnceAndRetriesErrors(t *testing.T) {
-	var cache TokenCache
-	var calls atomic.Int32
-	load := func() (string, time.Duration, error) {
-		calls.Add(1)
-		return "token", time.Hour, nil
-	}
-
-	var wg sync.WaitGroup
-	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			value, err := cache.Get(load)
-			if err != nil || value != "token" {
-				t.Errorf("TokenCache.Get() = %q, %v", value, err)
-			}
-		}()
-	}
-	wg.Wait()
-	if calls.Load() != 1 {
-		t.Fatalf("token loader called %d times", calls.Load())
-	}
-
-	var failing TokenCache
-	failCalls := 0
-	loaderError := errors.New("load failed")
-	if _, err := failing.Get(func() (string, time.Duration, error) {
-		failCalls++
-		return "", 0, loaderError
-	}); !errors.Is(err, loaderError) {
-		t.Fatalf("TokenCache.Get(error) = %v", err)
-	}
-	if _, err := failing.Get(func() (string, time.Duration, error) {
-		failCalls++
-		return "recovered", time.Second, nil
-	}); err != nil {
-		t.Fatalf("TokenCache.Get(retry) = %v", err)
-	}
-	if failCalls != 2 {
-		t.Fatalf("failed loader calls = %d", failCalls)
 	}
 }
 

@@ -1,4 +1,4 @@
-package providers
+package utils
 
 import (
 	"fmt"
@@ -39,20 +39,20 @@ func text(value any) string {
 	return strings.TrimSpace(fmt.Sprint(value))
 }
 
-// String returns a trimmed textual representation of a configuration value.
-func String(c ProviderConfig, key string) string {
-	return text(c[key])
+// String returns a trimmed textual representation of the value stored at key.
+func String(values map[string]any, key string) string {
+	return text(values[key])
 }
 
-// Bool reports whether a configuration value is "true", case-insensitively, or "1".
-func Bool(c ProviderConfig, key string) bool {
-	value := strings.ToLower(text(c[key]))
+// Bool reports whether the value stored at key is "true", case-insensitively, or "1".
+func Bool(values map[string]any, key string) bool {
+	value := strings.ToLower(text(values[key]))
 	return value == "true" || value == "1"
 }
 
-// Int converts a configuration value to an integer, returning zero when invalid.
-func Int(c ProviderConfig, key string) int {
-	value, _ := strconv.Atoi(text(c[key]))
+// Int converts the value stored at key to an integer, returning zero when invalid.
+func Int(values map[string]any, key string) int {
+	value, _ := strconv.Atoi(text(values[key]))
 	return value
 }
 

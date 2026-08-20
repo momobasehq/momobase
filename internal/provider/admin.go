@@ -234,7 +234,7 @@ func validateProviderConfig(config map[string]any) error {
 	if len(config) == 0 {
 		return errors.New("provider config is required")
 	}
-	if providers.String(config, "webhook_secret") == "" {
+	if utils.String(config, "webhook_secret") == "" {
 		return errors.New("webhook_secret is required")
 	}
 	return nil

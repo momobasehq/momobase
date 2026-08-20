@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/momobasehq/momobase/internal/utils"
 )
 
 // PaymentStatus normalizes a provider status value to a Momobase transaction
@@ -106,12 +108,12 @@ func ParseAmountToMinor(raw, currency string) (int64, error) {
 			strings.ToUpper(currency),
 		)
 	}
-	units, err := strconv.ParseInt(First(whole, "0"), 10, 64)
+	units, err := strconv.ParseInt(utils.First(whole, "0"), 10, 64)
 	if err != nil {
 		return 0, err
 	}
 	minor, err := strconv.ParseInt(
-		First(fraction+strings.Repeat("0", exp-len(fraction)), "0"),
+		utils.First(fraction+strings.Repeat("0", exp-len(fraction)), "0"),
 		10,
 		64,
 	)

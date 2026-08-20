@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -189,7 +190,7 @@ func (p *Provider) pay(ctx context.Context, service string, req providers.Paymen
 	entry := &record{
 		service:   service,
 		amount:    req.Amount,
-		currency:  providers.First(req.Currency, p.cfg.Currency),
+		currency:  utils.First(req.Currency, p.cfg.Currency),
 		final:     settled(p.cfg.Outcome),
 		remaining: p.cfg.SettleAfter,
 	}
@@ -281,7 +282,7 @@ func (p *Provider) VerifyWebhook(_ context.Context, payload []byte, headers map[
 		return nil, errors.New("dummy: webhook payload has no reference")
 	}
 	status := providers.PaymentStatus(body.Status)
-	currency := strings.ToUpper(providers.First(body.Currency, p.currency(body.Reference)))
+	currency := strings.ToUpper(utils.First(body.Currency, p.currency(body.Reference)))
 	amount, err := providers.OptionalAmount(body.Amount, currency)
 	if err != nil {
 		return nil, errors.New("dummy: webhook payload has an unreadable amount")
@@ -294,7 +295,7 @@ func (p *Provider) VerifyWebhook(_ context.Context, payload []byte, headers map[
 	return &providers.ProviderWebhookEvent{
 		ProviderReference: body.Reference,
 		Status:            status,
-		EventType:         providers.First(body.EventType, "payment.updated"),
+		EventType:         utils.First(body.EventType, "payment.updated"),
 		ExternalReference: body.ExternalReference,
 		Amount:            amount,
 		Currency:          body.Currency,
@@ -396,18 +397,18 @@ func header(headers map[string]string, name string) string {
 
 func parseConfig(raw providers.ProviderConfig) (Config, error) {
 	cfg := Config{
-		Outcome:       strings.ToLower(providers.First(providers.String(raw, "outcome"), OutcomeSucceed)),
-		SettleAfter:   providers.Int(raw, "settle_after"),
-		LatencyMs:     providers.Int(raw, "latency_ms"),
-		FailInit:      providers.Bool(raw, "fail_init"),
-		FailHealth:    providers.Bool(raw, "fail_health"),
-		Services:      parseServices(providers.String(raw, "services")),
-		Currency:      strings.ToUpper(providers.First(providers.String(raw, "currency"), defaultCurrency)),
+		Outcome:       strings.ToLower(utils.First(utils.String(raw, "outcome"), OutcomeSucceed)),
+		SettleAfter:   utils.Int(raw, "settle_after"),
+		LatencyMs:     utils.Int(raw, "latency_ms"),
+		FailInit:      utils.Bool(raw, "fail_init"),
+		FailHealth:    utils.Bool(raw, "fail_health"),
+		Services:      parseServices(utils.String(raw, "services")),
+		Currency:      strings.ToUpper(utils.First(utils.String(raw, "currency"), defaultCurrency)),
 		Balance:       defaultBalance,
-		WebhookSecret: providers.String(raw, "webhook_secret"),
+		WebhookSecret: utils.String(raw, "webhook_secret"),
 	}
-	if providers.String(raw, "balance") != "" {
-		cfg.Balance = int64(providers.Int(raw, "balance"))
+	if utils.String(raw, "balance") != "" {
+		cfg.Balance = int64(utils.Int(raw, "balance"))
 	}
 	if cfg.WebhookSecret == "" {
 		return Config{}, errors.New("dummy: a webhook signing credential is required")

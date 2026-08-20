@@ -47,9 +47,9 @@ Layers, outermost first:
 - `internal/routing` — `routing.Engine` selects a provider account for a request; `routing.AdminService` maintains the routes.
 - `internal/provider` — the adapter lifecycle: `RuntimeManager` (loaded adapters), `Executor` (timeout + circuit breaker), `AdminService` (accounts and encrypted config), `HealthService`. Distinct from the top-level `providers` package, which is the contract an adapter implements.
 - `internal/audit` — `audit.Service`, the best-effort audit-log recorder. A leaf, so any service package may take one.
-- `providers` — the public adapter contract plus shared helpers (`DoJSON`, `TokenCache`, `Redact`, config accessors, amount/status normalization). `providers/dummy` is the in-tree reference adapter: it simulates payments in memory, so it is registered like any third-party one and needs no credentials.
+- `providers` — the public adapter contract plus the provider-specific helpers (`DoJSON`, `Redact`, amount/status normalization, references). The configuration accessors and the generic string and error helpers live in `internal/utils`; out-of-tree adapters reach them through the root package's re-exports. `providers/dummy` is the in-tree reference adapter: it simulates payments in memory, so it is registered like any third-party one and needs no credentials.
 - `internal/domain` — GORM models, the shared service/status/circuit constants, and behaviour belonging to a model (`Transaction.Transition`, `AdminUser.ActorID`).
-- `internal/utils` — dependency-free helpers shared across services: identifier/account shape checks, ISO-3166 country normalization, and raw-payload redaction. Nothing here touches the database.
+- `internal/utils` — dependency-free helpers shared across the module: identifier/account shape checks, ISO-3166 country normalization, raw-payload redaction, and the map, string, and error helpers an adapter reads its decrypted config with. Nothing here touches the database.
 - `internal/store` — the only transaction boundary (`Within`) and write-result helper (`Affected`).
 - `internal/platform` — AES-256-GCM encryptor, HMAC token manager, bcrypt, IDs, JSON request decoding, the `{success,data,error}` response envelope, pagination.
 - `internal/workers` — one `Manager` owning all background goroutines (`health`, `reconciliation`, `cleanup`), stopped by context cancellation.
@@ -96,7 +96,7 @@ These are load-bearing; breaking one is a silent correctness bug.
 
 **Adding a provider.** Implement the eight-method `providers.PaymentProvider` interface and a `func(*slog.Logger) providers.PaymentProvider` factory; register with `WithProvider(code, factory)`. Implement `providers.RequestValidator` too when the rail constrains what an account may be. Bundled adapters may import `internal/domain` for constants; out-of-tree providers use the root package's re-exports (`momobase.ServiceCollection`, `momobase.PaymentStatus`, …). `examples/customprovider/main.go` is a complete reference implementation. Config always arrives as `ProviderConfig` and must include `webhook_secret`.
 
-**Exposing a new helper to third-party providers.** Add it to `providers/`, then re-export it from the root `provider.go` — the root package is the documented surface, and `momobase_test.go` compiles a stub provider from exported types only, so it fails if that surface regresses.
+**Exposing a new helper to third-party providers.** Put it in `providers/` when it is about the adapter contract and in `internal/utils` when it is a pure helper over plain values, then re-export it from the root `provider.go` either way — the root package is the documented surface, and `momobase_test.go` compiles a stub provider from exported types only, so it fails if that surface regresses.
 
 **Adding an HTTP endpoint.** Handler in the matching `internal/http/*` package with swag annotations → register in `internal/http/router.go` with its middleware (role/scope, `JSONOnly`, `NoCache`) → `make docs` → mirror in `web/sdk/src/client.ts` (+`types.ts`), which the dashboard consumes through the pnpm workspace. There is no second client to keep in step.
 
