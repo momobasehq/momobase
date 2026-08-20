@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -187,9 +186,6 @@ func TestRegistryCapabilitiesAndReferences(t *testing.T) {
 	first, second := RandomRef("ref-"), RandomRef("ref-")
 	if first == second || !strings.HasPrefix(first, "ref-") {
 		t.Fatalf("RandomRef() = %q, %q", first, second)
-	}
-	if matched := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(UUID()); !matched {
-		t.Fatalf("UUID() returned an unexpected format")
 	}
 }
 

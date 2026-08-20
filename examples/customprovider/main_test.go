@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -88,8 +89,8 @@ func TestCapabilitiesCoverBothServices(t *testing.T) {
 	server, _ := acmeServer(t)
 	caps := newTestProvider(t, server.URL).Capabilities()
 	for _, service := range []string{momobase.ServiceCollection, momobase.ServiceDisbursement} {
-		if !momobase.Supports(caps, service) {
-			t.Errorf("Supports(%s) = false, want true", service)
+		if !slices.ContainsFunc(caps, func(c momobase.Capability) bool { return c.ServiceType == service }) {
+			t.Errorf("Capabilities() is missing %s", service)
 		}
 	}
 }

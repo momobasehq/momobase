@@ -73,14 +73,6 @@ const (
 	TxExpired = domain.TxExpired
 )
 
-// ErrCircuitOpen indicates that a provider request was rejected by an open circuit breaker.
-var ErrCircuitOpen = providers.ErrCircuitOpen
-
-// Supports reports whether caps contains the requested service.
-func Supports(caps []Capability, service string) bool {
-	return providers.Supports(caps, service)
-}
-
 // DoJSON sends an HTTP request with an optional JSON body and decodes a successful
 // JSON response into out. Non-2xx responses are returned as redacted errors.
 func DoJSON(
@@ -125,16 +117,6 @@ func First(values ...string) string {
 	return utils.First(values...)
 }
 
-// Slash ensures value begins with a forward slash, for joining configured API paths.
-func Slash(value string) string {
-	return utils.Slash(value)
-}
-
-// FirstError returns primary when it is non-nil and fallback otherwise.
-func FirstError(primary, fallback error) error {
-	return utils.FirstError(primary, fallback)
-}
-
 // PaymentStatus maps a provider status string onto a normalized Tx status.
 func PaymentStatus(value string) string {
 	return providers.PaymentStatus(value)
@@ -159,9 +141,4 @@ func OptionalAmount(raw, currency string) (*int64, error) {
 // RandomRef returns a random reference with the supplied prefix.
 func RandomRef(prefix string) string {
 	return providers.RandomRef(prefix)
-}
-
-// UUID returns a random UUID string.
-func UUID() string {
-	return providers.UUID()
 }

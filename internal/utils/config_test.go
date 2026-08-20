@@ -1,7 +1,6 @@
 package utils_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/momobasehq/momobase/internal/utils"
@@ -31,13 +30,5 @@ func TestConfigHelpers(t *testing.T) {
 	}
 	if utils.First(" ", " first ", "second") != "first" || utils.First("", " ") != "" {
 		t.Fatal("First() returned an unexpected value")
-	}
-	if utils.Slash("path") != "/path" || utils.Slash("/path") != "/path" {
-		t.Fatal("Slash() returned an unexpected value")
-	}
-	primary := errors.New("primary")
-	fallback := errors.New("fallback")
-	if utils.FirstError(primary, fallback) != primary || utils.FirstError(nil, fallback) != fallback {
-		t.Fatal("FirstError() returned an unexpected error")
 	}
 }

@@ -172,14 +172,6 @@ func TestServeReturnsNilWhenContextIsCancelled(t *testing.T) {
 // helper that stops being reachable from outside the module breaks this test
 // rather than silently regressing a documented part of the public surface.
 func TestExportedProviderHelpers(t *testing.T) {
-	caps := []momobase.Capability{{ServiceType: momobase.ServiceCollection}}
-	if !momobase.Supports(caps, momobase.ServiceCollection) {
-		t.Error("Supports() = false, want true for a declared capability")
-	}
-	if momobase.Supports(caps, momobase.ServiceDisbursement) {
-		t.Error("Supports() = true, want false for an undeclared capability")
-	}
-
 	config := momobase.ProviderConfig{
 		"name":    "  Acme  ",
 		"enabled": "TRUE",
@@ -200,16 +192,6 @@ func TestExportedProviderHelpers(t *testing.T) {
 	}
 	if got := momobase.First("", "  ", "chosen"); got != "chosen" {
 		t.Errorf("First() = %q, want the first nonblank value", got)
-	}
-	if got := momobase.Slash("v1/ping"); got != "/v1/ping" {
-		t.Errorf("Slash() = %q, want a leading slash", got)
-	}
-	sentinel := errors.New("primary")
-	if got := momobase.FirstError(sentinel, errors.New("fallback")); !errors.Is(got, sentinel) {
-		t.Errorf("FirstError() = %v, want the primary error", got)
-	}
-	if got := momobase.FirstError(nil, sentinel); !errors.Is(got, sentinel) {
-		t.Errorf("FirstError(nil, fallback) = %v, want the fallback", got)
 	}
 
 	if got := momobase.PaymentStatus("SUCCESSFUL"); got != momobase.TxSucceeded {
@@ -238,9 +220,6 @@ func TestExportedProviderHelpers(t *testing.T) {
 	}
 	if got := momobase.RandomRef("acme"); !strings.HasPrefix(got, "acme") || len(got) != len("acme")+32 {
 		t.Errorf("RandomRef() = %q, want the prefix followed by 32 hexadecimal characters", got)
-	}
-	if got := momobase.UUID(); len(got) != 36 {
-		t.Errorf("UUID() = %q, want a 36-character identifier", got)
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -6,22 +6,6 @@ import (
 	"strings"
 )
 
-// Slash ensures value begins with a forward slash.
-func Slash(value string) string {
-	if strings.HasPrefix(value, "/") {
-		return value
-	}
-	return "/" + value
-}
-
-// FirstError returns primary when it is non-nil and fallback otherwise.
-func FirstError(primary, fallback error) error {
-	if primary != nil {
-		return primary
-	}
-	return fallback
-}
-
 // First returns the first nonblank value after trimming surrounding whitespace.
 func First(values ...string) string {
 	for _, value := range values {
