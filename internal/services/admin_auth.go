@@ -174,10 +174,32 @@ func (s *AdminAuthService) activeUser(ctx context.Context, id string) (*domain.A
 	return &user, nil
 }
 
+// Verify authenticates an administrator token's signature and lifetime, without
+// resolving the identity behind it. The HTTP layer verifies once per request and
+// hands the claims to AuthenticateClaims.
+func (s *AdminAuthService) Verify(raw string) (*platform.TokenClaims, error) {
+	return s.tokens.Verify(raw)
+}
+
 // AuthenticateBearer validates an administrator access token and returns its active user.
 func (s *AdminAuthService) AuthenticateBearer(ctx context.Context, raw string) (*domain.AdminUser, error) {
 	claims, err := s.tokens.Verify(raw)
-	if err != nil || claims.SubjectType != "admin" || claims.TokenType != "access" {
+	if err != nil {
+		return nil, errors.New("invalid admin token")
+	}
+	return s.AuthenticateClaims(ctx, claims)
+}
+
+// AuthenticateClaims resolves the active administrator behind an already verified token.
+//
+// It takes claims rather than a raw token because the signature is checked once, in
+// middleware, and this is the half that cannot be delegated: the session row must still
+// be live and the permissions are read from the database, never from the token.
+func (s *AdminAuthService) AuthenticateClaims(
+	ctx context.Context,
+	claims *platform.TokenClaims,
+) (*domain.AdminUser, error) {
+	if claims == nil || claims.SubjectType != "admin" || claims.TokenType != "access" {
 		return nil, errors.New("invalid admin token")
 	}
 	var session domain.AdminSession

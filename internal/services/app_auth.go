@@ -135,10 +135,30 @@ func (s *AppAuthService) ValidateClientCredentials(ctx context.Context, clientID
 	return s.fromCredential(ctx, &cred)
 }
 
+// Verify authenticates an application token's signature and lifetime, without resolving
+// the identity behind it. The HTTP layer verifies once per request and hands the claims
+// to AuthenticateClaims.
+func (s *AppAuthService) Verify(raw string) (*platform.TokenClaims, error) {
+	return s.tokens.Verify(raw)
+}
+
 // AuthenticateBearer validates an application access token and returns its active identity.
 func (s *AppAuthService) AuthenticateBearer(ctx context.Context, raw string) (*AppIdentity, error) {
 	claims, err := s.tokens.Verify(raw)
-	if err != nil || claims.SubjectType != "app" || claims.TokenType != "access" {
+	if err != nil {
+		return nil, errors.New("invalid app token")
+	}
+	return s.AuthenticateClaims(ctx, claims)
+}
+
+// AuthenticateClaims resolves the active application identity behind an already verified
+// token. The credential and its scopes are re-read from the database on every request, so
+// a revoked credential stops working immediately rather than at the next refresh.
+func (s *AppAuthService) AuthenticateClaims(
+	ctx context.Context,
+	claims *platform.TokenClaims,
+) (*AppIdentity, error) {
+	if claims == nil || claims.SubjectType != "app" || claims.TokenType != "access" {
 		return nil, errors.New("invalid app token")
 	}
 	var session domain.AppSession
