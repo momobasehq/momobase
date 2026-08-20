@@ -29,6 +29,16 @@ type AdminUser struct {
 	Permissions []string `gorm:"-" json:"permissions,omitempty"`
 }
 
+// ActorID returns the identifier to attribute an administrative action to, falling
+// back to "system" when the change did not originate from a signed-in administrator
+// — a nil actor is normal for seeding and background work, not an error.
+func (u *AdminUser) ActorID() string {
+	if u == nil || u.ID == "" {
+		return "system"
+	}
+	return u.ID
+}
+
 // Permission is one entry of the seeded permission catalogue. Rows are upserted from
 // domain.Permissions on every boot, so the table follows the code rather than leading
 // it, and a permission is never defined by a migration.

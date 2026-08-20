@@ -2,7 +2,6 @@ package webhooks
 
 import (
 	"context"
-	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,13 +9,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gofiber/fiber/v3"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/repository"
+	"github.com/momobasehq/momobase/internal/service/provider"
+	"github.com/momobasehq/momobase/internal/service/webhook"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -81,22 +83,21 @@ func webhookHandler(t *testing.T) (*Handler, *gorm.DB) {
 	}
 	registry := providers.NewRegistry()
 	registry.Register("test", func(*slog.Logger) providers.PaymentProvider { return &webhookProvider{} })
-	runtime := services.NewProviderRuntimeManager(db, registry, encryptor, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	repos := repository.New(db)
+	runtime := provider.NewRuntimeManager(repos, registry, encryptor, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err := runtime.LoadActive(context.Background()); err != nil {
 		t.Fatalf("LoadActive() error = %v", err)
 	}
-	return NewHandler(services.NewWebhookService(db, runtime)), db
+	return NewHandler(webhook.New(repos, runtime)), db
 }
 
 func TestProviderWebhookAcceptsVerifiedEvent(t *testing.T) {
 	h, db := webhookHandler(t)
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/provider-1", strings.NewReader(`{"status":"pending"}`))
-	req.SetPathValue("providerAccountID", "provider-1")
 	req.Header.Set("X-Webhook-Secret", "hook-secret")
-	recorder := httptest.NewRecorder()
-	h.ProviderWebhook(recorder, req)
-	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"ok":true`) {
-		t.Fatalf("ProviderWebhook() = %d %s", recorder.Code, recorder.Body.String())
+	res := call(t, h, req)
+	if res.Code != http.StatusOK || !strings.Contains(res.Body, `"ok":true`) {
+		t.Fatalf("ProviderWebhook() = %d %s", res.Code, res.Body)
 	}
 	var count int64
 	if err := db.Model(&domain.WebhookEvent{}).Count(&count).Error; err != nil || count != 1 {
@@ -107,27 +108,46 @@ func TestProviderWebhookAcceptsVerifiedEvent(t *testing.T) {
 func TestProviderWebhookRejectsInvalidSecret(t *testing.T) {
 	h, _ := webhookHandler(t)
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/provider-1", strings.NewReader(`{}`))
-	req.SetPathValue("providerAccountID", "provider-1")
 	req.Header.Set("X-Webhook-Secret", "wrong")
-	recorder := httptest.NewRecorder()
-	h.ProviderWebhook(recorder, req)
-	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "invalid webhook secret") {
-		t.Fatalf("ProviderWebhook(invalid secret) = %d %s", recorder.Code, recorder.Body.String())
+	res := call(t, h, req)
+	if res.Code != http.StatusBadRequest || !strings.Contains(res.Body, "invalid webhook secret") {
+		t.Fatalf("ProviderWebhook(invalid secret) = %d %s", res.Code, res.Body)
 	}
 }
 
-type failingBody struct{}
-
-func (failingBody) Read([]byte) (int, error) { return 0, errors.New("read failed") }
-func (failingBody) Close() error             { return nil }
-
-func TestProviderWebhookReportsBodyReadError(t *testing.T) {
-	h := NewHandler(nil)
-	req := httptest.NewRequest(http.MethodPost, "/webhooks/provider-1", nil)
-	req.Body = failingBody{}
-	recorder := httptest.NewRecorder()
-	h.ProviderWebhook(recorder, req)
-	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "read failed") {
-		t.Fatalf("ProviderWebhook(read error) = %d %s", recorder.Code, recorder.Body.String())
+// TestProviderWebhookRejectsAnUnknownAccount covers the path a body read error used to.
+// fasthttp buffers the request before a handler runs, so a body that fails mid-read is
+// no longer a failure the handler can observe; an account the runtime has never loaded
+// is, and it reaches the same branch.
+func TestProviderWebhookRejectsAnUnknownAccount(t *testing.T) {
+	h, _ := webhookHandler(t)
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/absent", strings.NewReader(`{}`))
+	req.Header.Set("X-Webhook-Secret", "hook-secret")
+	res := call(t, h, req)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("ProviderWebhook(unknown account) = %d %s", res.Code, res.Body)
 	}
+}
+
+// response is one recorded reply. A fiber.Ctx cannot be built directly, so a handler is
+// exercised by mounting it on a throwaway app and driving a request through it.
+type response struct {
+	Code int
+	Body string
+}
+
+func call(t *testing.T, h *Handler, req *http.Request) response {
+	t.Helper()
+	app := fiber.New()
+	app.Post("/webhooks/:providerAccountID", h.ProviderWebhook)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	raw, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	_ = res.Body.Close()
+	return response{Code: res.StatusCode, Body: string(raw)}
 }

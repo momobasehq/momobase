@@ -1,11 +1,11 @@
 package admin
 
 import (
-	"net/http"
+	"github.com/gofiber/fiber/v3"
 
 	httpcommon "github.com/momobasehq/momobase/internal/http/common"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
 // Me writes the authenticated administrator stored in the request context.
@@ -18,7 +18,7 @@ import (
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/me [get]
-func (h *Handler) Me(w http.ResponseWriter, r *http.Request) { platform.JSON(w, 200, actor(r)) }
+func (h *Handler) Me(c fiber.Ctx) error { return platform.JSON(c, 200, actor(c)) }
 
 // Token documents administrator login.
 //
@@ -36,10 +36,10 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) { platform.JSON(w, 
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/token [post]
 // @Router /api/admin/login [post]
-func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
-	httpcommon.Token("password", func(r *http.Request) (*services.TokenResponse, error) {
-		return h.auth.IssuePasswordToken(r.Context(), r.Form.Get("username"), r.Form.Get("password"), r.RemoteAddr, r.UserAgent())
-	})(w, r)
+func (h *Handler) Token(c fiber.Ctx) error {
+	return httpcommon.Token("password", func(c fiber.Ctx) (*identity.TokenResponse, error) {
+		return h.auth.IssuePasswordToken(c.Context(), c.FormValue("username"), c.FormValue("password"), c.IP(), c.Get(fiber.HeaderUserAgent))
+	})(c)
 }
 
 // RefreshToken documents administrator token refresh.
@@ -55,10 +55,10 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/token/refresh [post]
-func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
-	httpcommon.Token("refresh_token", func(r *http.Request) (*services.TokenResponse, error) {
-		return h.auth.RefreshToken(r.Context(), r.Form.Get("refresh_token"), r.RemoteAddr, r.UserAgent())
-	})(w, r)
+func (h *Handler) RefreshToken(c fiber.Ctx) error {
+	return httpcommon.Token("refresh_token", func(c fiber.Ctx) (*identity.TokenResponse, error) {
+		return h.auth.RefreshToken(c.Context(), c.FormValue("refresh_token"), c.IP(), c.Get(fiber.HeaderUserAgent))
+	})(c)
 }
 
 // GetApp writes the application identified by the request path or a not-found
@@ -74,13 +74,12 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/apps/{id} [get]
-func (h *Handler) GetApp(w http.ResponseWriter, r *http.Request) {
-	app, err := h.apps.GetApp(r.Context(), id(r))
+func (h *Handler) GetApp(c fiber.Ctx) error {
+	app, err := h.apps.GetApp(c.Context(), id(c))
 	if err != nil {
-		platform.Error(w, 404, "NOT_FOUND", "app not found")
-		return
+		return platform.Error(c, 404, "NOT_FOUND", "app not found")
 	}
-	platform.JSON(w, 200, app)
+	return platform.JSON(c, 200, app)
 }
 
 // ActiveProviderBalances queries balances for active provider runtimes and
@@ -98,25 +97,24 @@ func (h *Handler) GetApp(w http.ResponseWriter, r *http.Request) {
 // @Failure 403 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/balances/providers [get]
-func (h *Handler) ActiveProviderBalances(w http.ResponseWriter, r *http.Request) {
-	items, err := h.runtime.QueryActiveBalances(r.Context())
+func (h *Handler) ActiveProviderBalances(c fiber.Ctx) error {
+	items, err := h.runtime.QueryActiveBalances(c.Context())
 	if err != nil {
-		platform.Error(w, 400, "BALANCE_QUERY_FAILED", err.Error())
-		return
+		return platform.Error(c, 400, "BALANCE_QUERY_FAILED", err.Error())
 	}
 	h.audit.RecordBestEffort(
-		r.Context(),
-		actor(r).ID,
+		c,
+		actor(c).ID,
 		"admin",
 		"balances.active_providers_queried",
 		"provider_account",
 		"all_active",
 		nil,
-		r.RemoteAddr,
-		r.UserAgent(),
+		c.IP(),
+		c.Get(fiber.HeaderUserAgent),
 	)
-	page, size := platform.Pagination(r)
-	platform.JSON(w, 200, platform.PaginateSlice(items, page, size))
+	page, size := platform.Pagination(c)
+	return platform.JSON(c, 200, platform.PaginateSlice(items, page, size))
 }
 
 // ProviderBalance queries and writes the balance for the provider account and
@@ -134,12 +132,11 @@ func (h *Handler) ActiveProviderBalances(w http.ResponseWriter, r *http.Request)
 // @Failure 403 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/providers/accounts/{id}/balance [get]
-func (h *Handler) ProviderBalance(w http.ResponseWriter, r *http.Request) {
-	out, err := h.runtime.QueryBalance(r.Context(), id(r), r.URL.Query().Get("country"))
+func (h *Handler) ProviderBalance(c fiber.Ctx) error {
+	out, err := h.runtime.QueryBalance(c.Context(), id(c), c.Query("country"))
 	if err != nil {
-		platform.Error(w, 400, "BALANCE_QUERY_FAILED", err.Error())
-		return
+		return platform.Error(c, 400, "BALANCE_QUERY_FAILED", err.Error())
 	}
-	h.audit.RecordBestEffort(r.Context(), actor(r).ID, "admin", "balance.queried", "provider_account", id(r), nil, r.RemoteAddr, r.UserAgent())
-	platform.JSON(w, 200, out)
+	h.audit.RecordBestEffort(c.Context(), actor(c).ID, "admin", "balance.queried", "provider_account", id(c), nil, c.IP(), c.Get(fiber.HeaderUserAgent))
+	return platform.JSON(c, 200, out)
 }

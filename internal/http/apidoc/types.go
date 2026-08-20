@@ -58,57 +58,6 @@ type Health struct {
 	OK bool `json:"ok" example:"true"`
 }
 
-// CreateAdminRequest creates an administrator.
-type CreateAdminRequest struct {
-	Name     string `json:"name" example:"Operations Admin"`
-	Email    string `json:"email" format:"email" example:"ops@example.com"`
-	Password string `json:"password" format:"password" example:"change-me-now"`
-	// Role names a seeded or operator-created role; list them with GET /api/admin/roles.
-	Role string `json:"role" example:"operations"`
-}
-
-// ChangePasswordRequest replaces an administrator password.
-type ChangePasswordRequest struct {
-	Password string `json:"password" format:"password" example:"change-me-now"`
-}
-
-// ChangeStatusRequest changes a resource status.
-type ChangeStatusRequest struct {
-	Status string `json:"status" example:"active"`
-}
-
-// CreateAppRequest creates an application.
-type CreateAppRequest struct {
-	Name        string `json:"name" example:"Checkout"`
-	Description string `json:"description" example:"Checkout payment application"`
-	Environment string `json:"environment" enums:"sandbox,production" example:"sandbox"`
-}
-
-// UpdateAppRequest updates mutable application fields.
-type UpdateAppRequest struct {
-	Name        string `json:"name,omitempty" example:"Checkout"`
-	Description string `json:"description" example:"Checkout payment application"`
-	Environment string `json:"environment,omitempty" enums:"sandbox,production" example:"sandbox"`
-}
-
-// CreateCredentialRequest creates an application credential.
-type CreateCredentialRequest struct {
-	Name      string `json:"name" example:"Backend credential"`
-	Scopes    string `json:"scopes" example:"collections:create transactions:read"`
-	ExpiresAt string `json:"expires_at,omitempty" format:"date-time" example:"2030-01-02T03:04:05Z"`
-}
-
-// CreateProviderAccountRequest creates a provider account.
-type CreateProviderAccountRequest struct {
-	ProviderCode string `json:"provider_code" example:"dummy"`
-	Name         string `json:"name" example:"Sandbox provider"`
-	Environment  string `json:"environment" enums:"sandbox,production" example:"sandbox"`
-	// Countries restricts the account to the listed ISO 3166-1 alpha-2 countries. An
-	// empty list leaves it unrestricted, which suits a rail with no country notion.
-	Countries []string       `json:"countries" example:"UG"`
-	Config    map[string]any `json:"config" swaggertype:"object"`
-}
-
 // ProviderRegistry lists the provider codes registered in the running build.
 type ProviderRegistry struct {
 	Providers []string `json:"providers" example:"dummy"`
@@ -120,32 +69,6 @@ type ProviderRegistryResponse struct {
 	Data    ProviderRegistry   `json:"data"`
 	Error   *platform.APIError `json:"error,omitempty"`
 	Message string             `json:"message,omitempty"`
-}
-
-// UpdateCountriesRequest replaces a provider account's countries. An empty list
-// leaves the account unrestricted by country.
-type UpdateCountriesRequest struct {
-	Countries []string `json:"countries" example:"UG,RW"`
-}
-
-// UpdateProviderConfigRequest replaces provider configuration.
-type UpdateProviderConfigRequest struct {
-	Config map[string]any `json:"config" swaggertype:"object"`
-}
-
-// CreateRouteRequest creates a payment route.
-type CreateRouteRequest struct {
-	ServiceType       string `json:"service_type" enums:"collection,disbursement" example:"collection"`
-	PaymentMethod     string `json:"payment_method" example:"momo"`
-	ProviderAccountID string `json:"provider_account_id" example:"pacc_123"`
-	Priority          int    `json:"priority" minimum:"1" example:"1"`
-	Active            bool   `json:"active" example:"true"`
-}
-
-// UpdateRouteRequest updates a payment route.
-type UpdateRouteRequest struct {
-	Priority int  `json:"priority" minimum:"1" example:"1"`
-	Active   bool `json:"active" example:"true"`
 }
 
 // SystemInfo describes the running service.
@@ -177,8 +100,8 @@ type Worker struct {
 	State      string `json:"state" example:"managed_by_single_binary"`
 }
 
-// RuntimeProvider describes an initialized provider runtime.
-type RuntimeProvider struct {
+// Runtime describes an initialized provider runtime.
+type Runtime struct {
 	ProviderAccountID string                         `json:"provider_account_id" example:"pacc_123"`
 	ProviderCode      string                         `json:"provider_code" example:"dummy"`
 	ConfigVersion     int                            `json:"config_version" example:"1"`

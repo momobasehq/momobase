@@ -5,9 +5,12 @@ import (
 	"encoding/hex"
 	"io/fs"
 	"mime"
-	"net/http"
 	"path"
 	"strings"
+
+	"github.com/gofiber/fiber/v3"
+
+	dashboardweb "github.com/momobasehq/momobase/web/dashboard"
 )
 
 // indexFile is the application shell every dashboard visit resolves to. The
@@ -23,11 +26,13 @@ type dashboardHandler struct {
 
 // newDashboardHandler indexes the bundle and precomputes an entity tag per file.
 //
-// embed.FS reports a zero ModTime, so http.ServeContent emits no Last-Modified and
+// embed.FS reports a zero ModTime, so a static file server emits no Last-Modified and
 // a conditional request has nothing to validate against — every asset would be
 // re-downloaded in full on every load. Hashing the contents once at start-up gives
 // each file a stable validator that survives restarts and is identical across
-// replicas, which a build timestamp would not be.
+// replicas, which a build timestamp would not be. Fiber's static middleware and its
+// etag middleware between them do not produce this, which is why the bundle is served
+// here rather than mounted.
 func newDashboardHandler(assets fs.FS) *dashboardHandler {
 	handler := &dashboardHandler{assets: assets, etags: make(map[string]string)}
 	_ = fs.WalkDir(assets, ".", func(name string, entry fs.DirEntry, err error) error {
@@ -45,43 +50,60 @@ func newDashboardHandler(assets fs.FS) *dashboardHandler {
 	return handler
 }
 
-// ServeHTTP serves one embedded asset, or the application shell at the root.
-func (h *dashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// serve serves one embedded asset, or the application shell at the root.
+func (h *dashboardHandler) serve(c fiber.Ctx) error {
 	// Cleaning an absolute path collapses any ".." before it is used as a key, so a
 	// traversal attempt resolves to a name that simply is not in the bundle.
-	name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
+	name := strings.TrimPrefix(path.Clean("/"+c.Params("*")), "/")
 	if name == "" || name == "." {
 		name = indexFile
 	}
 	etag, ok := h.etags[name]
 	if !ok {
-		http.NotFound(w, r)
-		return
+		return fiber.ErrNotFound
 	}
 	data, err := fs.ReadFile(h.assets, name)
 	if err != nil {
-		http.NotFound(w, r)
-		return
+		return fiber.ErrNotFound
 	}
 
 	// The shell names the hashed assets, so a cached copy would go on pointing at a
 	// bundle the next deploy replaced; it must revalidate every time. The assets
 	// carry their content hash in the filename and can never change under it.
 	if name == indexFile {
-		w.Header().Set("Cache-Control", "no-cache")
+		c.Set(fiber.HeaderCacheControl, "no-cache")
 	} else {
-		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		c.Set(fiber.HeaderCacheControl, "public, max-age=31536000, immutable")
 	}
-	w.Header().Set("ETag", etag)
-	if match := r.Header.Get("If-None-Match"); match != "" && strings.Contains(match, etag) {
-		w.WriteHeader(http.StatusNotModified)
-		return
+	c.Set(fiber.HeaderETag, etag)
+	if match := c.Get(fiber.HeaderIfNoneMatch); match != "" && strings.Contains(match, etag) {
+		return c.SendStatus(fiber.StatusNotModified)
 	}
 
 	contentType := mime.TypeByExtension(path.Ext(name))
 	if contentType == "" {
-		contentType = "application/octet-stream"
+		contentType = fiber.MIMEOctetStream
 	}
-	w.Header().Set("Content-Type", contentType)
-	_, _ = w.Write(data)
+	c.Set(fiber.HeaderContentType, contentType)
+	return c.Send(data)
+}
+
+// mountDashboard serves the embedded administration dashboard when it is both
+// enabled and present.
+//
+// Available is false unless this binary was built with the dashboard tag, so a
+// deployment that sets the flag against an untagged build serves nothing here rather
+// than an empty shell whose scripts 404.
+func mountDashboard(app *fiber.App, enabled bool) {
+	if !enabled || !dashboardweb.Available() {
+		return
+	}
+	handler := newDashboardHandler(dashboardweb.FS())
+	app.Get("/dashboard/*", handler.serve)
+	// The panel that lived here was replaced by the dashboard. Redirecting permanently
+	// keeps existing bookmarks and runbooks working instead of answering them with a
+	// bare 404.
+	app.Get("/admin/*", func(c fiber.Ctx) error {
+		return c.Redirect().Status(fiber.StatusMovedPermanently).To("/dashboard/")
+	})
 }

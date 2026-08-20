@@ -12,6 +12,84 @@
     },
     "basePath": "/",
     "paths": {
+        "/api/admin/analytics/transactions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Analytics"
+                ],
+                "summary": "Transaction analytics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Inclusive RFC3339 start; defaults to 30 days ago",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Exclusive RFC3339 end; defaults to now",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "day",
+                            "hour"
+                        ],
+                        "type": "string",
+                        "description": "Bucket width",
+                        "name": "interval",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Restrict to one application",
+                        "name": "app_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Restrict to one provider account",
+                        "name": "provider_account_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.DocResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/admin/apps": {
             "get": {
                 "security": [
@@ -93,7 +171,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apidoc.CreateAppRequest"
+                            "$ref": "#/definitions/dto.CreateAppRequest"
                         }
                     }
                 ],
@@ -217,7 +295,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apidoc.UpdateAppRequest"
+                            "$ref": "#/definitions/dto.UpdateAppRequest"
                         }
                     }
                 ],
@@ -357,7 +435,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apidoc.CreateCredentialRequest"
+                            "$ref": "#/definitions/dto.CreateCredentialRequest"
                         }
                     }
                 ],
@@ -561,7 +639,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apidoc.ChangeStatusRequest"
+                            "$ref": "#/definitions/dto.ChangeAppStatusRequest"
                         }
                     }
                 ],
@@ -1069,7 +1147,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apidoc.CreateProviderAccountRequest"
+                            "$ref": "#/definitions/dto.CreateProviderAccountRequest"
                         }
                     }
                 ],
@@ -1264,7 +1342,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apidoc.UpdateProviderConfigRequest"
+                            "$ref": "#/definitions/dto.UpdateProviderConfigRequest"
                         }
                     }
                 ],
@@ -1339,7 +1417,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apidoc.UpdateCountriesRequest"
+                            "$ref": "#/definitions/dto.UpdateCountriesRequest"
                         }
                     }
                 ],
@@ -1592,7 +1670,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/admin.RoleRequest"
+                            "$ref": "#/definitions/dto.RoleRequest"
                         }
                     }
                 ],
@@ -1710,7 +1788,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/admin.RoleRequest"
+                            "$ref": "#/definitions/dto.RoleRequest"
                         }
                     }
                 ],
@@ -1829,7 +1907,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apidoc.CreateRouteRequest"
+                            "$ref": "#/definitions/dto.CreateRouteRequest"
                         }
                     }
                 ],
@@ -1904,7 +1982,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apidoc.UpdateRouteRequest"
+                            "$ref": "#/definitions/dto.UpdateRouteRequest"
                         }
                     }
                 ],
@@ -2350,7 +2428,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apidoc.CreateAdminRequest"
+                            "$ref": "#/definitions/dto.CreateAdminRequest"
                         }
                     }
                 ],
@@ -2425,7 +2503,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apidoc.ChangePasswordRequest"
+                            "$ref": "#/definitions/dto.ChangePasswordRequest"
                         }
                     }
                 ],
@@ -2469,6 +2547,75 @@
                 }
             }
         },
+        "/api/admin/users/{id}/role": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Users"
+                ],
+                "summary": "Change an administrator's role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Administrator ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Replacement role",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ChangeRoleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.DocResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/admin/users/{id}/status": {
             "patch": {
                 "security": [
@@ -2500,7 +2647,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apidoc.ChangeStatusRequest"
+                            "$ref": "#/definitions/dto.ChangeAdminStatusRequest"
                         }
                     }
                 ],
@@ -2629,7 +2776,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/services.CreatePaymentRequest"
+                            "$ref": "#/definitions/dto.CreatePayment"
                         }
                     }
                 ],
@@ -2711,7 +2858,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/services.CreatePaymentRequest"
+                            "$ref": "#/definitions/dto.CreatePayment"
                         }
                     }
                 ],
@@ -3150,178 +3297,6 @@
         }
     },
     "definitions": {
-        "admin.RoleRequest": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "description": "Description explains the role in an operator-facing list.",
-                    "type": "string",
-                    "example": "Read transactions and reissue credentials"
-                },
-                "name": {
-                    "description": "Name identifies the role. It is ignored when updating, since the path carries it.",
-                    "type": "string",
-                    "example": "support"
-                },
-                "permissions": {
-                    "description": "Permissions are the codes the role grants, from GET /api/admin/permissions.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "transactions:read",
-                        "credentials:update"
-                    ]
-                }
-            }
-        },
-        "apidoc.ChangePasswordRequest": {
-            "type": "object",
-            "properties": {
-                "password": {
-                    "type": "string",
-                    "format": "password",
-                    "example": "change-me-now"
-                }
-            }
-        },
-        "apidoc.ChangeStatusRequest": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "type": "string",
-                    "example": "active"
-                }
-            }
-        },
-        "apidoc.CreateAdminRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "format": "email",
-                    "example": "ops@example.com"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Operations Admin"
-                },
-                "password": {
-                    "type": "string",
-                    "format": "password",
-                    "example": "change-me-now"
-                },
-                "role": {
-                    "description": "Role names a seeded or operator-created role; list them with GET /api/admin/roles.",
-                    "type": "string",
-                    "example": "operations"
-                }
-            }
-        },
-        "apidoc.CreateAppRequest": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "example": "Checkout payment application"
-                },
-                "environment": {
-                    "type": "string",
-                    "enum": [
-                        "sandbox",
-                        "production"
-                    ],
-                    "example": "sandbox"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Checkout"
-                }
-            }
-        },
-        "apidoc.CreateCredentialRequest": {
-            "type": "object",
-            "properties": {
-                "expires_at": {
-                    "type": "string",
-                    "format": "date-time",
-                    "example": "2030-01-02T03:04:05Z"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Backend credential"
-                },
-                "scopes": {
-                    "type": "string",
-                    "example": "collections:create transactions:read"
-                }
-            }
-        },
-        "apidoc.CreateProviderAccountRequest": {
-            "type": "object",
-            "properties": {
-                "config": {
-                    "type": "object"
-                },
-                "countries": {
-                    "description": "Countries restricts the account to the listed ISO 3166-1 alpha-2 countries. An\nempty list leaves it unrestricted, which suits a rail with no country notion.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "UG"
-                    ]
-                },
-                "environment": {
-                    "type": "string",
-                    "enum": [
-                        "sandbox",
-                        "production"
-                    ],
-                    "example": "sandbox"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Sandbox provider"
-                },
-                "provider_code": {
-                    "type": "string",
-                    "example": "dummy"
-                }
-            }
-        },
-        "apidoc.CreateRouteRequest": {
-            "type": "object",
-            "properties": {
-                "active": {
-                    "type": "boolean",
-                    "example": true
-                },
-                "payment_method": {
-                    "type": "string",
-                    "example": "momo"
-                },
-                "priority": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "example": 1
-                },
-                "provider_account_id": {
-                    "type": "string",
-                    "example": "pacc_123"
-                },
-                "service_type": {
-                    "type": "string",
-                    "enum": [
-                        "collection",
-                        "disbursement"
-                    ],
-                    "example": "collection"
-                }
-            }
-        },
         "apidoc.DocResponse": {
             "type": "object",
             "properties": {
@@ -3483,11 +3458,338 @@
                 }
             }
         },
-        "apidoc.UpdateAppRequest": {
+        "dto.ChangeAdminStatusRequest": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "active",
+                        "inactive"
+                    ],
+                    "example": "active"
+                }
+            }
+        },
+        "dto.ChangeAppStatusRequest": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "active",
+                        "disabled",
+                        "suspended"
+                    ],
+                    "example": "active"
+                }
+            }
+        },
+        "dto.ChangePasswordRequest": {
+            "type": "object",
+            "required": [
+                "password"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 8,
+                    "example": "change-me-now"
+                }
+            }
+        },
+        "dto.ChangeRoleRequest": {
+            "type": "object",
+            "required": [
+                "role"
+            ],
+            "properties": {
+                "role": {
+                    "description": "Role names a seeded or operator-created role; list them with GET /api/admin/roles.",
+                    "type": "string",
+                    "maxLength": 64,
+                    "example": "operations"
+                }
+            }
+        },
+        "dto.CreateAdminRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "name",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "description": "Email is stored lowercased, so it is matched case-insensitively at sign-in.",
+                    "type": "string",
+                    "format": "email",
+                    "example": "ops@example.com"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "example": "Operations Admin"
+                },
+                "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 8,
+                    "example": "change-me-now"
+                },
+                "role": {
+                    "description": "Role names a seeded or operator-created role; list them with GET /api/admin/roles.\nIt is checked against the roles table, which is why an empty value is allowed\nhere and defaulted there.",
+                    "type": "string",
+                    "maxLength": 64,
+                    "example": "operations"
+                }
+            }
+        },
+        "dto.CreateAppRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "example": "Checkout payment application"
+                },
+                "environment": {
+                    "description": "Environment is defaulted by the service when omitted.",
+                    "type": "string",
+                    "enum": [
+                        "sandbox",
+                        "production"
+                    ],
+                    "example": "sandbox"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "example": "Checkout"
+                }
+            }
+        },
+        "dto.CreateCredentialRequest": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2030-01-02T03:04:05Z"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "example": "Backend credential"
+                },
+                "scopes": {
+                    "description": "Scopes is a space-separated list checked against the application permission\ncatalogue, so a typo fails here rather than at the first payment.",
+                    "type": "string",
+                    "example": "collections:create transactions:read"
+                }
+            }
+        },
+        "dto.CreatePayment": {
+            "type": "object",
+            "required": [
+                "account",
+                "payment_method",
+                "reference"
+            ],
+            "properties": {
+                "account": {
+                    "description": "Account is the provider-specific account the payment is collected from or\ndisbursed to: a mobile number, bank account, card token, or wallet address.\nMomobase checks its shape only and leaves its meaning to the selected provider,\nthrough providers.RequestValidator.",
+                    "type": "string"
+                },
+                "amount": {
+                    "description": "Amount is the payment amount in the currency's minor unit.",
+                    "type": "integer"
+                },
+                "country": {
+                    "description": "Country is the optional ISO 3166-1 alpha-2 transaction country. Providers that\ndeclare supported countries are only eligible when it is present and matches.",
+                    "type": "string"
+                },
+                "currency": {
+                    "description": "Currency is the three-letter currency code.",
+                    "type": "string"
+                },
+                "customer": {
+                    "description": "Customer optionally identifies the collection customer.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.Party"
+                        }
+                    ]
+                },
+                "description": {
+                    "description": "Description is optional payment context shown to downstream systems.",
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "metadata": {
+                    "description": "Metadata optionally carries provider-specific payment details, such as a bank\nbranch code. It reaches the selected provider and is never persisted, so it\ncannot become a free-form store of identifiers Momobase would then have to\nprotect. It is part of the idempotency hash.",
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "payment_method": {
+                    "description": "PaymentMethod identifies the requested payment rail. It is free-form and must\nmatch an active payment route.",
+                    "type": "string"
+                },
+                "recipient": {
+                    "description": "Recipient optionally identifies the disbursement recipient.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.Party"
+                        }
+                    ]
+                },
+                "reference": {
+                    "description": "Reference is the application's unique business reference.",
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "scheme": {
+                    "description": "Scheme optionally names the account's provider-specific scheme, such as a\nmobile network, bank, or card brand. Like PaymentMethod it is free-form; the\nselected provider interprets it and Momobase never matches on it.",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CreateProviderAccountRequest": {
+            "type": "object",
+            "required": [
+                "config",
+                "name",
+                "provider_code"
+            ],
+            "properties": {
+                "config": {
+                    "description": "Config is the provider's own settings and must carry a webhook_secret. It is\nencrypted before it is stored and is never returned.",
+                    "type": "object"
+                },
+                "countries": {
+                    "description": "Countries restricts the account to the listed ISO 3166-1 alpha-2 countries. An\nempty list leaves it unrestricted, which suits a rail with no country notion.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "UG"
+                    ]
+                },
+                "environment": {
+                    "type": "string",
+                    "enum": [
+                        "sandbox",
+                        "production"
+                    ],
+                    "example": "sandbox"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "example": "Sandbox provider"
+                },
+                "provider_code": {
+                    "description": "ProviderCode names an adapter registered in the running build; list them with\nGET /api/admin/providers/registry.",
+                    "type": "string",
+                    "example": "dummy"
+                }
+            }
+        },
+        "dto.CreateRouteRequest": {
+            "type": "object",
+            "required": [
+                "payment_method",
+                "provider_account_id",
+                "service_type"
+            ],
+            "properties": {
+                "active": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "payment_method": {
+                    "type": "string",
+                    "example": "momo"
+                },
+                "priority": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 1
+                },
+                "provider_account_id": {
+                    "description": "ProviderAccountID must name an existing account, which the service checks.",
+                    "type": "string",
+                    "example": "pacc_123"
+                },
+                "service_type": {
+                    "type": "string",
+                    "enum": [
+                        "collection",
+                        "disbursement"
+                    ],
+                    "example": "collection"
+                }
+            }
+        },
+        "dto.Party": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "description": "Email is the party's email address.",
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "name": {
+                    "description": "Name is the party's display name.",
+                    "type": "string",
+                    "maxLength": 255
+                }
+            }
+        },
+        "dto.RoleRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "description": "Description explains what the role is for.",
+                    "type": "string",
+                    "maxLength": 255,
+                    "example": "Read-only support access"
+                },
+                "name": {
+                    "description": "Name identifies the role and is what an administrator is assigned.",
+                    "type": "string",
+                    "maxLength": 64,
+                    "example": "support"
+                },
+                "permissions": {
+                    "description": "Permissions are the codes the role grants; each is checked against the catalogue.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "transactions:read"
+                    ]
+                }
+            }
+        },
+        "dto.UpdateAppRequest": {
             "type": "object",
             "properties": {
                 "description": {
                     "type": "string",
+                    "maxLength": 1000,
                     "example": "Checkout payment application"
                 },
                 "environment": {
@@ -3500,11 +3802,12 @@
                 },
                 "name": {
                     "type": "string",
+                    "maxLength": 255,
                     "example": "Checkout"
                 }
             }
         },
-        "apidoc.UpdateCountriesRequest": {
+        "dto.UpdateCountriesRequest": {
             "type": "object",
             "properties": {
                 "countries": {
@@ -3519,15 +3822,18 @@
                 }
             }
         },
-        "apidoc.UpdateProviderConfigRequest": {
+        "dto.UpdateProviderConfigRequest": {
             "type": "object",
+            "required": [
+                "config"
+            ],
             "properties": {
                 "config": {
                     "type": "object"
                 }
             }
         },
-        "apidoc.UpdateRouteRequest": {
+        "dto.UpdateRouteRequest": {
             "type": "object",
             "properties": {
                 "active": {
@@ -3548,77 +3854,6 @@
                     "type": "string"
                 },
                 "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "services.CreatePaymentRequest": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "description": "Account is the provider-specific account the payment is collected from or\ndisbursed to: a mobile number, bank account, card token, or wallet address.\nMomobase treats it as opaque and leaves its validation to the selected\nprovider, through providers.RequestValidator.",
-                    "type": "string"
-                },
-                "amount": {
-                    "description": "Amount is the payment amount in the currency's minor unit.",
-                    "type": "integer"
-                },
-                "country": {
-                    "description": "Country is the optional ISO 3166-1 alpha-2 transaction country. Providers that\ndeclare supported countries are only eligible when it is present and matches.",
-                    "type": "string"
-                },
-                "currency": {
-                    "description": "Currency is the three-letter currency code.",
-                    "type": "string"
-                },
-                "customer": {
-                    "description": "Customer optionally identifies the collection customer.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/services.PartyPayload"
-                        }
-                    ]
-                },
-                "description": {
-                    "description": "Description is optional payment context shown to downstream systems.",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "Metadata optionally carries provider-specific payment details, such as a bank\nbranch code. It reaches the selected provider and is never persisted, so it\ncannot become a free-form store of identifiers Momobase would then have to\nprotect. It is part of the idempotency hash.",
-                    "type": "object",
-                    "additionalProperties": {}
-                },
-                "payment_method": {
-                    "description": "PaymentMethod identifies the requested payment rail. It is free-form and must\nmatch an active payment route.",
-                    "type": "string"
-                },
-                "recipient": {
-                    "description": "Recipient optionally identifies the disbursement recipient.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/services.PartyPayload"
-                        }
-                    ]
-                },
-                "reference": {
-                    "description": "Reference is the application's unique business reference.",
-                    "type": "string"
-                },
-                "scheme": {
-                    "description": "Scheme optionally names the account's provider-specific scheme, such as a\nmobile network, bank, or card brand. Like PaymentMethod it is free-form; the\nselected provider interprets it and Momobase never matches on it.",
-                    "type": "string"
-                }
-            }
-        },
-        "services.PartyPayload": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "description": "Email is the party's email address.",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "Name is the party's display name.",
                     "type": "string"
                 }
             }

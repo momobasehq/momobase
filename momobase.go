@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net/http"
 	"os/signal"
 	"syscall"
 
+	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 
 	"github.com/momobasehq/momobase/internal/bootstrap"
@@ -165,15 +165,21 @@ func (i *Instance) SeedAdmin(ctx context.Context, email, password, name string) 
 	return i.app.SeedAdmin(ctx, email, password, name)
 }
 
-// Handler returns the server's HTTP handler, which may be mounted in an existing
-// server instead of calling Serve or Run.
-func (i *Instance) Handler() http.Handler {
-	return i.app.Server.Handler
+// App returns the Fiber application, which may be mounted in an existing Fiber app,
+// exercised with App().Test, or extended with additional routes instead of calling
+// Serve or Run.
+//
+// Momobase runs on fasthttp rather than net/http, so this is a *fiber.App and not an
+// http.Handler; an application serving Momobase alongside net/http routes has to
+// adapt at its own boundary.
+func (i *Instance) App() *fiber.App {
+	return i.app.Fiber
 }
 
-// Addr returns the address the HTTP server listens on.
+// Addr returns the address the HTTP server listens on. A configured port of 0 reads
+// back as the port the kernel chose once Serve has bound the listener.
 func (i *Instance) Addr() string {
-	return i.app.Server.Addr
+	return i.app.ListenAddr()
 }
 
 // DB returns the instance's database handle.

@@ -16,12 +16,3 @@ func RandomRef(prefix string) string {
 	}
 	return prefix + hex.EncodeToString(raw[:])
 }
-
-// UUID returns a UUID-shaped random reference, or RandomRef's fallback unchanged.
-func UUID() string {
-	raw := RandomRef("")
-	if len(raw) != 32 {
-		return raw
-	}
-	return raw[:8] + "-" + raw[8:12] + "-4" + raw[13:16] + "-a" + raw[17:20] + "-" + raw[20:]
-}

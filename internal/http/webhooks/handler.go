@@ -1,18 +1,17 @@
 package webhooks
 
 import (
-	"io"
-	"net/http"
+	"github.com/gofiber/fiber/v3"
 
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/webhook"
 )
 
 // Handler serves incoming provider webhook requests.
-type Handler struct{ service *services.WebhookService }
+type Handler struct{ service *webhook.Service }
 
 // NewHandler constructs a provider webhook handler from a webhook service.
-func NewHandler(s *services.WebhookService) *Handler { return &Handler{service: s} }
+func NewHandler(s *webhook.Service) *Handler { return &Handler{service: s} }
 
 // ProviderWebhook reads an incoming provider webhook and delegates validation
 // and processing to the webhook service.
@@ -29,19 +28,18 @@ func NewHandler(s *services.WebhookService) *Handler { return &Handler{service: 
 // @Failure 413 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /webhooks/{providerAccountID} [post]
-func (h *Handler) ProviderWebhook(w http.ResponseWriter, r *http.Request) {
-	payload, err := io.ReadAll(r.Body)
-	if err != nil {
-		platform.Error(w, 400, "BAD_REQUEST", err.Error())
-		return
-	}
+func (h *Handler) ProviderWebhook(c fiber.Ctx) error {
+	// Body is the buffered request body; the provider secret and the payload hash are
+	// both taken from it, so it must be read whole before anything is decided.
+	payload := c.Body()
 	headers := map[string]string{}
-	for k := range r.Header {
-		headers[k] = r.Header.Get(k)
+	for key, values := range c.GetReqHeaders() {
+		if len(values) > 0 {
+			headers[key] = values[0]
+		}
 	}
-	if err := h.service.Handle(r.Context(), r.PathValue("providerAccountID"), payload, headers); err != nil {
-		platform.Error(w, 400, "WEBHOOK_ERROR", err.Error())
-		return
+	if err := h.service.Handle(c.Context(), c.Params("providerAccountID"), payload, headers); err != nil {
+		return platform.Error(c, fiber.StatusBadRequest, "WEBHOOK_ERROR", err.Error())
 	}
-	platform.JSON(w, 200, map[string]any{"ok": true})
+	return platform.JSON(c, 200, map[string]any{"ok": true})
 }

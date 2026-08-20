@@ -120,3 +120,23 @@ export interface SystemHealth {
   workers_configured: string[]; server_time: string
 }
 export interface WorkerState { name: string; configured: boolean; state: string }
+
+/** Transaction counts for one bucket, split by service. */
+export interface ServiceCounts { collection: number; disbursement: number }
+/** One point on an analytics time series. Quiet periods are present and zeroed, so a
+ * chart shows a gap in traffic rather than joining a line across it. */
+export interface AnalyticsBucket {
+  period: string; total: number; by_service: ServiceCounts; succeeded: number; failed: number
+}
+/** Volume for one currency. Amounts are in that currency's minor unit and are
+ * deliberately never summed across currencies — the total would mean nothing. */
+export interface CurrencyVolume { currency: string; count: number; amount: number }
+export interface TransactionAnalytics {
+  from: string; to: string; interval: "day" | "hour"
+  buckets: AnalyticsBucket[]; total: number; by_service: ServiceCounts; volume: CurrencyVolume[]
+}
+/** Narrows an analytics query. Every field is optional; the server defaults to the
+ * last 30 days bucketed by day. */
+export interface AnalyticsQuery {
+  from?: string; to?: string; interval?: "day" | "hour"; appId?: string; providerAccountId?: string
+}

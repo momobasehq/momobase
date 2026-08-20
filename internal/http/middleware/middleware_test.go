@@ -10,152 +10,134 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
+
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/requestid"
 
 	"github.com/momobasehq/momobase/internal/domain"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
+// serve runs a chain against req on a throwaway app. A fiber.Ctx cannot be built
+// directly, so middleware is exercised through a request rather than in isolation.
+func serve(t *testing.T, req *http.Request, chain ...fiber.Handler) *http.Response {
+	t.Helper()
+	app := fiber.New()
+	rest := make([]any, 0, len(chain)-1)
+	for _, handler := range chain[1:] {
+		rest = append(rest, handler)
+	}
+	app.All("/*", chain[0], rest...)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	return res
+}
+
+func accepted(c fiber.Ctx) error { return c.SendStatus(http.StatusAccepted) }
+
 func TestRequestPolicyMiddleware(t *testing.T) {
-	called := false
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusAccepted)
-	})
-
-	recorder := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`))
-	JSONOnly(next).ServeHTTP(recorder, req)
-	if recorder.Code != http.StatusUnsupportedMediaType || called {
-		t.Fatalf("JSONOnly() status/called = %d, %v", recorder.Code, called)
+	res := serve(t, req, JSONOnly, accepted)
+	if res.StatusCode != http.StatusUnsupportedMediaType {
+		t.Fatalf("JSONOnly() status = %d", res.StatusCode)
 	}
 
-	called = false
-	recorder = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`))
-	req.Header.Set("Content-Type", "Application/JSON; charset=utf-8")
-	NoCache(JSONOnly(next)).ServeHTTP(recorder, req)
-	if recorder.Code != http.StatusAccepted || !called {
-		t.Fatalf("JSONOnly(valid) status/called = %d, %v", recorder.Code, called)
+	req.Header.Set(fiber.HeaderContentType, "Application/JSON; charset=utf-8")
+	res = serve(t, req, NoCache, JSONOnly, accepted)
+	if res.StatusCode != http.StatusAccepted {
+		t.Fatalf("JSONOnly(valid) status = %d", res.StatusCode)
 	}
-	if got := recorder.Header().Get("Cache-Control"); got != "no-store" {
+	if got := res.Header.Get(fiber.HeaderCacheControl); got != "no-store" {
 		t.Fatalf("NoCache() header = %q", got)
 	}
 }
 
-func TestMaxBodyBytesEnforcesLimit(t *testing.T) {
-	handler := MaxBodyBytes(4)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := io.ReadAll(r.Body); err != nil {
-			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("12345"))
-	handler.ServeHTTP(recorder, req)
-	if recorder.Code != http.StatusRequestEntityTooLarge {
-		t.Fatalf("MaxBodyBytes() status = %d", recorder.Code)
-	}
-}
+// TestBoundRequestIDDropsAnOversizedHeader pins the half of the request-id contract
+// Fiber's middleware does not cover. It refuses anything but visible ASCII; it does
+// not bound the length, and an unbounded value from a caller reaches every log line.
+func TestBoundRequestIDDropsAnOversizedHeader(t *testing.T) {
+	echo := func(c fiber.Ctx) error { return c.SendString(requestid.FromContext(c)) }
 
-func TestRecoverConvertsPanicToJSONError(t *testing.T) {
-	var logs bytes.Buffer
-	logger := slog.New(slog.NewJSONHandler(&logs, nil))
-	handler := Recover(logger)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		panic("boom")
-	}))
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/panic", nil))
-	if recorder.Code != http.StatusInternalServerError || !strings.Contains(recorder.Body.String(), "SERVER_ERROR") {
-		t.Fatalf("Recover() response = %d %s", recorder.Code, recorder.Body.String())
-	}
-	if !strings.Contains(logs.String(), "http panic") || !strings.Contains(logs.String(), "boom") {
-		t.Fatalf("Recover() log = %s", logs.String())
-	}
-}
-
-func TestRateLimitByIPIsolatedByClient(t *testing.T) {
-	handler := RateLimitByIP(2, time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	for attempt := 1; attempt <= 3; attempt++ {
-		recorder := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		req.RemoteAddr = "192.0.2.1:1234"
-		handler.ServeHTTP(recorder, req)
-		want := http.StatusNoContent
-		if attempt == 3 {
-			want = http.StatusTooManyRequests
-		}
-		if recorder.Code != want {
-			t.Fatalf("attempt %d status = %d, want %d", attempt, recorder.Code, want)
-		}
-	}
-
-	recorder := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.RemoteAddr = "198.51.100.2"
-	handler.ServeHTTP(recorder, req)
-	if recorder.Code != http.StatusNoContent {
-		t.Fatalf("different client status = %d", recorder.Code)
+	req.Header.Set(fiber.HeaderXRequestID, "trace-from-the-proxy")
+	res := serve(t, req, BoundRequestID, requestid.New(), echo)
+	if got := readBody(t, res); got != "trace-from-the-proxy" {
+		t.Fatalf("adopted request id = %q, want the inbound value", got)
 	}
-	if got := clientIP(req); got != "198.51.100.2" {
-		t.Fatalf("clientIP() = %q", got)
+
+	oversized := strings.Repeat("x", maxInboundRequestID+1)
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(fiber.HeaderXRequestID, oversized)
+	res = serve(t, req, BoundRequestID, requestid.New(), echo)
+	if got := readBody(t, res); got == oversized || got == "" {
+		t.Fatalf("request id = %q, want a generated replacement", got)
 	}
 }
 
 func TestAuthenticationContextAndAuthorization(t *testing.T) {
-	if got := BearerToken(httptest.NewRequest(http.MethodGet, "/", nil)); got != "" {
+	bearer := func(c fiber.Ctx) error { return c.SendString(BearerToken(c)) }
+	if got := readBody(t, serve(t, httptest.NewRequest(http.MethodGet, "/", nil), bearer)); got != "" {
 		t.Fatalf("BearerToken() without header = %q", got)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Bearer  token-value ")
-	type requestMarker struct{}
-	req = req.WithContext(context.WithValue(req.Context(), requestMarker{}, true))
-	if got := BearerToken(req); got != "token-value" {
+	authorized := httptest.NewRequest(http.MethodGet, "/", nil)
+	authorized.Header.Set(fiber.HeaderAuthorization, "Bearer  token-value ")
+	if got := readBody(t, serve(t, authorized, bearer)); got != "token-value" {
 		t.Fatalf("BearerToken() = %q", got)
 	}
 
 	verified := &domain.AdminUser{Role: "operations", Permissions: []string{"transactions:read"}}
-	auth := authenticate(adminKey, func(ctx context.Context, token string) (*domain.AdminUser, error) {
-		if marked, _ := ctx.Value(requestMarker{}).(bool); token == "token-value" && !marked {
-			t.Fatal("request context was not passed to authentication")
-		}
+	verify := func(token string) (*platform.TokenClaims, error) {
 		if token != "token-value" {
 			return nil, errors.New("bad token")
 		}
-		return verified, nil
-	})
-	protected := auth(RequirePermission("transactions:read")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if AdminUser(r) != verified {
-			t.Fatal("authenticated admin was not stored in context")
+		return &platform.TokenClaims{SubjectID: "admin-1"}, nil
+	}
+	resolve := func(ctx context.Context, claims *platform.TokenClaims) (*domain.AdminUser, error) {
+		if ctx == nil {
+			t.Fatal("request context was not passed to authentication")
 		}
-		w.WriteHeader(http.StatusNoContent)
-	})))
-	recorder := httptest.NewRecorder()
-	protected.ServeHTTP(recorder, req)
-	if recorder.Code != http.StatusNoContent {
-		t.Fatalf("authenticated status = %d", recorder.Code)
+		if claims.SubjectID != "admin-1" {
+			return nil, errors.New("unknown subject")
+		}
+		return verified, nil
+	}
+	guarded := func(c fiber.Ctx) error {
+		if AdminUser(c) != verified {
+			t.Fatal("authenticated admin was not stored on the request")
+		}
+		return c.SendStatus(http.StatusNoContent)
+	}
+	chain := []fiber.Handler{
+		authenticate(adminKey, verify, resolve),
+		RequirePermission("transactions:read"),
+		guarded,
 	}
 
-	bad := httptest.NewRequest(http.MethodGet, "/", nil)
-	recorder = httptest.NewRecorder()
-	protected.ServeHTTP(recorder, bad)
-	if recorder.Code != http.StatusUnauthorized {
-		t.Fatalf("unauthenticated status = %d", recorder.Code)
+	authorized = httptest.NewRequest(http.MethodGet, "/", nil)
+	authorized.Header.Set(fiber.HeaderAuthorization, "Bearer token-value")
+	if res := serve(t, authorized, chain...); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("authenticated status = %d", res.StatusCode)
+	}
+	if res := serve(t, httptest.NewRequest(http.MethodGet, "/", nil), chain...); res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated status = %d", res.StatusCode)
 	}
 
 	// A role that grants nothing is refused, which is also what an administrator whose
 	// role was deleted looks like: no permissions resolve, so nothing is authorized.
-	forbidden := httptest.NewRequest(http.MethodGet, "/", nil)
-	forbidden = forbidden.WithContext(context.WithValue(forbidden.Context(), adminKey, &domain.AdminUser{Role: "viewer"}))
-	recorder = httptest.NewRecorder()
-	RequirePermission("transactions:read")(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("forbidden handler was called")
-	})).ServeHTTP(recorder, forbidden)
-	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("RequirePermission() status = %d", recorder.Code)
+	res := serve(t, httptest.NewRequest(http.MethodGet, "/", nil),
+		store(adminKey, &domain.AdminUser{Role: "viewer"}),
+		RequirePermission("transactions:read"),
+		func(fiber.Ctx) error {
+			t.Fatal("forbidden handler was called")
+			return nil
+		},
+	)
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("RequirePermission() status = %d", res.StatusCode)
 	}
 }
 
@@ -163,40 +145,38 @@ func TestAuthenticationContextAndAuthorization(t *testing.T) {
 // correct as permissions are added: the role holds "*", not an enumerated set, so a
 // permission introduced by a later release needs no migration to reach it.
 func TestRequirePermissionHonorsTheWildcard(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req = req.WithContext(context.WithValue(
-		req.Context(),
-		adminKey,
-		&domain.AdminUser{Role: "super_admin", Permissions: []string{domain.PermissionWildcard}},
-	))
+	admin := &domain.AdminUser{Role: "super_admin", Permissions: []string{domain.PermissionWildcard}}
 	for _, permission := range []string{"transactions:read", "roles:delete", "something:invented:later"} {
-		recorder := httptest.NewRecorder()
-		RequirePermission(permission)(next).ServeHTTP(recorder, req)
-		if recorder.Code != http.StatusNoContent {
-			t.Errorf("RequirePermission(%q) with the wildcard = %d, want %d", permission, recorder.Code, http.StatusNoContent)
+		res := serve(t, httptest.NewRequest(http.MethodGet, "/", nil),
+			store(adminKey, admin), RequirePermission(permission),
+			func(c fiber.Ctx) error { return c.SendStatus(http.StatusNoContent) })
+		if res.StatusCode != http.StatusNoContent {
+			t.Errorf("RequirePermission(%q) with the wildcard = %d", permission, res.StatusCode)
 		}
 	}
 }
 
 func TestRequireAppScope(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	identity := &services.AppIdentity{Credential: domain.AppCredential{Scopes: "transactions:read collections:create"}}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req = req.WithContext(context.WithValue(req.Context(), appKey, identity))
-	recorder := httptest.NewRecorder()
-	RequireAppScope("transactions:read")(next).ServeHTTP(recorder, req)
-	if recorder.Code != http.StatusNoContent || App(req) != identity {
-		t.Fatalf("RequireAppScope(valid) status = %d", recorder.Code)
+	identity := &identity.AppIdentity{
+		Credential: domain.AppCredential{Scopes: "transactions:read collections:create"},
+	}
+	guarded := func(c fiber.Ctx) error {
+		if App(c) != identity {
+			t.Fatal("app identity was not stored on the request")
+		}
+		return c.SendStatus(http.StatusNoContent)
+	}
+	res := serve(t, httptest.NewRequest(http.MethodGet, "/", nil),
+		store(appKey, identity), RequireAppScope("transactions:read"), guarded)
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("RequireAppScope(valid) status = %d", res.StatusCode)
 	}
 
 	identity.Credential.Scopes = "collections:create"
-	recorder = httptest.NewRecorder()
-	RequireAppScope("transactions:read")(next).ServeHTTP(recorder, req)
-	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("RequireAppScope(missing) status = %d", recorder.Code)
+	res = serve(t, httptest.NewRequest(http.MethodGet, "/", nil),
+		store(appKey, identity), RequireAppScope("transactions:read"), guarded)
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("RequireAppScope(missing) status = %d", res.StatusCode)
 	}
 	// Admin roles and app credentials share one wildcard rule, so the two paths
 	// cannot come to disagree on what "*" grants.
@@ -205,20 +185,51 @@ func TestRequireAppScope(t *testing.T) {
 	}
 }
 
-func TestStructuredLoggerRecordsRequest(t *testing.T) {
+func TestRequestLoggerRecordsRequest(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))
-	handler := StructuredLogger(logger)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusCreated)
-	}))
 	req := httptest.NewRequest(http.MethodPost, "/payments", nil)
-	req.RemoteAddr = "192.0.2.10:4321"
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, req)
+	req.Header.Set(fiber.HeaderXRequestID, "trace-1")
+	serve(t, req,
+		BoundRequestID, requestid.New(), RequestLogger(logger),
+		func(c fiber.Ctx) error { return c.SendStatus(http.StatusCreated) })
 	log := output.String()
-	for _, value := range []string{"http_request", "POST", "/payments", `"status":201`, "192.0.2.10:4321"} {
+	for _, value := range []string{"http_request", "POST", "/payments", `"status":201`, `"request_id":"trace-1"`} {
 		if !strings.Contains(log, value) {
-			t.Fatalf("StructuredLogger() log %q does not contain %q", log, value)
+			t.Fatalf("RequestLogger() log %q does not contain %q", log, value)
 		}
 	}
+}
+
+// TestRequestLoggerReportsTheStatusAnErrorWillProduce covers the case the recorded
+// status cannot answer: a handler that returned an error has not reached the error
+// handler yet, so the response still carries whatever was set before it failed.
+func TestRequestLoggerReportsTheStatusAnErrorWillProduce(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	serve(t, httptest.NewRequest(http.MethodGet, "/missing", nil),
+		RequestLogger(logger),
+		func(fiber.Ctx) error { return fiber.ErrNotFound })
+	if !strings.Contains(output.String(), `"status":404`) {
+		t.Fatalf("RequestLogger() log = %s, want the status the error carries", output.String())
+	}
+}
+
+// store puts a value on the request the way an authenticating middleware would, so an
+// authorization test does not have to mint a real token first.
+func store(k key, value any) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		c.Locals(k, value)
+		return c.Next()
+	}
+}
+
+func readBody(t *testing.T, res *http.Response) string {
+	t.Helper()
+	raw, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	_ = res.Body.Close()
+	return string(raw)
 }

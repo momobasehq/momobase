@@ -25,8 +25,13 @@
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
     --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
+    /* Chart slots 1 and 2 carry series identity, so unlike the rest of this theme
+       they are hued: two greys cannot encode identity — they fail the chroma floor
+       and, at oklch(0.87), sit at 1.4:1 against a white card, effectively invisible.
+       These two are validated in both modes (CVD ΔE 24.7 light / 26.8 dark, >= 3:1
+       contrast) against the surfaces actually rendered. Slots 3-5 stay monochrome. */
+    --chart-1: #2a78d6;
+    --chart-2: #eb6834;
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
@@ -60,8 +65,10 @@
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
+    /* Stepped for the dark surface rather than reused from light: the same hex on
+       both would be wrong on one of them. */
+    --chart-1: #3987e5;
+    --chart-2: #d95926;
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);

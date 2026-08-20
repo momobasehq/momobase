@@ -1,17 +1,17 @@
 package platform
 
 import (
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lestrrat-go/jwx/v3/jwa"
+	"github.com/lestrrat-go/jwx/v3/jwt"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -31,15 +31,15 @@ type TokenClaims struct {
 	Extra        map[string]string `json:"extra,omitempty"`
 }
 
-// TokenManager issues and verifies HMAC-signed application tokens.
-type TokenManager struct{ secret []byte }
+// TokenManager issues and verifies HS256 JSON Web Tokens.
+type TokenManager struct{ key []byte }
 
 // NewTokenManager constructs a token manager from a sufficiently long secret.
 func NewTokenManager(secret string) (*TokenManager, error) {
 	if len(strings.TrimSpace(secret)) < 32 {
 		return nil, errors.New("token secret must be at least 32 characters")
 	}
-	return &TokenManager{secret: []byte(secret)}, nil
+	return &TokenManager{key: []byte(secret)}, nil
 }
 
 // Issue signs claims with the supplied lifetime and returns the token and final
@@ -50,37 +50,84 @@ func (m *TokenManager) Issue(claims TokenClaims, ttl time.Duration) (string, Tok
 	if claims.TokenID == "" {
 		claims.TokenID = NewID("tok")
 	}
-	raw, err := json.Marshal(claims)
+	// The registered names carry the fields JWT already defines one for, so a token
+	// stays legible to any standard tool; everything else is a private claim.
+	builder := jwt.NewBuilder().
+		Subject(claims.SubjectID).
+		JwtID(claims.TokenID).
+		IssuedAt(now).
+		Expiration(now.Add(ttl)).
+		Claim("subject_type", claims.SubjectType).
+		Claim("token_type", claims.TokenType)
+	for name, value := range map[string]string{
+		"credential_id": claims.CredentialID,
+		"email":         claims.Email,
+		"role":          claims.Role,
+		"scope":         claims.Scopes,
+	} {
+		if value != "" {
+			builder = builder.Claim(name, value)
+		}
+	}
+	if len(claims.Extra) > 0 {
+		builder = builder.Claim("extra", claims.Extra)
+	}
+	token, err := builder.Build()
 	if err != nil {
 		return "", claims, err
 	}
-	payload := base64.RawURLEncoding.EncodeToString(raw)
-	return payload + "." + m.sign(payload), claims, nil
+	signed, err := jwt.Sign(token, jwt.WithKey(jwa.HS256(), m.key))
+	if err != nil {
+		return "", claims, err
+	}
+	return string(signed), claims, nil
 }
 
-// Verify authenticates token and rejects malformed or expired claims.
+// Verify authenticates token and rejects a malformed, mis-signed, or expired one.
+// Parse validates the registered lifetime claims by default.
 func (m *TokenManager) Verify(token string) (*TokenClaims, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) != 2 || !hmac.Equal([]byte(m.sign(parts[0])), []byte(parts[1])) {
-		return nil, errors.New("invalid token")
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(parts[0])
+	verified, err := jwt.Parse([]byte(token), jwt.WithKey(jwa.HS256(), m.key))
 	if err != nil {
-		return nil, errors.New("invalid token payload")
+		return nil, err
 	}
-	var claims TokenClaims
-	if json.Unmarshal(raw, &claims) != nil {
-		return nil, errors.New("invalid token claims")
-	}
-	if claims.ExpiresAt <= time.Now().UTC().Unix() {
-		return nil, errors.New("token expired")
-	}
-	return &claims, nil
+	return claimsFrom(verified), nil
 }
-func (m *TokenManager) sign(payload string) string {
-	mac := hmac.New(sha256.New, m.secret)
-	_, _ = mac.Write([]byte(payload))
-	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+
+// claimsFrom projects a verified JWT back onto TokenClaims. A claim the token does not
+// carry is left at its zero value: presence is the caller's business, and every field
+// that authorizes anything is re-read from the database anyway.
+func claimsFrom(token jwt.Token) *TokenClaims {
+	claims := TokenClaims{}
+	claims.SubjectID, _ = token.Subject()
+	claims.TokenID, _ = token.JwtID()
+	if issued, ok := token.IssuedAt(); ok {
+		claims.IssuedAt = issued.Unix()
+	}
+	if expires, ok := token.Expiration(); ok {
+		claims.ExpiresAt = expires.Unix()
+	}
+	for name, field := range map[string]*string{
+		"subject_type":  &claims.SubjectType,
+		"credential_id": &claims.CredentialID,
+		"email":         &claims.Email,
+		"role":          &claims.Role,
+		"scope":         &claims.Scopes,
+		"token_type":    &claims.TokenType,
+	} {
+		_ = token.Get(name, field)
+	}
+	// A private claim decodes as map[string]any, so it needs narrowing rather than a
+	// direct assignment into the map[string]string field.
+	var extra map[string]any
+	if token.Get("extra", &extra) == nil && len(extra) > 0 {
+		claims.Extra = make(map[string]string, len(extra))
+		for name, value := range extra {
+			if text, ok := value.(string); ok {
+				claims.Extra[name] = text
+			}
+		}
+	}
+	return &claims
 }
 
 // NewID returns a UUID string with an optional prefix.

@@ -1,29 +1,23 @@
 package common
 
 import (
-	"net/http"
+	"github.com/gofiber/fiber/v3"
 
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
 // Token wraps a form-encoded grant handler with shared validation and JSON response handling.
-func Token(grant string, issue func(*http.Request) (*services.TokenResponse, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			platform.Error(w, 400, "BAD_REQUEST", err.Error())
-			return
-		}
-		actual := r.Form.Get("grant_type")
+func Token(grant string, issue func(fiber.Ctx) (*identity.TokenResponse, error)) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		actual := c.FormValue("grant_type")
 		if actual != grant && (grant != "password" || actual != "") {
-			platform.Error(w, 400, "UNSUPPORTED_GRANT", "grant_type must be "+grant)
-			return
+			return platform.Error(c, fiber.StatusBadRequest, "UNSUPPORTED_GRANT", "grant_type must be "+grant)
 		}
-		out, err := issue(r)
+		out, err := issue(c)
 		if err != nil {
-			platform.Error(w, 401, "UNAUTHORIZED", err.Error())
-			return
+			return platform.Error(c, fiber.StatusUnauthorized, "UNAUTHORIZED", err.Error())
 		}
-		platform.RawJSON(w, 200, out)
+		return platform.RawJSON(c, fiber.StatusOK, out)
 	}
 }

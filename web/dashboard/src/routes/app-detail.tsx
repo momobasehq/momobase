@@ -1,10 +1,12 @@
 import { useState } from "react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useParams } from "react-router"
 import { ArrowLeft, Copy, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 
 import { DataTable, type Column } from "@/components/data-table"
+import { ServiceMixChart } from "@/components/analytics-charts"
+import { AnalyticsFilters, defaultRange, toQuery, type AnalyticsRange } from "@/components/analytics-filters"
 import { AppTester } from "@/components/app-tester"
 import { GuardedAction } from "@/components/guarded-action"
 import { PaginationControls } from "@/components/pagination-controls"
@@ -17,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { AdminPermissions, type AppCredential, type CreatedCredential } from "@momobase/sdk"
 
@@ -97,6 +100,15 @@ export function AppDetail() {
   // Credentials are their own permission, so the card is hidden for a role that may
   // read apps but not their credentials.
   const showCredentials = can(AdminPermissions.credentialsRead)
+  const [range, setRange] = useState<AnalyticsRange>(defaultRange)
+  const showAnalytics = can(AdminPermissions.transactionsRead)
+  const analytics = useQuery({
+    queryKey: keys.analytics.transactions({ ...toQuery(range), appId }),
+    queryFn: () => client.analytics.transactions({ ...toQuery(range), appId }),
+    enabled: showAnalytics && Boolean(appId),
+    placeholderData: keepPreviousData,
+  })
+
   const app = useQuery({ queryKey: keys.apps.detail(appId), queryFn: () => client.apps.get(appId), enabled: Boolean(appId) })
   const paged = usePagedQuery(
     (page) => keys.apps.credentials(appId, page),
@@ -273,36 +285,74 @@ export function AppDetail() {
         </CardContent>
       </Card>
 
-      {showCredentials && (
-      <Card>
-        <CardHeader>
-          <CardTitle>Credentials</CardTitle>
-          <CardDescription>Client credentials this app uses to obtain access tokens.</CardDescription>
-          <div className="ms-auto">
-            <GuardedAction permission={AdminPermissions.credentialsCreate} size="sm" onClick={() => setNaming(true)}>
-              New credential
-            </GuardedAction>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            columns={columns}
-            rows={paged.items}
-            rowKey={(credential) => credential.id}
-            loading={paged.loading}
-            empty="This app has no credentials yet."
-          />
-          <PaginationControls
-            page={paged.page}
-            perPage={paged.perPage}
-            total={paged.total}
-            count={paged.count}
-            onPageChange={paged.setPage}
-            busy={paged.fetching}
-          />
-        </CardContent>
-      </Card>
-      )}
+      {/* Tabs rather than a stack: the page now carries four unrelated concerns, and
+          scrolling past credentials to reach the tester made both harder to find. */}
+      <Tabs defaultValue="credentials">
+        <TabsList>
+          <TabsTrigger value="credentials">Credentials</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="testing">Testing</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="credentials" className="pt-3">
+          {showCredentials && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Credentials</CardTitle>
+              <CardDescription>Client credentials this app uses to obtain access tokens.</CardDescription>
+              <div className="ms-auto">
+                <GuardedAction permission={AdminPermissions.credentialsCreate} size="sm" onClick={() => setNaming(true)}>
+                  New credential
+                </GuardedAction>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                columns={columns}
+                rows={paged.items}
+                rowKey={(credential) => credential.id}
+                loading={paged.loading}
+                empty="This app has no credentials yet."
+              />
+              <PaginationControls
+                page={paged.page}
+                perPage={paged.perPage}
+                total={paged.total}
+                count={paged.count}
+                onPageChange={paged.setPage}
+                busy={paged.fetching}
+              />
+            </CardContent>
+          </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="analytics" className="flex flex-col gap-4 pt-3">
+          {showAnalytics ? (
+            <>
+              {/* The app is fixed by the page, so its selector is suppressed; range and
+                  provider still apply. */}
+              <AnalyticsFilters range={range} onChange={setRange} showApp={false} />
+              <ServiceMixChart
+                data={analytics.data}
+                loading={analytics.isPending}
+                title="This app's payments"
+                description="Collections and disbursements created by this app alone."
+              />
+            </>
+          ) : (
+            <p className="text-muted-foreground">Requires the transactions:read permission.</p>
+          )}
+        </TabsContent>
+
+        <TabsContent value="testing" className="pt-3">
+          {can(AdminPermissions.appsTest) ? (
+            <AppTester clientId={created?.credential.client_id} clientSecret={created?.client_secret} />
+          ) : (
+            <p className="text-muted-foreground">Requires the apps:test permission.</p>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={naming} onOpenChange={setNaming}>
         <DialogContent>
@@ -379,13 +429,6 @@ export function AppDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Prefilled from a credential issued above: the secret exists in memory only for
-          that moment, so handing it straight to the tester saves the operator copying it
-          out and back in. */}
-      {can(AdminPermissions.appsTest) && (
-        <AppTester clientId={created?.credential.client_id} clientSecret={created?.client_secret} />
-      )}
 
       <SecretDialog created={created} onClose={() => setCreated(undefined)} />
     </div>

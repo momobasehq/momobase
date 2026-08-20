@@ -28,7 +28,9 @@ log.Fatal(instance.Run())
 
 Registering none is rejected at startup rather than booting a server that cannot execute a payment.
 
-`New` reads configuration from the environment unless `WithConfig` supplies it, opens the database, and prepares the HTTP server, providers, and background workers. `Run` serves until the process is interrupted; use `Serve(ctx)` to control shutdown yourself, or `Handler()` to mount Momobase in an existing HTTP server.
+`New` reads configuration from the environment unless `WithConfig` supplies it, opens the database, and prepares the HTTP server, providers, and background workers. `Run` serves until the process is interrupted; use `Serve(ctx)` to control shutdown yourself, or `App()` to reach the underlying [Fiber](https://gofiber.io) application and mount Momobase inside one of your own.
+
+Momobase serves on Fiber v3, which runs on fasthttp rather than `net/http`, so `App()` returns a `*fiber.App` and not an `http.Handler`. An application built around `net/http` adapts at its own boundary.
 
 ### Custom providers
 
@@ -57,7 +59,7 @@ Register a factory for it under a provider code, then create, configure, and act
 
 The TypeScript SDK exposes it as `client.providers.registry()`, and the dashboard builds its provider dropdown from it, so an out-of-tree adapter appears without a client release.
 
-The package also exports the helpers the bundled adapters use, so a third-party provider does not have to reimplement them: `DoJSON`, `Redact`, `TokenCache`, `ConfigString`/`ConfigBool`/`ConfigInt`/`ConfigPath`, `ParseAmountToMinor`, `FormatAmountMinor`, `PaymentStatus`, and the `Service*`, `PaymentMethod*`, and `Tx*` constants. They are also importable directly from `github.com/momobasehq/momobase/providers`, which is the package the bundled adapters use.
+The root package also exports the helpers the bundled adapters use, so a third-party provider does not have to reimplement them: `DoJSON`, `Redact`, `ConfigString`/`ConfigBool`/`ConfigInt`/`ConfigPath`, `First`, `ParseAmountToMinor`, `FormatAmountMinor`, `PaymentStatus`, and the `Service*` and `Tx*` constants. The root package is the surface an out-of-tree adapter uses: `github.com/momobasehq/momobase/providers` carries the contract and the provider-specific helpers, while the configuration accessors and `First` live in `internal/utils` and reach adapters only through the root re-exports.
 
 See [`examples/customprovider`](examples/customprovider) for a complete provider implementing the whole contract against an HTTP API, and [`providers/dummy`](providers/dummy) for the in-tree reference adapter, which simulates payments in memory so a deployment can be exercised end to end without provider credentials.
 

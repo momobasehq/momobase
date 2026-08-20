@@ -45,6 +45,10 @@ export const keys = {
     all: ["routes"] as const,
     list: (page: Page) => [...keys.routes.all, "list", page] as const,
   },
+  analytics: {
+    all: ["analytics"] as const,
+    transactions: (query: object) => [...keys.analytics.all, "transactions", query] as const,
+  },
   transactions: {
     all: ["transactions"] as const,
     list: (page: Page) => [...keys.transactions.all, "list", page] as const,

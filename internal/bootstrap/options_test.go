@@ -81,7 +81,7 @@ func TestWithRegistryUsesSuppliedRegistry(t *testing.T) {
 	base := providers.NewRegistry()
 	base.Register("acme_pay", fakeFactory)
 
-	registry, err := newOptions([]Option{WithRegistry(base)}).buildRegistry()
+	registry, err := newOptions([]Option{withRegistry(base)}).buildRegistry()
 	if err != nil {
 		t.Fatalf("buildRegistry() error = %v", err)
 	}

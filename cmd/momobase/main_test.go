@@ -42,8 +42,8 @@ func TestLoadInstanceBuildsAServableInstance(t *testing.T) {
 			t.Errorf("Close() error = %v", closeErr)
 		}
 	})
-	if instance.Handler() == nil {
-		t.Error("Handler() = nil, want the configured HTTP handler")
+	if instance.App() == nil {
+		t.Error("App() = nil, want the configured Fiber application")
 	}
 }
 

@@ -118,20 +118,27 @@ func TestTokenManagerRejectsInvalidAndExpiredTokens(t *testing.T) {
 		t.Fatal("Verify() accepted a malformed token")
 	}
 
-	invalidPayload := "%%%"
-	if _, err := manager.Verify(invalidPayload + "." + manager.sign(invalidPayload)); err == nil {
-		t.Fatal("Verify() accepted an invalid payload encoding")
+	signed, _, err := manager.Issue(TokenClaims{SubjectID: "app-1"}, time.Minute)
+	if err != nil {
+		t.Fatalf("Issue() error = %v", err)
 	}
-	invalidClaims := base64.RawURLEncoding.EncodeToString([]byte("["))
-	if _, err := manager.Verify(invalidClaims + "." + manager.sign(invalidClaims)); err == nil {
-		t.Fatal("Verify() accepted invalid claims JSON")
+	header, payload, signature := jwtSegments(t, signed)
+	if _, err := manager.Verify(header + "." + payload + "." + signature[:len(signature)-1] + "A"); err == nil {
+		t.Fatal("Verify() accepted a token whose signature was altered")
+	}
+	forged := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"someone-else"}`))
+	if _, err := manager.Verify(header + "." + forged + "." + signature); err == nil {
+		t.Fatal("Verify() accepted a token whose payload was rewritten")
+	}
+	if _, err := manager.Verify(header + "." + "%%%" + "." + signature); err == nil {
+		t.Fatal("Verify() accepted an invalid payload encoding")
 	}
 
 	expired, _, err := manager.Issue(TokenClaims{SubjectID: "expired"}, -time.Second)
 	if err != nil {
 		t.Fatalf("Issue() error = %v", err)
 	}
-	if _, err := manager.Verify(expired); err == nil || !strings.Contains(err.Error(), "expired") {
+	if _, err := manager.Verify(expired); err == nil || !strings.Contains(err.Error(), "exp") {
 		t.Fatalf("Verify(expired) error = %v", err)
 	}
 }
@@ -158,4 +165,15 @@ func TestIdentityPasswordAndHashHelpers(t *testing.T) {
 	if !VerifyPassword(hash, "correct horse battery staple") || VerifyPassword(hash, "wrong") {
 		t.Fatal("VerifyPassword() returned an incorrect result")
 	}
+}
+
+// jwtSegments splits a signed token into its three parts, so a test can rebuild it with
+// one of them altered.
+func jwtSegments(t *testing.T, token string) (header, payload, signature string) {
+	t.Helper()
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		t.Fatalf("Issue() produced %d segments, want 3", len(parts))
+	}
+	return parts[0], parts[1], parts[2]
 }

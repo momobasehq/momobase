@@ -2,11 +2,14 @@ package public
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gofiber/fiber/v3"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -15,10 +18,11 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/repository"
+	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
-func authenticatedHandler(t *testing.T) (*Handler, *services.AppAuthService, string) {
+func authenticatedHandler(t *testing.T) (*Handler, *identity.AppAuthService, string) {
 	t.Helper()
 	db, err := gorm.Open(
 		sqlite.Open("file:"+strings.ReplaceAll(t.Name(), "/", "-")+"?mode=memory&cache=shared"),
@@ -54,17 +58,54 @@ func authenticatedHandler(t *testing.T) (*Handler, *services.AppAuthService, str
 	if err != nil {
 		t.Fatalf("NewTokenManager() error = %v", err)
 	}
-	auth := services.NewAppAuthService(db, "client", "secret", time.Minute, time.Hour, manager)
+	auth := identity.NewAppAuthService(repository.New(db), "client", "secret", time.Minute, time.Hour, manager)
 	tokens, err := auth.IssueClientToken(context.Background(), "client-1", "client-secret")
 	if err != nil {
 		t.Fatalf("IssueClientToken() error = %v", err)
 	}
-	return NewHandler(nil, nil, db), auth, tokens.AccessToken
+	return NewHandler(nil, nil, repository.New(db)), auth, tokens.AccessToken
 }
 
-func serveAuthenticated(auth *services.AppAuthService, token string, handler http.HandlerFunc, recorder *httptest.ResponseRecorder, req *http.Request) {
-	req.Header.Set("Authorization", "Bearer "+token)
-	authmw.WithAppBearer(auth)(handler).ServeHTTP(recorder, req)
+// response is one recorded reply. A fiber.Ctx cannot be built directly, so a handler is
+// exercised by mounting it on a throwaway app and driving a request through it.
+type response struct {
+	Code int
+	Body string
+}
+
+// serve mounts handler at pattern and runs req through it, optionally behind the app
+// bearer middleware so the handler sees a resolved identity.
+func serve(t *testing.T, pattern string, handler fiber.Handler, req *http.Request, guards ...fiber.Handler) response {
+	t.Helper()
+	app := fiber.New()
+	chain := append(append([]fiber.Handler{}, guards...), handler)
+	rest := make([]any, 0, len(chain)-1)
+	for _, link := range chain[1:] {
+		rest = append(rest, link)
+	}
+	app.All(pattern, chain[0], rest...)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	raw, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	_ = res.Body.Close()
+	return response{Code: res.StatusCode, Body: string(raw)}
+}
+
+func serveAuthenticated(
+	t *testing.T,
+	auth *identity.AppAuthService,
+	token, pattern string,
+	handler fiber.Handler,
+	req *http.Request,
+) response {
+	t.Helper()
+	req.Header.Set(fiber.HeaderAuthorization, "Bearer "+token)
+	return serve(t, pattern, handler, req, authmw.WithAppBearer(auth))
 }
 
 func TestGetTransactionByIDAndReference(t *testing.T) {
@@ -81,46 +122,40 @@ func TestGetTransactionByIDAndReference(t *testing.T) {
 		IdempotencyKey: "idem-1",
 		Status:         domain.TxPending,
 	}
-	if err := h.db.Create(&tx).Error; err != nil {
+	if err := h.repos.Transactions.Create(context.Background(), &tx); err != nil {
 		t.Fatalf("create transaction: %v", err)
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/transactions/txn-1", nil)
-	req.SetPathValue("id", "txn-1")
-	recorder := httptest.NewRecorder()
-	serveAuthenticated(auth, token, h.GetTransaction, recorder, req)
-	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "order-1") {
-		t.Fatalf("GetTransaction() = %d %s", recorder.Code, recorder.Body.String())
+	res := serveAuthenticated(t, auth, token, "/transactions/:id", h.GetTransaction, req)
+	if res.Code != http.StatusOK || !strings.Contains(res.Body, "order-1") {
+		t.Fatalf("GetTransaction() = %d %s", res.Code, res.Body)
 	}
 
+	const byReference = "/transactions/by-reference/:reference"
 	req = httptest.NewRequest(http.MethodGet, "/transactions/by-reference/order-1", nil)
-	req.SetPathValue("reference", "order-1")
-	recorder = httptest.NewRecorder()
-	serveAuthenticated(auth, token, h.GetTransactionByReference, recorder, req)
-	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "txn-1") {
-		t.Fatalf("GetTransactionByReference() = %d %s", recorder.Code, recorder.Body.String())
+	res = serveAuthenticated(t, auth, token, byReference, h.GetTransactionByReference, req)
+	if res.Code != http.StatusOK || !strings.Contains(res.Body, "txn-1") {
+		t.Fatalf("GetTransactionByReference() = %d %s", res.Code, res.Body)
 	}
 
-	req.SetPathValue("reference", "missing")
-	recorder = httptest.NewRecorder()
-	serveAuthenticated(auth, token, h.GetTransactionByReference, recorder, req)
-	if recorder.Code != http.StatusNotFound {
-		t.Fatalf("GetTransactionByReference(missing) status = %d", recorder.Code)
+	req = httptest.NewRequest(http.MethodGet, "/transactions/by-reference/missing", nil)
+	res = serveAuthenticated(t, auth, token, byReference, h.GetTransactionByReference, req)
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("GetTransactionByReference(missing) status = %d", res.Code)
 	}
 }
 
 func TestCreateCollectionRequiresIdentityAndValidJSON(t *testing.T) {
 	h, auth, token := authenticatedHandler(t)
-	recorder := httptest.NewRecorder()
-	h.CreateCollection(recorder, httptest.NewRequest(http.MethodPost, "/collections", strings.NewReader(`{}`)))
-	if recorder.Code != http.StatusUnauthorized {
-		t.Fatalf("CreateCollection(no identity) status = %d", recorder.Code)
+	anonymous := httptest.NewRequest(http.MethodPost, "/collections", strings.NewReader(`{}`))
+	if res := serve(t, "/collections", h.CreateCollection, anonymous); res.Code != http.StatusUnauthorized {
+		t.Fatalf("CreateCollection(no identity) status = %d", res.Code)
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/collections", strings.NewReader(`{"unknown":true}`))
-	recorder = httptest.NewRecorder()
-	serveAuthenticated(auth, token, h.CreateCollection, recorder, req)
-	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "VALIDATION_ERROR") {
-		t.Fatalf("CreateCollection(invalid JSON) = %d %s", recorder.Code, recorder.Body.String())
+	res := serveAuthenticated(t, auth, token, "/collections", h.CreateCollection, req)
+	if res.Code != http.StatusBadRequest || !strings.Contains(res.Body, "VALIDATION_ERROR") {
+		t.Fatalf("CreateCollection(invalid JSON) = %d %s", res.Code, res.Body)
 	}
 }

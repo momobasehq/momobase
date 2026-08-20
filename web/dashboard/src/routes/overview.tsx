@@ -1,4 +1,9 @@
-import { useQuery } from "@tanstack/react-query"
+import { useState } from "react"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import { AdminPermissions } from "@momobase/sdk"
+
+import { ServiceMixChart, TransactionsChart } from "@/components/analytics-charts"
+import { AnalyticsFilters, defaultRange, toQuery, type AnalyticsRange } from "@/components/analytics-filters"
 import { Activity, CircleCheck, CircleX, Database, Plug } from "lucide-react"
 
 import { StatusBadge } from "@/components/status-badge"
@@ -30,11 +35,20 @@ function Tile({ label, value, hint, icon: Icon, loading }: {
   )
 }
 
-/** Overview is the landing screen: system health and the running configuration. */
+/** Overview is the landing screen: system health, traffic, and the configuration. */
 export function Overview() {
-  const { client } = useAuth()
+  const { client, can } = useAuth()
   const health = useQuery({ queryKey: keys.system.health(), queryFn: () => client.system.health() })
   const info = useQuery({ queryKey: keys.system.info(), queryFn: () => client.system.info() })
+
+  const [range, setRange] = useState<AnalyticsRange>(defaultRange)
+  const showCharts = can(AdminPermissions.transactionsRead)
+  const analytics = useQuery({
+    queryKey: keys.analytics.transactions(toQuery(range)),
+    queryFn: () => client.analytics.transactions(toQuery(range)),
+    enabled: showCharts,
+    placeholderData: keepPreviousData,
+  })
 
   return (
     <div className="flex flex-col gap-4">
@@ -68,6 +82,18 @@ export function Overview() {
           loading={health.isPending}
         />
       </div>
+
+      {showCharts && (
+        <div className="flex flex-col gap-4">
+          {/* One filter row above both charts, so the two are always of the same window;
+              per-chart ranges are how a dashboard ends up inviting a false comparison. */}
+          <AnalyticsFilters range={range} onChange={setRange} />
+          <div className="grid gap-4 xl:grid-cols-2">
+            <TransactionsChart data={analytics.data} loading={analytics.isPending} />
+            <ServiceMixChart data={analytics.data} loading={analytics.isPending} />
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

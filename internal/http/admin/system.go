@@ -1,14 +1,13 @@
 package admin
 
 import (
-	"errors"
-	"net/http"
+	"github.com/gofiber/fiber/v3"
+
 	"runtime"
 	"time"
 
-	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
-	"gorm.io/gorm"
+	"github.com/momobasehq/momobase/internal/repository"
 )
 
 // SystemInfo writes application, runtime, and worker metadata.
@@ -21,8 +20,8 @@ import (
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/system/info [get]
-func (h *Handler) SystemInfo(w http.ResponseWriter, _ *http.Request) {
-	platform.JSON(w, 200, map[string]any{
+func (h *Handler) SystemInfo(c fiber.Ctx) error {
+	return platform.JSON(c, 200, map[string]any{
 		"app_name":        h.system.AppName,
 		"app_env":         h.system.AppEnv,
 		"db_type":         h.system.DBType,
@@ -46,23 +45,17 @@ func (h *Handler) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/system/health [get]
-func (h *Handler) SystemHealth(w http.ResponseWriter, r *http.Request) {
-	sqlDB, err := h.db.DB()
+func (h *Handler) SystemHealth(c fiber.Ctx) error {
+	dbOK := h.repos.Ping(c.Context()) == nil
+	active, err := h.repos.ProviderAccounts.CountActive(c.Context())
 	if err != nil {
-		platform.Error(w, 500, "DB_ERROR", err.Error())
-		return
-	}
-	dbOK := sqlDB.PingContext(r.Context()) == nil
-	var active int64
-	if err = h.db.WithContext(r.Context()).Model(&domain.ProviderAccount{}).Where("active = ?", true).Count(&active).Error; err != nil {
-		platform.Error(w, 500, "DB_ERROR", err.Error())
-		return
+		return platform.Error(c, 500, "DB_ERROR", err.Error())
 	}
 	status := "error"
 	if dbOK {
 		status = "ok"
 	}
-	platform.JSON(w, 200, map[string]any{
+	return platform.JSON(c, 200, map[string]any{
 		"ok":                            dbOK,
 		"database":                      status,
 		"runtime_provider_count":        len(h.runtime.List()),
@@ -84,7 +77,7 @@ func (h *Handler) SystemHealth(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/admin/workers [get]
-func (h *Handler) Workers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Workers(c fiber.Ctx) error {
 	items := make([]map[string]any, 0, len(h.system.WorkerNames))
 	for _, name := range h.system.WorkerNames {
 		items = append(items, map[string]any{
@@ -93,8 +86,8 @@ func (h *Handler) Workers(w http.ResponseWriter, r *http.Request) {
 			"state":      "managed_by_single_binary",
 		})
 	}
-	page, size := platform.Pagination(r)
-	platform.JSON(w, 200, platform.PaginateSlice(items, page, size))
+	page, size := platform.Pagination(c)
+	return platform.JSON(c, 200, platform.PaginateSlice(items, page, size))
 }
 
 // RuntimeProviders writes a paginated view of initialized provider runtimes
@@ -111,7 +104,7 @@ func (h *Handler) Workers(w http.ResponseWriter, r *http.Request) {
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/runtime/providers [get]
-func (h *Handler) RuntimeProviders(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) RuntimeProviders(c fiber.Ctx) error {
 	items := make([]map[string]any, 0)
 	for _, runtime := range h.runtime.List() {
 		item := map[string]any{
@@ -123,15 +116,15 @@ func (h *Handler) RuntimeProviders(w http.ResponseWriter, r *http.Request) {
 			"capabilities":        runtime.Capabilities,
 			"countries":           runtime.Countries,
 		}
-		var health domain.ProviderHealthSnapshot
-		if err := h.db.WithContext(r.Context()).First(&health, "provider_account_id = ?", runtime.AccountID).Error; err == nil {
-			item["health"] = &health
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			platform.Error(w, 500, "SERVER_ERROR", err.Error())
-			return
+		// A provider that has never been probed simply has no snapshot to report.
+		health, err := h.repos.ProviderHealth.ByAccount(c.Context(), runtime.AccountID)
+		if err == nil {
+			item["health"] = health
+		} else if !repository.IsNotFound(err) {
+			return platform.Error(c, 500, "SERVER_ERROR", err.Error())
 		}
 		items = append(items, item)
 	}
-	page, size := platform.Pagination(r)
-	platform.JSON(w, 200, platform.PaginateSlice(items, page, size))
+	page, size := platform.Pagination(c)
+	return platform.JSON(c, 200, platform.PaginateSlice(items, page, size))
 }

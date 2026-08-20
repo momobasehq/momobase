@@ -2,12 +2,14 @@
 
 ## Architecture
 
-The backend is a modular monolith with six main areas:
+The backend is a modular monolith, layered so that each concern has one home:
 
-- `internal/http`: standard-library routing, middleware, public/admin/webhook handlers.
-- `internal/services`: authentication, payments, routing, provider runtime, health, webhooks, reconciliation, and auditing.
+- `internal/http`: Fiber routing, middleware, and the public, administrative, and webhook handlers.
+- `internal/dto`: every request body the API accepts, carrying its own validation rules and normalization.
+- `internal/service/*`: identity, payments, routing, provider runtime, health, webhooks, reconciliation, and auditing.
+- `internal/repository`: the only package that reaches the database — one repository per entity, and the single transaction boundary.
 - `providers`: the public provider contract and shared adapter helpers, plus the in-tree reference adapter in `providers/dummy`. Nothing here is registered automatically; a build chooses its providers through `momobase.WithProvider`.
-- `internal/store`: database helpers and transaction boundaries.
+- `internal/utils`: dependency-free helpers shared across the module — validation, country normalization, and redaction.
 - `internal/workers`: bounded health, reconciliation, and session-cleanup loops.
 - `internal/bootstrap`: configuration, database initialization, dependency wiring, migration, and process lifecycle.
 - `internal/migrations`: ordered schema changes that `AutoMigrate` cannot express, and the ledger recording which have been applied.
@@ -118,12 +120,73 @@ Capabilities name the service only — `{"service_type": "collection"}`. Which p
 - Revocation invalidates existing sessions for that credential.
 - Access and refresh tokens are signed separately from admin tokens.
 
+### Token format
+
+Both audiences are issued HS256 JSON Web Tokens, signed with the audience's own
+secret — `APP_OAUTH_SECRET` for applications, `ADMIN_OAUTH_SECRET` for administrators.
+The registered claims carry what JWT already defines a name for (`sub`, `jti`, `iat`,
+`exp`) and everything else is a private claim, so a token is legible to any standard
+JWT tooling.
+
+A token proves only that it was signed by this deployment and has not expired. It
+authorizes nothing on its own: the session row must still be live, an administrator's
+permissions are read from their role on every request, and an application's scopes come
+from a fresh read of the credential. Revoking either takes effect on the next call
+rather than at the next refresh.
+
 ### Admin sessions
 
 - Admins authenticate with password grant semantics.
 - Refresh-token rotation revokes the old session transactionally.
 - Disabling an admin invalidates their active sessions.
 - Every administrative endpoint requires one permission, checked by middleware.
+
+## Client addresses behind a proxy
+
+Rate limiting and request logs both key on the same resolved client address. By default
+that is the immediate peer and **no forwarded header is believed**: `X-Forwarded-For` is
+one any caller can set, so honouring it unconditionally would let a client mint a fresh
+bucket per request and switch the limiter off.
+
+```env
+TRUSTED_PROXY_CIDRS=10.0.0.0/8,192.0.2.1
+```
+
+With proxies named, trust becomes directional. The header is read only when the request
+arrived **from** one of them, and the chain is then walked right to left to the first
+address that is not a trusted proxy — the last hop this deployment did not control.
+Anything further left was supplied by something upstream and is not believed. A
+malformed hop ends the walk rather than being skipped.
+
+Without this, every client behind one proxy shares a single bucket. A malformed entry
+fails at start-up rather than silently disabling the feature.
+
+Each request also carries an `X-Request-Id`, echoed on the response and included in its
+log line. An inbound one is adopted when present and plausibly sized, so a trace begun by
+a proxy stays one trace; it is a correlation aid and nothing authorizes on it.
+
+## Analytics
+
+```text
+GET /api/admin/analytics/transactions?from=&to=&interval=day&app_id=&provider_account_id=
+```
+
+Returns a bucketed transaction series — one point per day or hour, with quiet periods
+present and zeroed so a chart shows a gap in traffic rather than joining a line across
+it. Bucketing happens in SQL, so the response size depends on the range rather than on
+how many transactions fall in it; a range covering more than 400 buckets is refused
+rather than truncated, because a silently capped series renders as a chart that omits
+part of its own range.
+
+Volume is reported **per currency and never summed**: amounts are in each currency's
+minor unit, so a single total across UGX and USD would mean nothing.
+
+It requires `transactions:read` — the same rows the transaction list already exposes,
+in aggregate — so any role that can read transactions can chart them.
+
+The one piece of per-driver SQL in the codebase is the date-truncation expression, since
+SQLite, PostgreSQL, and MySQL each spell it differently. Only SQLite is covered by the
+test suite; the other two are exercised by a real deployment.
 
 ## Roles and permissions
 
@@ -151,7 +214,11 @@ create a role.
 
 An administrator's effective permissions are resolved from their role when a request
 authenticates, not carried in the access token, so removing a permission takes effect on
-the next call rather than the next refresh. `GET /api/admin/me` returns them, which is
+the next call rather than the next refresh. Reassigning an administrator to another role
+(`PATCH /api/admin/users/{id}/role`) needs no session revocation for the same reason.
+Changing your **own** role is refused: it is both a lockout risk, since the last
+`super_admin` demoting itself leaves nobody able to undo it, and a self-promotion path
+that `users:update` would otherwise be enough for. `GET /api/admin/me` returns them, which is
 what the dashboard gates its controls on.
 
 An administrator whose role no longer exists resolves to no permissions and is refused

@@ -14,9 +14,9 @@ func TestOpenDatabaseSQLiteAndAutoMigrate(t *testing.T) {
 		Type: "sqlite",
 		Path: filepath.Join(t.TempDir(), "nested", "momobase.db"),
 	}}
-	db, err := OpenDatabase(cfg)
+	db, err := openDatabase(cfg)
 	if err != nil {
-		t.Fatalf("OpenDatabase() error = %v", err)
+		t.Fatalf("openDatabase() error = %v", err)
 	}
 	t.Cleanup(func() { _ = closeDatabase(db) })
 
@@ -49,19 +49,19 @@ func TestOpenDatabaseSQLiteAndAutoMigrate(t *testing.T) {
 }
 
 func TestOpenDatabaseRejectsUnsupportedDriver(t *testing.T) {
-	_, err := OpenDatabase(Config{DB: DatabaseConfig{Type: "oracle"}})
+	_, err := openDatabase(Config{DB: DatabaseConfig{Type: "oracle"}})
 	if err == nil {
-		t.Fatal("OpenDatabase() accepted an unsupported driver")
+		t.Fatal("openDatabase() accepted an unsupported driver")
 	}
 }
 
 func TestAutoMigrateReturnsClosedDatabaseError(t *testing.T) {
-	db, err := OpenDatabase(Config{DB: DatabaseConfig{
+	db, err := openDatabase(Config{DB: DatabaseConfig{
 		Type: "sqlite",
 		Path: filepath.Join(t.TempDir(), "closed.db"),
 	}})
 	if err != nil {
-		t.Fatalf("OpenDatabase() error = %v", err)
+		t.Fatalf("openDatabase() error = %v", err)
 	}
 	if err := closeDatabase(db); err != nil {
 		t.Fatalf("closeDatabase() error = %v", err)
@@ -85,7 +85,7 @@ func TestNewLoggerHonorsLevel(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.level, func(t *testing.T) {
-			logger := NewLogger(test.level)
+			logger := newLogger(test.level)
 			if got := logger.Enabled(context.Background(), slog.LevelDebug); got != test.debugEnabled {
 				t.Fatalf("debug enabled = %v", got)
 			}

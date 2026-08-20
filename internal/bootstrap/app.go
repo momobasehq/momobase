@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
+	"net"
 	"sync"
 	"time"
 
+	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 
 	"github.com/momobasehq/momobase/internal/domain"
@@ -17,7 +18,14 @@ import (
 	publich "github.com/momobasehq/momobase/internal/http/public"
 	webhookh "github.com/momobasehq/momobase/internal/http/webhooks"
 	"github.com/momobasehq/momobase/internal/platform"
-	"github.com/momobasehq/momobase/internal/services"
+	"github.com/momobasehq/momobase/internal/repository"
+	"github.com/momobasehq/momobase/internal/service/audit"
+	"github.com/momobasehq/momobase/internal/service/identity"
+	"github.com/momobasehq/momobase/internal/service/payment"
+	"github.com/momobasehq/momobase/internal/service/provider"
+	"github.com/momobasehq/momobase/internal/service/reconciliation"
+	"github.com/momobasehq/momobase/internal/service/routing"
+	"github.com/momobasehq/momobase/internal/service/webhook"
 	"github.com/momobasehq/momobase/internal/workers"
 )
 
@@ -25,10 +33,11 @@ import (
 type App struct {
 	Logger     *slog.Logger
 	DB         *gorm.DB
-	Runtime    *services.ProviderRuntimeManager
+	Runtime    *provider.RuntimeManager
 	Workers    *workers.Manager
-	Server     *http.Server
-	AdminUsers *services.AdminUserService
+	Fiber      *fiber.App
+	Addr       string
+	AdminUsers *identity.AdminUserService
 
 	lifecycleMu sync.Mutex
 	serveCancel context.CancelFunc
@@ -52,9 +61,9 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	}
 	log := o.logger
 	if log == nil {
-		log = NewLogger(cfg.Log.Level)
+		log = newLogger(cfg.Log.Level)
 	}
-	db, err := OpenDatabase(cfg)
+	db, err := openDatabase(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +80,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 			return nil, err
 		}
 	} else {
-		WarnPendingMigrations(context.Background(), db, log)
+		warnPendingMigrations(context.Background(), db, log)
 	}
 	enc, err := platform.NewEncryptor(cfg.Security.EncryptionMasterKeyBase64)
 	if err != nil {
@@ -86,43 +95,45 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		return nil, err
 	}
 
-	runtime := services.NewProviderRuntimeManager(db, registry, enc, log)
+	// One unit of work over the open handle: every service reaches the database only
+	// through the repositories it hands out, and Within is the sole transaction boundary.
+	repos := repository.New(db)
 
-	audit := services.NewAuditService(db, log)
+	runtime := provider.NewRuntimeManager(repos, registry, enc, log)
+
+	audit := audit.New(repos, log)
 
 	// Seeded before anything can authenticate: the catalogue and the system roles are
 	// what every authorization check resolves against, so a boot that skipped this
 	// would authorize nothing.
-	authz := services.NewAuthzService(db, audit)
+	authz := identity.NewAuthzService(repos, audit)
 	if err = authz.Seed(context.Background()); err != nil {
 		return nil, err
 	}
-	adminAuth := services.NewAdminAuthService(
-		db,
+	adminAuth := identity.NewAdminAuthService(repos,
 		cfg.Security.AdminAccessTTL,
 		cfg.Security.AdminRefreshTTL,
 		audit,
 		adminTokens,
 		authz,
 	)
-	adminUsers := services.NewAdminUserService(db, audit, authz)
-	appAuth := services.NewAppAuthService(
-		db,
+	adminUsers := identity.NewAdminUserService(repos, audit, authz)
+	appAuth := identity.NewAppAuthService(repos,
 		cfg.Security.AppClientIDPrefix,
 		cfg.Security.AppClientSecretPrefix,
 		cfg.Security.AppAccessTTL,
 		cfg.Security.AppRefreshTTL,
 		appTokens,
 	)
-	apps := services.NewAppService(db, appAuth, audit)
-	providerAdmin := services.NewProviderAdminService(db, audit, enc, registry, runtime)
-	routeAdmin := services.NewRouteAdminService(db, audit)
-	routeEngine := services.NewRouteEngine(db, runtime)
-	payments := services.NewPaymentOrchestrator(db, routeEngine, services.NewProviderExecutor(runtime))
-	webhooks := services.NewWebhookService(db, runtime)
-	health := services.NewHealthService(db, runtime)
-	recon := services.NewReconciliationService(db, runtime, webhooks, log)
-	manager := workers.NewManager(log, workerTasks(cfg, db, health, recon)...)
+	apps := identity.NewAppService(repos, appAuth, audit)
+	providerAdmin := provider.NewAdminService(repos, audit, enc, registry, runtime)
+	routeAdmin := routing.NewAdminService(repos, audit)
+	routeEngine := routing.NewEngine(repos, runtime)
+	payments := payment.NewOrchestrator(repos, routeEngine, provider.NewExecutor(runtime))
+	webhooks := webhook.New(repos, runtime)
+	health := provider.NewHealthService(repos, runtime)
+	recon := reconciliation.New(repos, runtime, webhooks, log)
+	manager := workers.NewManager(log, workerTasks(cfg, repos, health, recon)...)
 
 	info := adminh.SystemInfo{
 		AppName:        cfg.App.Name,
@@ -133,50 +144,53 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		WorkerNames:    manager.Names(),
 	}
 
-	publicHandler := publich.NewHandler(payments, routeEngine, db)
-	adminHandler := adminh.NewHandler(
-		db,
-		adminAuth,
-		adminUsers,
-		providerAdmin,
-		routeAdmin,
-		apps,
-		runtime,
-		audit,
-		authz,
-		info,
-	)
+	publicHandler := publich.NewHandler(payments, routeEngine, repos)
+	adminHandler := adminh.NewHandler(adminh.Deps{
+		Repos:     repos,
+		Auth:      adminAuth,
+		Users:     adminUsers,
+		Providers: providerAdmin,
+		Routes:    routeAdmin,
+		Apps:      apps,
+		Runtime:   runtime,
+		Audit:     audit,
+		Authz:     authz,
+		Analytics: identity.NewAnalyticsService(repos),
+		System:    info,
+	})
+	// Parsed here rather than in the router so a malformed CIDR fails at start-up with
+	// a clear error instead of silently disabling forwarded-header trust.
 	router := httpx.NewRouter(httpx.RouterDeps{
 		Logger:             log,
 		AdminAuth:          adminAuth,
 		AppAuth:            appAuth,
 		DashboardEnabled:   cfg.Features.DashboardEnabled,
 		CORSAllowedOrigins: cfg.App.CORSAllowedOrigins,
+		TrustedProxyCIDRs:  cfg.App.TrustedProxyCIDRs,
 		Public:             publicHandler,
 		Admin:              adminHandler,
 		Webhooks:           webhookh.NewHandler(webhooks),
 	})
 
 	app := &App{
-		Logger:  log,
-		DB:      db,
-		Runtime: runtime,
-		Workers: manager,
-		Server: &http.Server{
-			Addr:              cfg.App.Addr,
-			Handler:           router,
-			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       65 * time.Second,
-			WriteTimeout:      65 * time.Second,
-			IdleTimeout:       120 * time.Second,
-		},
+		Logger:     log,
+		DB:         db,
+		Runtime:    runtime,
+		Workers:    manager,
+		Fiber:      router,
+		Addr:       cfg.App.Addr,
 		AdminUsers: adminUsers,
 	}
 	databaseOwned = false
 	return app, nil
 }
 
-func workerTasks(c Config, db *gorm.DB, health *services.HealthService, recon *services.ReconciliationService) []workers.Task {
+func workerTasks(
+	c Config,
+	repos *repository.UnitOfWork,
+	health *provider.HealthService,
+	recon *reconciliation.Service,
+) []workers.Task {
 	if !c.Workers.Enabled {
 		return nil
 	}
@@ -198,15 +212,20 @@ func workerTasks(c Config, db *gorm.DB, health *services.HealthService, recon *s
 		})
 	}
 	if c.Workers.CleanupEnabled {
-		tasks = append(tasks, workers.Task{Name: "cleanup", Interval: c.Workers.CleanupInterval, Run: func(ctx context.Context) error {
-			now := time.Now().UTC()
-			return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-				if err := tx.Where("expires_at < ?", now).Delete(&domain.AdminSession{}).Error; err != nil {
+		tasks = append(tasks, workers.Task{
+			Name:     "cleanup",
+			Interval: c.Workers.CleanupInterval,
+			Run: func(ctx context.Context) error {
+				now := time.Now().UTC()
+				return repos.Within(ctx, func(r *repository.Set) error {
+					if _, err := r.AdminSessions.DeleteExpired(ctx, now); err != nil {
+						return err
+					}
+					_, err := r.AppSessions.DeleteExpired(ctx, now)
 					return err
-				}
-				return tx.Where("expires_at < ?", now).Delete(&domain.AppSession{}).Error
-			})
-		}})
+				})
+			},
+		})
 	}
 	return tasks
 }
@@ -246,22 +265,43 @@ func (a *App) Serve(ctx context.Context) error {
 	}
 	a.Workers.Start(serveCtx)
 	errCh := make(chan error, 1)
-	go func() { errCh <- a.Server.ListenAndServe() }()
-	a.Logger.Info("server starting", slog.String("addr", a.Server.Addr))
+	go func() {
+		errCh <- a.Fiber.Listen(a.Addr, fiber.ListenConfig{
+			DisableStartupMessage: true,
+			ListenerAddrFunc:      a.recordListenAddr,
+		})
+	}()
+	a.Logger.Info("server starting", slog.String("addr", a.Addr))
 	select {
 	case <-serveCtx.Done():
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if err := a.Server.Shutdown(shutdown); err != nil {
+		// Listen returns nil once the graceful shutdown completes, so the goroutine
+		// above is drained by the caller rather than left holding the channel.
+		if err := a.Fiber.ShutdownWithContext(shutdown); err != nil {
 			return err
 		}
 		return serveCtx.Err()
 	case err := <-errCh:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
 		return err
 	}
+}
+
+// recordListenAddr stores the address the listener actually bound. A configured port
+// of 0 asks the kernel to choose one, and an embedding application has no other way to
+// learn which.
+func (a *App) recordListenAddr(addr net.Addr) {
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
+	a.Addr = addr.String()
+}
+
+// ListenAddr returns the address the server is bound to, which is the configured one
+// until the listener resolves a port of 0.
+func (a *App) ListenAddr() string {
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
+	return a.Addr
 }
 
 // Close stops an active server and its workers before closing the database
