@@ -24,9 +24,9 @@ func WithLogger(log *slog.Logger) Option {
 	return func(o *options) { o.logger = log }
 }
 
-// WithRegistry uses registry as the base set of payment providers. Providers
+// withRegistry uses registry as the base set of payment providers. Providers
 // supplied with WithProvider are added to it.
-func WithRegistry(registry providers.Registry) Option {
+func withRegistry(registry providers.Registry) Option {
 	return func(o *options) { o.registry = registry }
 }
 

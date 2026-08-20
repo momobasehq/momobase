@@ -109,7 +109,7 @@ func (o *Orchestrator) Create(
 	if strings.TrimSpace(key) == "" {
 		return nil, errors.New("Idempotency-Key header is required")
 	}
-	hash := PaymentRequestHash(service, req)
+	hash := paymentRequestHash(service, req)
 	if tx, err := o.find(ctx, appID, key); err == nil {
 		return replay(tx, hash, service, req)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {

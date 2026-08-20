@@ -52,7 +52,7 @@ func TestJSONResponseHelpers(t *testing.T) {
 	if recorder.Code != http.StatusCreated || recorder.Header().Get("Content-Type") != "application/json" {
 		t.Fatalf("JSON() status/header = %d, %q", recorder.Code, recorder.Header().Get("Content-Type"))
 	}
-	var response APIResponse
+	var response apiResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode JSON response: %v", err)
 	}

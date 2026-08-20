@@ -6,8 +6,8 @@ import (
 	"strconv"
 )
 
-// APIResponse is the common envelope returned by JSON API endpoints.
-type APIResponse struct {
+// apiResponse is the common envelope returned by JSON API endpoints.
+type apiResponse struct {
 	Success bool      `json:"success"`
 	Data    any       `json:"data,omitempty"`
 	Error   *APIError `json:"error,omitempty"`
@@ -30,7 +30,7 @@ type PageData[T any] struct {
 
 // JSON writes payload in a successful API response envelope.
 func JSON(w http.ResponseWriter, status int, payload any) {
-	writeJSON(w, status, APIResponse{Success: status < 400, Data: payload})
+	writeJSON(w, status, apiResponse{Success: status < 400, Data: payload})
 }
 
 // RawJSON writes payload directly without an API response envelope.
@@ -38,7 +38,7 @@ func RawJSON(w http.ResponseWriter, status int, payload any) { writeJSON(w, stat
 
 // Error writes a failed API response containing code and message.
 func Error(w http.ResponseWriter, status int, code, message string) {
-	writeJSON(w, status, APIResponse{Error: &APIError{Code: code, Message: message}, Message: message})
+	writeJSON(w, status, apiResponse{Error: &APIError{Code: code, Message: message}, Message: message})
 }
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")

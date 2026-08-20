@@ -21,8 +21,8 @@ import (
 	"github.com/momobasehq/momobase/providers"
 )
 
-// VerifiedWebhook contains a provider-verified event and its Momobase routing metadata.
-type VerifiedWebhook struct {
+// verifiedWebhook contains a provider-verified event and its Momobase routing metadata.
+type verifiedWebhook struct {
 	// ProviderWebhookEvent is the normalized event returned by the provider adapter.
 	providers.ProviderWebhookEvent
 	// ProviderAccountID identifies the provider account that received the webhook.
@@ -47,7 +47,7 @@ func (s *Service) verify(
 	accountID string,
 	payload []byte,
 	headers map[string]string,
-) (*VerifiedWebhook, error) {
+) (*verifiedWebhook, error) {
 	rp, ok := s.runtime.Get(accountID)
 	if !ok || rp.WebhookSecret == "" {
 		return nil, errors.New("provider webhook is not initialized")
@@ -70,8 +70,8 @@ func (s *Service) verify(
 		strings.ToUpper(event.Currency),
 		strings.ToUpper(event.Country),
 		utils.RedactRawMap(event.Raw)
-	out := &VerifiedWebhook{ProviderWebhookEvent: *event, ProviderAccountID: accountID}
-	out.PayloadHash = CanonicalWebhookHash(out)
+	out := &verifiedWebhook{ProviderWebhookEvent: *event, ProviderAccountID: accountID}
+	out.PayloadHash = canonicalWebhookHash(out)
 	return out, nil
 }
 
@@ -107,7 +107,7 @@ func (s *Service) Handle(ctx context.Context, accountID string, payload []byte, 
 		return s.apply(db, row, event)
 	})
 }
-func (s *Service) apply(db *gorm.DB, row *domain.WebhookEvent, event *VerifiedWebhook) error {
+func (s *Service) apply(db *gorm.DB, row *domain.WebhookEvent, event *verifiedWebhook) error {
 	tx, attempt, err := findWebhookTarget(db, event.ProviderAccountID, event.ProviderReference)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
@@ -151,7 +151,7 @@ func (s *Service) ReprocessPending(ctx context.Context, limit int) error {
 		return err
 	}
 	for i := range rows {
-		var event VerifiedWebhook
+		var event verifiedWebhook
 		if json.Unmarshal([]byte(rows[i].PayloadJSON), &event) != nil {
 			continue
 		}
@@ -176,8 +176,8 @@ func findWebhookTarget(db *gorm.DB, accountID, ref string) (*domain.Transaction,
 	return &tx, &attempt, db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&tx, "id = ?", attempt.TransactionID).Error
 }
 
-// CanonicalWebhookHash returns a stable SHA-256 hash of a verified webhook's identifying fields.
-func CanonicalWebhookHash(event *VerifiedWebhook) string {
+// canonicalWebhookHash returns a stable SHA-256 hash of a verified webhook's identifying fields.
+func canonicalWebhookHash(event *verifiedWebhook) string {
 	if event == nil {
 		return ""
 	}
@@ -195,7 +195,7 @@ func CanonicalWebhookHash(event *VerifiedWebhook) string {
 		strings.ToUpper(event.Currency),
 	}, "|"))
 }
-func validateWebhook(event *VerifiedWebhook, tx *domain.Transaction) error {
+func validateWebhook(event *verifiedWebhook, tx *domain.Transaction) error {
 	// The account is compared exactly: the provider reports the form it normalized
 	// the request to, which is the form the transaction recorded. An event that
 	// carries no account skips the check.

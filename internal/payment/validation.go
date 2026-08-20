@@ -72,8 +72,8 @@ func validateParty(party *PartyPayload) error {
 	return nil
 }
 
-// PaymentRequestHash returns the canonical SHA-256 request hash used for idempotency checks.
-func PaymentRequestHash(service string, req *CreatePaymentRequest) string {
+// paymentRequestHash returns the canonical SHA-256 request hash used for idempotency checks.
+func paymentRequestHash(service string, req *CreatePaymentRequest) string {
 	data, _ := json.Marshal(struct {
 		Service string
 		Request *CreatePaymentRequest

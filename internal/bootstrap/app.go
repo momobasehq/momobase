@@ -59,9 +59,9 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	}
 	log := o.logger
 	if log == nil {
-		log = NewLogger(cfg.Log.Level)
+		log = newLogger(cfg.Log.Level)
 	}
-	db, err := OpenDatabase(cfg)
+	db, err := openDatabase(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 			return nil, err
 		}
 	} else {
-		WarnPendingMigrations(context.Background(), db, log)
+		warnPendingMigrations(context.Background(), db, log)
 	}
 	enc, err := platform.NewEncryptor(cfg.Security.EncryptionMasterKeyBase64)
 	if err != nil {

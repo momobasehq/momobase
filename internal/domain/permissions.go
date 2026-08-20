@@ -101,14 +101,14 @@ var SystemRoles = []SystemRoleDefinition{
 	{
 		Name:        RoleOperations,
 		Description: "Read everything and query provider balances; no changes",
-		Permissions: func() []string { return AdminReadPermissions() },
+		Permissions: func() []string { return adminReadPermissions() },
 	},
 	{
 		Name:        RoleReadOnly,
 		Description: "Read everything except provider balances",
 		Permissions: func() []string {
 			codes := make([]string, 0, len(Permissions))
-			for _, code := range AdminReadPermissions() {
+			for _, code := range adminReadPermissions() {
 				if code != "balances:read" {
 					codes = append(codes, code)
 				}
@@ -118,9 +118,9 @@ var SystemRoles = []SystemRoleDefinition{
 	},
 }
 
-// AdminReadPermissions returns every administrative read permission, which is the
+// adminReadPermissions returns every administrative read permission, which is the
 // basis of both non-privileged system roles.
-func AdminReadPermissions() []string {
+func adminReadPermissions() []string {
 	codes := make([]string, 0, len(Permissions))
 	for _, permission := range Permissions {
 		if permission.Audience == AudienceAdmin && isRead(permission.Code) {

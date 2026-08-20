@@ -109,9 +109,9 @@ func TestMigrateAdoptsADatabaseCreatedBeforeTheLedgerExisted(t *testing.T) {
 func TestWarnPendingMigrationsDoesNotChangeTheSchema(t *testing.T) {
 	db := migrateTestDatabase(t)
 	// Never panics and never migrates: the caller opted out of applying them.
-	WarnPendingMigrations(context.Background(), db, discardLogger())
+	warnPendingMigrations(context.Background(), db, discardLogger())
 	if db.Migrator().HasTable(&domain.Transaction{}) {
-		t.Fatal("WarnPendingMigrations() created the schema, want it left untouched")
+		t.Fatal("warnPendingMigrations() created the schema, want it left untouched")
 	}
-	WarnPendingMigrations(context.Background(), db, nil)
+	warnPendingMigrations(context.Background(), db, nil)
 }
