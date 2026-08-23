@@ -123,7 +123,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	// Seeded before anything can authenticate: the catalogue and the system roles are
 	// what every authorization check resolves against, so a boot that skipped this
 	// would authorize nothing.
-	authz := identity.NewAuthzService(repos, audit)
+	authz := identity.NewAuthzService(repos, audit, cacheStore)
 	if err = authz.Seed(context.Background()); err != nil {
 		return nil, err
 	}

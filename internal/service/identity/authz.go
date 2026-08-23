@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/momobasehq/momobase/internal/cache"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/repository"
@@ -21,11 +22,20 @@ var ErrSystemRole = errors.New("system roles cannot be changed or deleted")
 type AuthzService struct {
 	repos *repository.UnitOfWork
 	audit *audit.Service
+	cache cache.Store
 }
 
 // NewAuthzService creates a permission and role service.
-func NewAuthzService(repos *repository.UnitOfWork, audit *audit.Service) *AuthzService {
-	return &AuthzService{repos, audit}
+func NewAuthzService(
+	repos *repository.UnitOfWork,
+	audit *audit.Service,
+	stores ...cache.Store,
+) *AuthzService {
+	var store cache.Store
+	if len(stores) > 0 {
+		store = stores[0]
+	}
+	return &AuthzService{repos: repos, audit: audit, cache: store}
 }
 
 // Seed converges the permission catalogue and the system roles with the code in
@@ -147,7 +157,23 @@ func (s *AuthzService) ListPermissions(ctx context.Context, audience string) ([]
 	if audience != "" && audience != domain.AudienceAdmin && audience != domain.AudienceApp {
 		return nil, errors.New("audience must be admin or app")
 	}
-	return s.repos.Permissions.List(ctx, audience)
+	key := permissionCacheKey(audience)
+	if permissions := cache.Get[[]domain.Permission](ctx, s.cache, key); permissions != nil {
+		return *permissions, nil
+	}
+	permissions, err := s.repos.Permissions.List(ctx, audience)
+	if err != nil {
+		return nil, err
+	}
+	cache.Set(ctx, s.cache, key, permissions)
+	return permissions, nil
+}
+
+func permissionCacheKey(audience string) string {
+	if audience == "" {
+		return "permissions:v1:all"
+	}
+	return "permissions:v1:" + audience
 }
 
 // ListRoles returns every role with its permissions, system roles first.
