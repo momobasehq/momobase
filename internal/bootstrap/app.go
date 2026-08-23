@@ -146,7 +146,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	providerAdmin := provider.NewAdminService(repos, audit, enc, registry, runtime)
 	routeAdmin := routing.NewAdminService(repos, audit)
 	routeEngine := routing.NewEngine(repos, runtime)
-	payments := payment.NewOrchestrator(repos, routeEngine, provider.NewExecutor(runtime))
+	payments := payment.NewOrchestrator(repos, routeEngine, provider.NewExecutor(runtime), cacheStore)
 	webhooks := webhook.New(repos, runtime)
 	health := provider.NewHealthService(repos, runtime)
 	recon := reconciliation.New(repos, runtime, webhooks, log)
