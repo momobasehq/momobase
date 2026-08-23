@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/momobasehq/momobase/internal/cache"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/repository"
@@ -24,11 +25,21 @@ type AppService struct {
 	repos *repository.UnitOfWork
 	auth  *AppAuthService
 	audit *audit.Service
+	cache cache.Store
 }
 
 // NewAppService creates an application management service.
-func NewAppService(repos *repository.UnitOfWork, auth *AppAuthService, audit *audit.Service) *AppService {
-	return &AppService{repos, auth, audit}
+func NewAppService(
+	repos *repository.UnitOfWork,
+	auth *AppAuthService,
+	audit *audit.Service,
+	stores ...cache.Store,
+) *AppService {
+	var store cache.Store
+	if len(stores) > 0 {
+		store = stores[0]
+	}
+	return &AppService{repos: repos, auth: auth, audit: audit, cache: store}
 }
 func (s *AppService) auditChange(ctx context.Context, actor *domain.AdminUser, action, resource, id string, meta map[string]any) {
 	if actor != nil {
@@ -38,7 +49,17 @@ func (s *AppService) auditChange(ctx context.Context, actor *domain.AdminUser, a
 
 // GetApp retrieves an application by ID.
 func (s *AppService) GetApp(ctx context.Context, id string) (*domain.App, error) {
-	return s.repos.Apps.ByID(ctx, id)
+	key := appCacheKey(id)
+	if app := cache.Get[domain.App](ctx, s.cache, key); app != nil {
+		return app, nil
+	}
+
+	app, err := s.repos.Apps.ByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	cache.Set(ctx, s.cache, key, app)
+	return app, nil
 }
 
 // CreateApp validates and persists an active application.
@@ -59,6 +80,7 @@ func (s *AppService) CreateApp(ctx context.Context, actor *domain.AdminUser, nam
 	err := s.repos.Apps.Create(ctx, app)
 	if err == nil {
 		s.auditChange(ctx, actor, "app.created", "app", app.ID, map[string]any{"name": name})
+		cache.Set(ctx, s.cache, appCacheKey(app.ID), app)
 	}
 	return app, err
 }
@@ -76,25 +98,42 @@ func (s *AppService) UpdateApp(ctx context.Context, actor *domain.AdminUser, id,
 		return nil, err
 	}
 	s.auditChange(ctx, actor, "app.updated", "app", id, updates)
-	return s.GetApp(ctx, id)
+	app, err := s.repos.Apps.ByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	cache.Set(ctx, s.cache, appCacheKey(id), app)
+	return app, nil
 }
 
 // ChangeAppStatus updates an application's status and revokes its sessions when it is no longer active.
 func (s *AppService) ChangeAppStatus(ctx context.Context, actor *domain.AdminUser, id, status string) error {
+	var app *domain.App
 	err := s.repos.Within(ctx, func(r *repository.Set) error {
 		if err := r.Apps.SetStatus(ctx, id, status); err != nil {
 			return err
 		}
-		if status == "active" {
-			return nil
+		if status != "active" {
+			if err := r.AppSessions.RevokeForApp(ctx, id, time.Now().UTC()); err != nil {
+				return err
+			}
 		}
-		return r.AppSessions.RevokeForApp(ctx, id, time.Now().UTC())
+		var err error
+		app, err = r.Apps.ByID(ctx, id)
+		return err
 	})
-	if err == nil {
-		s.auditChange(ctx, actor, "app.status_changed", "app", id, map[string]any{"status": status})
+	if err != nil {
+		return err
 	}
-	return err
+	s.auditChange(ctx, actor, "app.status_changed", "app", id, map[string]any{"status": status})
+	cache.Set(ctx, s.cache, appCacheKey(id), app)
+	return nil
 }
+
+func appCacheKey(id string) string {
+	return "app:v1:" + id
+}
+
 func (s *AppService) newSecret() (string, string, error) {
 	secret, err := platform.SecureRandomToken(s.auth.secretPrefix, 32)
 	if err != nil {

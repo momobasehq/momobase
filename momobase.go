@@ -24,6 +24,8 @@ type (
 	LogConfig = bootstrap.LogConfig
 	// DatabaseConfig contains settings shared by the supported database drivers.
 	DatabaseConfig = bootstrap.DatabaseConfig
+	// CacheConfig contains the connection settings for the shared Redis cache.
+	CacheConfig = bootstrap.CacheConfig
 	// SecurityConfig contains encryption, token, and application credential settings.
 	SecurityConfig = bootstrap.SecurityConfig
 	// WorkersConfig controls background task activation and scheduling.
@@ -99,10 +101,10 @@ type Instance struct {
 	app *bootstrap.App
 }
 
-// New builds an instance from the supplied options, opening the database and
-// preparing the HTTP server, providers, and background workers. Configuration is
-// read from the environment unless WithConfig is supplied. The caller owns the
-// returned instance and must Close it to release its database connections.
+// New builds an instance from the supplied options, opening the database, creating
+// the shared Redis cache, and preparing the HTTP server, providers, and background
+// workers. Configuration is read from the environment unless WithConfig is supplied.
+// The caller owns the returned instance and must Close it to release its connections.
 func New(opts ...Option) (*Instance, error) {
 	o := &options{}
 	for _, opt := range opts {
@@ -147,8 +149,8 @@ func (i *Instance) Run() error {
 	return i.Serve(ctx)
 }
 
-// Close stops an active server and its workers before closing the database
-// connection pool. It is safe to call Close more than once.
+// Close stops an active server and its workers before closing the Redis and database
+// connection pools. It is safe to call Close more than once.
 func (i *Instance) Close() error {
 	return i.app.Close()
 }

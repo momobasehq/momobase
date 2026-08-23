@@ -14,11 +14,22 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   momobase:
     build: .
     restart: unless-stopped
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "${APP_PORT:-9090}:9090"
@@ -37,6 +48,12 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       DB_NAME: ${DB_NAME:-momobase}
       DB_SSLMODE: disable
+      REDIS_ADDR: ${REDIS_ADDR:-redis:6379}
+      REDIS_USERNAME: ${REDIS_USERNAME:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_TLS_ENABLED: ${REDIS_TLS_ENABLED:-false}
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
       ENCRYPTION_MASTER_KEY_BASE64: ${ENCRYPTION_MASTER_KEY_BASE64:?set ENCRYPTION_MASTER_KEY_BASE64, e.g. openssl rand -base64 32}
       ADMIN_OAUTH_SECRET: ${ADMIN_OAUTH_SECRET:?set ADMIN_OAUTH_SECRET at least 32 chars}
       APP_OAUTH_SECRET: ${APP_OAUTH_SECRET:?set APP_OAUTH_SECRET at least 32 chars}

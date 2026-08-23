@@ -257,6 +257,13 @@ Momobase uses `github.com/joho/godotenv/autoload` to load a local `.env` file au
 
 ## Local development
 
+Momobase uses one shared Redis-backed cache. Start Redis locally and configure
+`REDIS_ADDR` (default `localhost:6379`); `REDIS_USERNAME`, `REDIS_PASSWORD`, and
+`REDIS_DB` select authenticated or logical-database deployments. Enable
+`REDIS_TLS_ENABLED` for encrypted remote connections. `CACHE_TTL_SECONDS` sets one
+TTL for every cached value (default 300 seconds). Cache failures are logged by the
+shared cache and fall back to the database for cached read paths.
+
 ```bash
 cp .env.example .env
 go mod tidy
@@ -299,6 +306,9 @@ openssl rand -hex 32
 openssl rand -hex 32
 docker compose up -d --build
 ```
+
+Compose starts both PostgreSQL and an internal Redis service. Redis is used as an
+ephemeral cache and is not published on a host port.
 
 Set the generated values as `ENCRYPTION_MASTER_KEY_BASE64`, `ADMIN_OAUTH_SECRET`, and `APP_OAUTH_SECRET`. In staging or production, also use an HTTPS `APP_PUBLIC_URL`, non-default database credentials, and an explicit CORS allowlist.
 
