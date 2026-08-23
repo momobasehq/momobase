@@ -30,7 +30,7 @@ log.Fatal(instance.Run())
 
 Registering none is rejected at startup rather than booting a server that cannot execute a payment.
 
-`New` reads configuration from the environment unless `WithConfig` supplies it, opens the database, and prepares the HTTP server, providers, and background workers. `Run` serves until the process is interrupted; use `Serve(ctx)` to control shutdown yourself, or `App()` to reach the underlying [Fiber](https://gofiber.io) application and mount Momobase inside one of your own.
+`New` reads configuration from the environment unless `WithConfig` supplies it, opens the database, creates one shared Redis cache, and prepares the HTTP server, providers, and background workers. `Run` serves until the process is interrupted; use `Serve(ctx)` to control shutdown yourself, or `App()` to reach the underlying [Fiber](https://gofiber.io) application and mount Momobase inside one of your own. Redis defaults to `localhost:6379` and can be configured with `REDIS_ADDR`, `REDIS_USERNAME`, `REDIS_PASSWORD`, `REDIS_DB`, and `REDIS_TLS_ENABLED`; `CACHE_TTL_SECONDS` sets the TTL for every cached value.
 
 Momobase serves on Fiber v3, which runs on fasthttp rather than `net/http`, so `App()` returns a `*fiber.App` and not an `http.Handler`. An application built around `net/http` adapts at its own boundary.
 

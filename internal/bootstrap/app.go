@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
+	"github.com/momobasehq/momobase/internal/cache"
 	"github.com/momobasehq/momobase/internal/domain"
 	httpx "github.com/momobasehq/momobase/internal/http"
 	adminh "github.com/momobasehq/momobase/internal/http/admin"
@@ -33,6 +35,7 @@ import (
 type App struct {
 	Logger     *slog.Logger
 	DB         *gorm.DB
+	Cache      cache.Store
 	Runtime    *provider.RuntimeManager
 	Workers    *workers.Manager
 	Fiber      *fiber.App
@@ -45,6 +48,7 @@ type App struct {
 	closed      bool
 	closeOnce   sync.Once
 	closeErr    error
+	redisClient *redis.Client
 }
 
 // NewApp validates cfg and constructs the application and all owned runtime
@@ -63,6 +67,19 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	if log == nil {
 		log = newLogger(cfg.Log.Level)
 	}
+	if cfg.Cache.TTL <= 0 {
+		cfg.Cache.TTL = defaultCacheTTL
+	}
+	redisClient := newRedisClient(cfg)
+	cacheStore := cache.NewRedisStore(redisClient, cfg.Cache.TTL, log)
+	cacheOwned := true
+	defer func() {
+		if cacheOwned {
+			if closeErr := redisClient.Close(); closeErr != nil {
+				log.Error("close Redis client after startup failure", slog.String("error", closeErr.Error()))
+			}
+		}
+	}()
 	db, err := openDatabase(cfg)
 	if err != nil {
 		return nil, err
@@ -106,7 +123,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	// Seeded before anything can authenticate: the catalogue and the system roles are
 	// what every authorization check resolves against, so a boot that skipped this
 	// would authorize nothing.
-	authz := identity.NewAuthzService(repos, audit)
+	authz := identity.NewAuthzService(repos, audit, cacheStore)
 	if err = authz.Seed(context.Background()); err != nil {
 		return nil, err
 	}
@@ -125,11 +142,11 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		cfg.Security.AppRefreshTTL,
 		appTokens,
 	)
-	apps := identity.NewAppService(repos, appAuth, audit)
+	apps := identity.NewAppService(repos, appAuth, audit, cacheStore)
 	providerAdmin := provider.NewAdminService(repos, audit, enc, registry, runtime)
-	routeAdmin := routing.NewAdminService(repos, audit)
-	routeEngine := routing.NewEngine(repos, runtime)
-	payments := payment.NewOrchestrator(repos, routeEngine, provider.NewExecutor(runtime))
+	routeAdmin := routing.NewAdminService(repos, audit, cacheStore)
+	routeEngine := routing.NewEngine(repos, runtime, cacheStore)
+	payments := payment.NewOrchestrator(repos, routeEngine, provider.NewExecutor(runtime), cacheStore)
 	webhooks := webhook.New(repos, runtime)
 	health := provider.NewHealthService(repos, runtime)
 	recon := reconciliation.New(repos, runtime, webhooks, log)
@@ -155,7 +172,7 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 		Runtime:   runtime,
 		Audit:     audit,
 		Authz:     authz,
-		Analytics: identity.NewAnalyticsService(repos),
+		Analytics: identity.NewAnalyticsService(repos, cacheStore),
 		System:    info,
 	})
 	// Parsed here rather than in the router so a malformed CIDR fails at start-up with
@@ -173,14 +190,17 @@ func NewApp(cfg Config, opts ...Option) (*App, error) {
 	})
 
 	app := &App{
-		Logger:     log,
-		DB:         db,
-		Runtime:    runtime,
-		Workers:    manager,
-		Fiber:      router,
-		Addr:       cfg.App.Addr,
-		AdminUsers: adminUsers,
+		Logger:      log,
+		DB:          db,
+		Cache:       cacheStore,
+		Runtime:     runtime,
+		Workers:     manager,
+		Fiber:       router,
+		Addr:        cfg.App.Addr,
+		AdminUsers:  adminUsers,
+		redisClient: redisClient,
 	}
+	cacheOwned = false
 	databaseOwned = false
 	return app, nil
 }
@@ -304,8 +324,8 @@ func (a *App) ListenAddr() string {
 	return a.Addr
 }
 
-// Close stops an active server and its workers before closing the database
-// connection pool. It is safe to call Close more than once.
+// Close stops an active server and its workers before closing the shared Redis
+// client and database connection pool. It is safe to call Close more than once.
 func (a *App) Close() error {
 	if a == nil {
 		return nil
@@ -323,9 +343,22 @@ func (a *App) Close() error {
 		if serveDone != nil {
 			<-serveDone
 		}
-		a.closeErr = closeDatabase(a.DB)
+		a.closeErr = errors.Join(
+			closeRedis(a.redisClient),
+			closeDatabase(a.DB),
+		)
 	})
 	return a.closeErr
+}
+
+func closeRedis(client *redis.Client) error {
+	if client == nil {
+		return nil
+	}
+	if err := client.Close(); err != nil {
+		return fmt.Errorf("close Redis client: %w", err)
+	}
+	return nil
 }
 
 func closeDatabase(db *gorm.DB) error {

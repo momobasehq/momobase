@@ -20,6 +20,7 @@ import (
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/identity"
+	"github.com/momobasehq/momobase/internal/service/payment"
 )
 
 func authenticatedHandler(t *testing.T) (*Handler, *identity.AppAuthService, string) {
@@ -63,7 +64,9 @@ func authenticatedHandler(t *testing.T) (*Handler, *identity.AppAuthService, str
 	if err != nil {
 		t.Fatalf("IssueClientToken() error = %v", err)
 	}
-	return NewHandler(nil, nil, repository.New(db)), auth, tokens.AccessToken
+	repos := repository.New(db)
+	payments := payment.NewOrchestrator(repos, nil, nil)
+	return NewHandler(payments, nil, repos), auth, tokens.AccessToken
 }
 
 // response is one recorded reply. A fiber.Ctx cannot be built directly, so a handler is

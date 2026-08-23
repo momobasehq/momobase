@@ -118,6 +118,11 @@ func (r PaymentRouteRepo) Create(ctx context.Context, route *domain.PaymentRoute
 	return r.create(ctx, route)
 }
 
+// ByID returns one payment route.
+func (r PaymentRouteRepo) ByID(ctx context.Context, id string) (*domain.PaymentRoute, error) {
+	return r.first(ctx, "id = ?", id)
+}
+
 // Candidates returns the active routes for a service in selection order: lowest
 // priority first, which is what makes the first match the preferred one. An empty
 // service returns every active route, for method discovery.

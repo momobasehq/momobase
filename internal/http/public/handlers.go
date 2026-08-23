@@ -221,7 +221,7 @@ func (h *Handler) get(c fiber.Ctx, field, value string) error {
 	if id == nil {
 		return platform.Error(c, 401, "UNAUTHORIZED", "missing app identity")
 	}
-	tx, err := h.repos.Transactions.ForApp(c.Context(), id.App.ID, field, value)
+	tx, err := h.payments.Get(c.Context(), id.App.ID, field, value)
 	if err != nil {
 		return platform.Error(c, 404, "NOT_FOUND", "transaction not found")
 	}

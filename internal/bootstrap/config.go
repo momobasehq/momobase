@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const defaultCacheTTL = 5 * time.Minute
+
 // AppConfig contains process-level application settings.
 type AppConfig struct {
 	Name               string
@@ -37,6 +39,16 @@ type DatabaseConfig struct {
 	Password string
 	Name     string
 	SSLMode  string
+}
+
+// CacheConfig contains the connection settings for the shared Redis cache.
+type CacheConfig struct {
+	Addr     string
+	Username string
+	Password string
+	DB       int
+	TLS      bool
+	TTL      time.Duration
 }
 
 // SecurityConfig contains encryption, token, and application credential settings.
@@ -77,6 +89,7 @@ type Config struct {
 	App      AppConfig
 	Log      LogConfig
 	DB       DatabaseConfig
+	Cache    CacheConfig
 	Security SecurityConfig
 	Workers  WorkersConfig
 	Features FeaturesConfig
@@ -86,6 +99,7 @@ type Config struct {
 // explicitly configured boolean and duration values.
 func LoadConfig() (Config, error) {
 	var c Config
+	var err error
 	// app
 	c.App.Name = env("APP_NAME", "momobase")
 	c.App.Env = env("APP_ENV", "development")
@@ -104,11 +118,26 @@ func LoadConfig() (Config, error) {
 	c.DB.Password = env("DB_PASSWORD", "")
 	c.DB.Name = env("DB_NAME", "momobase")
 	c.DB.SSLMode = env("DB_SSLMODE", "disable")
+	// cache
+	c.Cache.Addr = env("REDIS_ADDR", "localhost:6379")
+	c.Cache.Username = env("REDIS_USERNAME", "")
+	c.Cache.Password = env("REDIS_PASSWORD", "")
+	c.Cache.DB, err = nonNegativeInteger("REDIS_DB", 0)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Cache.TLS, err = boolean("REDIS_TLS_ENABLED", false)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Cache.TTL, err = duration("CACHE_TTL_SECONDS", int(defaultCacheTTL/time.Second), time.Second)
+	if err != nil {
+		return Config{}, err
+	}
 	// security
 	c.Security.EncryptionMasterKeyBase64 = env("ENCRYPTION_MASTER_KEY_BASE64", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	c.Security.AdminOAuthSecret = env("ADMIN_OAUTH_SECRET", "change-me-admin-oauth-secret")
 	c.Security.AppOAuthSecret = env("APP_OAUTH_SECRET", "change-me-app-oauth-secret")
-	var err error
 	c.Security.AdminAccessTTL, err = duration("ADMIN_ACCESS_TTL_MINUTES", 15, time.Minute)
 	if err != nil {
 		return Config{}, err
@@ -226,6 +255,21 @@ func duration(key string, fallback int, unit time.Duration) (time.Duration, erro
 		return 0, fmt.Errorf("%s must be greater than zero, got %d", key, value)
 	}
 	return time.Duration(value) * unit, nil
+}
+
+func nonNegativeInteger(key string, fallback int) (int, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a non-negative integer, got %q: %w", key, raw, err)
+	}
+	if value < 0 {
+		return 0, fmt.Errorf("%s must be zero or greater, got %d", key, value)
+	}
+	return value, nil
 }
 
 func list(key, fallback string) []string {

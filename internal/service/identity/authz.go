@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/momobasehq/momobase/internal/cache"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/repository"
@@ -21,11 +22,20 @@ var ErrSystemRole = errors.New("system roles cannot be changed or deleted")
 type AuthzService struct {
 	repos *repository.UnitOfWork
 	audit *audit.Service
+	cache cache.Store
 }
 
 // NewAuthzService creates a permission and role service.
-func NewAuthzService(repos *repository.UnitOfWork, audit *audit.Service) *AuthzService {
-	return &AuthzService{repos, audit}
+func NewAuthzService(
+	repos *repository.UnitOfWork,
+	audit *audit.Service,
+	stores ...cache.Store,
+) *AuthzService {
+	var store cache.Store
+	if len(stores) > 0 {
+		store = stores[0]
+	}
+	return &AuthzService{repos: repos, audit: audit, cache: store}
 }
 
 // Seed converges the permission catalogue and the system roles with the code in
@@ -147,13 +157,40 @@ func (s *AuthzService) ListPermissions(ctx context.Context, audience string) ([]
 	if audience != "" && audience != domain.AudienceAdmin && audience != domain.AudienceApp {
 		return nil, errors.New("audience must be admin or app")
 	}
-	return s.repos.Permissions.List(ctx, audience)
+	key := permissionCacheKey(audience)
+	if permissions := cache.Get[[]domain.Permission](ctx, s.cache, key); permissions != nil {
+		return *permissions, nil
+	}
+	permissions, err := s.repos.Permissions.List(ctx, audience)
+	if err != nil {
+		return nil, err
+	}
+	cache.Set(ctx, s.cache, key, permissions)
+	return permissions, nil
+}
+
+func permissionCacheKey(audience string) string {
+	if audience == "" {
+		return "permissions:v1:all"
+	}
+	return "permissions:v1:" + audience
 }
 
 // ListRoles returns every role with its permissions, system roles first.
 func (s *AuthzService) ListRoles(ctx context.Context) ([]domain.Role, error) {
-	return s.repos.Roles.List(ctx)
+	key := roleCacheKey()
+	if roles := cache.Get[[]domain.Role](ctx, s.cache, key); roles != nil {
+		return *roles, nil
+	}
+	roles, err := s.repos.Roles.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cache.Set(ctx, s.cache, key, roles)
+	return roles, nil
 }
+
+func roleCacheKey() string { return "roles:v1:all" }
 
 // CreateRole persists a custom role holding the supplied permissions.
 func (s *AuthzService) CreateRole(
@@ -182,10 +219,19 @@ func (s *AuthzService) CreateRole(
 		System:      false,
 		Permissions: permissions,
 	}
-	if err := s.repos.Roles.Create(ctx, role); err != nil {
+	roles := []domain.Role{}
+	if err := s.repos.Within(ctx, func(r *repository.Set) error {
+		if err := r.Roles.Create(ctx, role); err != nil {
+			return err
+		}
+		var err error
+		roles, err = r.Roles.List(ctx)
+		return err
+	}); err != nil {
 		return nil, err
 	}
 	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "role.created", "role", role.ID, map[string]any{"permissions": codes}, "", "")
+	cache.Set(ctx, s.cache, roleCacheKey(), roles)
 	return role, nil
 }
 
@@ -204,15 +250,22 @@ func (s *AuthzService) UpdateRole(
 	if err != nil {
 		return err
 	}
+	roles := []domain.Role{}
 	if err := s.repos.Within(ctx, func(r *repository.Set) error {
 		if err := r.Roles.SetDescription(ctx, role.ID, strings.TrimSpace(description)); err != nil {
 			return err
 		}
-		return r.Roles.ReplacePermissions(ctx, role, permissions)
+		if err := r.Roles.ReplacePermissions(ctx, role, permissions); err != nil {
+			return err
+		}
+		var err error
+		roles, err = r.Roles.List(ctx)
+		return err
 	}); err != nil {
 		return err
 	}
 	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "role.updated", "role", role.ID, map[string]any{"permissions": codes}, "", "")
+	cache.Set(ctx, s.cache, roleCacheKey(), roles)
 	return nil
 }
 
@@ -231,12 +284,19 @@ func (s *AuthzService) DeleteRole(ctx context.Context, actor *domain.AdminUser, 
 	if holders > 0 {
 		return fmt.Errorf("role %q is still assigned to %d administrator(s)", role.Name, holders)
 	}
+	roles := []domain.Role{}
 	if err := s.repos.Within(ctx, func(r *repository.Set) error {
-		return r.Roles.Delete(ctx, role)
+		if err := r.Roles.Delete(ctx, role); err != nil {
+			return err
+		}
+		var err error
+		roles, err = r.Roles.List(ctx)
+		return err
 	}); err != nil {
 		return err
 	}
 	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "role.deleted", "role", role.ID, nil, "", "")
+	cache.Set(ctx, s.cache, roleCacheKey(), roles)
 	return nil
 }
 
