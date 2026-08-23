@@ -1,0 +1,29 @@
+---
+const pathname = Astro.url.pathname
+
+const links = [
+  { href: "/about/", label: "About", active: pathname.startsWith("/about") },
+  { href: "https://github.com/momobasehq/momobase", label: "GitHub", active: false },
+  { href: "https://github.com/momobasehq/momobase/blob/main/docs/README.md", label: "Docs", active: false },
+]
+---
+
+<header class="border-b border-border dark:border-border-dark">
+  <nav class="mx-auto flex min-h-16 w-full max-w-[1128px] items-center justify-between px-6 max-sm:px-4" aria-label="Primary navigation">
+    <a class="flex items-center gap-2.5 text-sm font-semibold tracking-[-0.02em]" href="/" aria-label="Momobase home">
+      <img src="/logo.svg" width="24" height="24" alt="" />
+      <span>momobase</span>
+    </a>
+    <div class="flex items-center gap-7 text-[13px] text-muted max-sm:gap-5 dark:text-muted-dark">
+      {links.map((link) => (
+        <a
+          class:list={["transition-colors hover:text-text dark:hover:text-text-dark", link.active && "text-text dark:text-text-dark"]}
+          href={link.href}
+          aria-current={link.active ? "page" : undefined}
+        >
+          {link.label}
+        </a>
+      ))}
+    </div>
+  </nav>
+</header>

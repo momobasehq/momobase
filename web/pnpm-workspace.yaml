@@ -1,5 +1,6 @@
 packages:
   - sdk
   - dashboard
+  - site
 allowBuilds:
   esbuild: false
