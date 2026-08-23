@@ -3,6 +3,7 @@ package routing
 import (
 	"context"
 
+	"github.com/momobasehq/momobase/internal/cache"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/repository"
@@ -13,11 +14,20 @@ import (
 type AdminService struct {
 	repos *repository.UnitOfWork
 	audit *audit.Service
+	cache cache.Store
 }
 
 // NewAdminService creates a payment route administration service.
-func NewAdminService(repos *repository.UnitOfWork, audit *audit.Service) *AdminService {
-	return &AdminService{repos, audit}
+func NewAdminService(
+	repos *repository.UnitOfWork,
+	audit *audit.Service,
+	stores ...cache.Store,
+) *AdminService {
+	var store cache.Store
+	if len(stores) > 0 {
+		store = stores[0]
+	}
+	return &AdminService{repos: repos, audit: audit, cache: store}
 }
 
 // Create validates and persists a payment route for an existing provider account.
@@ -47,18 +57,62 @@ func (s *AdminService) Create(
 		Priority:          priority,
 		Active:            active,
 	}
-	if err := s.repos.PaymentRoutes.Create(ctx, route); err != nil {
+	methodRoutes := []domain.PaymentRoute{}
+	serviceRoutes := []domain.PaymentRoute{}
+	allRoutes := []domain.PaymentRoute{}
+	if err := s.repos.Within(ctx, func(r *repository.Set) error {
+		if err := r.PaymentRoutes.Create(ctx, route); err != nil {
+			return err
+		}
+		var err error
+		methodRoutes, err = r.PaymentRoutes.For(ctx, service, method)
+		if err != nil {
+			return err
+		}
+		serviceRoutes, err = r.PaymentRoutes.Candidates(ctx, service)
+		if err != nil {
+			return err
+		}
+		allRoutes, err = r.PaymentRoutes.Candidates(ctx, "")
+		return err
+	}); err != nil {
 		return nil, err
 	}
 	s.audit.RecordBestEffort(ctx, actor.ActorID(), "admin", "route.created", "payment_route", route.ID, nil, "", "")
+	cache.Set(ctx, s.cache, routeCacheKey("for", service, method), methodRoutes)
+	cache.Set(ctx, s.cache, routeCacheKey("candidates", service, ""), serviceRoutes)
+	cache.Set(ctx, s.cache, routeCacheKey("candidates", "", ""), allRoutes)
 	return route, nil
 }
 
 // Update replaces a payment route's priority and active state.
 func (s *AdminService) Update(ctx context.Context, actor *domain.AdminUser, id string, priority int, active bool) error {
-	if err := s.repos.PaymentRoutes.Update(ctx, id, map[string]any{
-		"priority": priority,
-		"active":   active,
+	var route *domain.PaymentRoute
+	methodRoutes := []domain.PaymentRoute{}
+	serviceRoutes := []domain.PaymentRoute{}
+	allRoutes := []domain.PaymentRoute{}
+	if err := s.repos.Within(ctx, func(r *repository.Set) error {
+		if err := r.PaymentRoutes.Update(ctx, id, map[string]any{
+			"priority": priority,
+			"active":   active,
+		}); err != nil {
+			return err
+		}
+		var err error
+		route, err = r.PaymentRoutes.ByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		methodRoutes, err = r.PaymentRoutes.For(ctx, route.ServiceType, route.PaymentMethod)
+		if err != nil {
+			return err
+		}
+		serviceRoutes, err = r.PaymentRoutes.Candidates(ctx, route.ServiceType)
+		if err != nil {
+			return err
+		}
+		allRoutes, err = r.PaymentRoutes.Candidates(ctx, "")
+		return err
 	}); err != nil {
 		return err
 	}
@@ -73,5 +127,8 @@ func (s *AdminService) Update(ctx context.Context, actor *domain.AdminUser, id s
 		"",
 		"",
 	)
+	cache.Set(ctx, s.cache, routeCacheKey("for", route.ServiceType, route.PaymentMethod), methodRoutes)
+	cache.Set(ctx, s.cache, routeCacheKey("candidates", route.ServiceType, ""), serviceRoutes)
+	cache.Set(ctx, s.cache, routeCacheKey("candidates", "", ""), allRoutes)
 	return nil
 }

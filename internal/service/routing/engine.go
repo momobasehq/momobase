@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 
+	"github.com/momobasehq/momobase/internal/cache"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/provider"
@@ -29,11 +30,20 @@ type SelectedProvider struct {
 type Engine struct {
 	repos   *repository.UnitOfWork
 	runtime *provider.RuntimeManager
+	cache   cache.Store
 }
 
 // NewEngine creates a provider route-selection engine.
-func NewEngine(repos *repository.UnitOfWork, runtime *provider.RuntimeManager) *Engine {
-	return &Engine{repos, runtime}
+func NewEngine(
+	repos *repository.UnitOfWork,
+	runtime *provider.RuntimeManager,
+	stores ...cache.Store,
+) *Engine {
+	var store cache.Store
+	if len(stores) > 0 {
+		store = stores[0]
+	}
+	return &Engine{repos: repos, runtime: runtime, cache: store}
 }
 
 // SelectProvider returns the highest-priority active provider that supports the
@@ -44,11 +54,17 @@ func (e *Engine) SelectProvider(ctx context.Context, service, method, country st
 	if err != nil {
 		return nil, err
 	}
-	routes, err := e.repos.PaymentRoutes.For(ctx, service, method)
-	if err != nil {
-		return nil, err
+	key := routeCacheKey("for", service, method)
+	routes := cache.Get[[]domain.PaymentRoute](ctx, e.cache, key)
+	if routes == nil {
+		loaded, err := e.repos.PaymentRoutes.For(ctx, service, method)
+		if err != nil {
+			return nil, err
+		}
+		routes = &loaded
+		cache.Set(ctx, e.cache, key, loaded)
 	}
-	for _, route := range routes {
+	for _, route := range *routes {
 		if candidate, ok := e.candidate(ctx, route, service, country); ok {
 			return candidate, nil
 		}
@@ -83,15 +99,21 @@ func (e *Engine) AvailablePaymentMethods(ctx context.Context, service, country s
 	if err != nil {
 		return nil, err
 	}
-	routes, err := e.repos.PaymentRoutes.Candidates(ctx, service)
-	if err != nil {
-		return nil, err
+	key := routeCacheKey("candidates", service, "")
+	routes := cache.Get[[]domain.PaymentRoute](ctx, e.cache, key)
+	if routes == nil {
+		loaded, err := e.repos.PaymentRoutes.Candidates(ctx, service)
+		if err != nil {
+			return nil, err
+		}
+		routes = &loaded
+		cache.Set(ctx, e.cache, key, loaded)
 	}
 	// One method may have several routes; the first that passes makes it available,
 	// and the rest are the fallbacks SelectProvider would try.
-	seen := make(map[AvailablePaymentMethod]struct{}, len(routes))
-	available := make([]AvailablePaymentMethod, 0, len(routes))
-	for _, route := range routes {
+	seen := make(map[AvailablePaymentMethod]struct{}, len(*routes))
+	available := make([]AvailablePaymentMethod, 0, len(*routes))
+	for _, route := range *routes {
 		method := AvailablePaymentMethod{ServiceType: route.ServiceType, PaymentMethod: route.PaymentMethod}
 		if _, done := seen[method]; done {
 			continue
@@ -103,6 +125,10 @@ func (e *Engine) AvailablePaymentMethods(ctx context.Context, service, country s
 		available = append(available, method)
 	}
 	return available, nil
+}
+
+func routeCacheKey(query, service, method string) string {
+	return "routes:v1:" + query + ":" + service + ":" + method
 }
 
 func (e *Engine) candidate(ctx context.Context, route domain.PaymentRoute, service, country string) (*SelectedProvider, bool) {
