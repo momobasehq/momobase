@@ -30,11 +30,8 @@ const runtimeColumns: Column<RuntimeProvider>[] = [
   { key: "account", header: "Account", cell: (row) => <code>{row.provider_account_id}</code> },
   { key: "initialized", header: "Initialized", cell: (row) => <StatusBadge status={row.initialized ? "active" : "inactive"} /> },
   { key: "version", header: "Config", cell: (row) => `v${row.config_version}` },
-  {
-    key: "countries",
-    header: "Countries",
-    cell: (row) => (row.countries.length === 0 ? <span className="text-muted-foreground">Unrestricted</span> : row.countries.join(", ")),
-  },
+  { key: "country", header: "Country", cell: (row) => row.country },
+  { key: "currency", header: "Currency", cell: (row) => row.currency },
   { key: "capabilities", header: "Capabilities", align: "end", cell: (row) => row.capabilities.length },
 ]
 

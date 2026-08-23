@@ -3,6 +3,9 @@
 export type PaymentMethod = string
 export type ServiceType = "collection" | "disbursement"
 export type TransactionStatus = "pending" | "processing" | "succeeded" | "failed" | "unknown" | "cancelled" | "expired"
+export type ChargeType = "flat" | "percentage"
+export interface ChargeRule { type: ChargeType; value: number }
+export interface ChargeSchedule { collection: ChargeRule; disbursement: ChargeRule }
 
 export interface APIError { code: string; message: string }
 export interface APIEnvelope<T = unknown> { success: boolean; data?: T; error?: APIError; message?: string }
@@ -24,22 +27,24 @@ export interface AvailablePaymentMethods { items: AvailablePaymentMethod[]; coun
  * the engine. `scheme` is likewise free-form; the provider interprets it. */
 interface PaymentRequest {
   payment_method: PaymentMethod; scheme?: string; account: string
-  amount: number; currency: string; country?: string
+  amount: number; currency: string; country: string
   reference: string; description?: string; metadata?: Record<string, unknown>
 }
 export interface CreateCollectionRequest extends PaymentRequest { customer?: PartyPayload }
 export interface CreateDisbursementRequest extends PaymentRequest { recipient?: PartyPayload }
 export interface CreatePaymentResponse {
   transaction_id: string; reference: string; service_type: ServiceType; payment_method: PaymentMethod
-  status: TransactionStatus; selected_provider: string; provider_reference: string; message: string
+  status: TransactionStatus; selected_provider: string; provider_reference: string; platform_fee: number; message: string
 }
 export interface Transaction {
   id: string; app_id: string; service_type: ServiceType; payment_method: PaymentMethod; amount: number
   currency: string; country?: string; reference: string; idempotency_key: string; status: TransactionStatus
   selected_route_id?: string; selected_provider_account_id?: string; provider_reference?: string
   customer_account?: string; customer_email?: string; customer_name?: string; description?: string
+  platform_fee: number
   created_at: string; updated_at: string
 }
+export interface AdminTransaction extends Transaction { provider_fee: number }
 export interface OAuthTokenResponse {
   access_token: string; token_type: string; expires_in: number; refresh_token?: string; scope?: string
   app_id?: string; app_name?: string; credential_id?: string; client_id?: string
@@ -76,6 +81,7 @@ export interface AdminUser {
 }
 export interface App {
   id: string; name: string; description: string; status: string; environment: string
+  currency: string; charges: ChargeSchedule
   created_by?: string; created_at: string; updated_at: string
 }
 export interface AppCredential {
@@ -85,7 +91,8 @@ export interface AppCredential {
 export interface CreatedCredential { credential: AppCredential; client_secret: string }
 export interface ProviderAccount {
   id: string; provider_code: string; name: string; environment: string
-  countries: string[]; active: boolean; config_version: number; created_at: string; updated_at: string
+  country: string; currency: string; charges: ChargeSchedule
+  active: boolean; config_version: number; created_at: string; updated_at: string
 }
 /** Provider codes registered in the running server, including custom providers. */
 export interface ProviderRegistry { providers: string[] }
@@ -105,7 +112,7 @@ export interface AuditLog {
 }
 export interface RuntimeProvider {
   provider_account_id: string; provider_code: string; config_version: number; active: boolean
-  initialized: boolean; capabilities: unknown[]; countries: string[]; health?: ProviderHealthSnapshot
+  initialized: boolean; capabilities: unknown[]; country: string; currency: string; health?: ProviderHealthSnapshot
 }
 export interface ProviderBalance { currency: string; available: number; ledger: number }
 export interface ProviderBalanceResult {

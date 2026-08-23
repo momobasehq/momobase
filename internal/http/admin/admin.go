@@ -117,8 +117,8 @@ func (h *Handler) ActiveProviderBalances(c fiber.Ctx) error {
 	return platform.JSON(c, 200, platform.PaginateSlice(items, page, size))
 }
 
-// ProviderBalance queries and writes the balance for the provider account and
-// optional country identified by the request.
+// ProviderBalance queries and writes the balance for the provider account and its
+// configured country. The optional query value must match when supplied.
 //
 // @Summary Query a provider balance
 // @Tags Admin - Providers

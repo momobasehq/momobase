@@ -6,15 +6,17 @@ import { useAuth } from "@/hooks/use-auth"
 import { usePagedQuery } from "@/hooks/use-paged-query"
 import { formatAmount, formatRelative, titleCase } from "@/lib/format"
 import { keys } from "@/lib/query-keys"
-import type { Transaction } from "@momobase/sdk"
+import type { AdminTransaction } from "@momobase/sdk"
 
-const columns: Column<Transaction>[] = [
+const columns: Column<AdminTransaction>[] = [
   { key: "reference", header: "Reference", cell: (tx) => <span className="font-medium">{tx.reference}</span> },
   { key: "service", header: "Service", cell: (tx) => titleCase(tx.service_type) },
   // Payment methods are free-form strings matched against routes, so this column
   // shows whatever the integrator sent rather than a known set of rails.
   { key: "method", header: "Method", cell: (tx) => <code>{tx.payment_method}</code> },
   { key: "amount", header: "Amount", align: "end", cell: (tx) => formatAmount(tx.amount, tx.currency) },
+  { key: "provider_fee", header: "Provider fee", align: "end", cell: (tx) => formatAmount(tx.provider_fee, tx.currency) },
+  { key: "platform_fee", header: "Platform fee", align: "end", cell: (tx) => formatAmount(tx.platform_fee, tx.currency) },
   { key: "account", header: "Account", cell: (tx) => <code>{tx.customer_account || "—"}</code> },
   { key: "country", header: "Country", cell: (tx) => tx.country || "—" },
   { key: "status", header: "Status", cell: (tx) => <StatusBadge status={tx.status} /> },

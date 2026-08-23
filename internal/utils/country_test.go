@@ -7,13 +7,6 @@ import (
 )
 
 func TestCountryNormalization(t *testing.T) {
-	countries, err := utils.NormalizeProviderCountries([]string{" ug ", "RW", "UG"})
-	if err != nil || len(countries) != 2 || countries[0] != "UG" || countries[1] != "RW" {
-		t.Fatalf("countries=%v err=%v", countries, err)
-	}
-	if countries, err = utils.NormalizeProviderCountries(nil); err != nil || countries != nil {
-		t.Fatalf("utils.NormalizeProviderCountries(nil) = %v, %v, want an unrestricted account", countries, err)
-	}
 	if country, err := utils.NormalizeOptionalCountry("  "); err != nil || country != "" {
 		t.Fatalf("utils.NormalizeOptionalCountry(blank) = %q, %v, want an empty country", country, err)
 	}

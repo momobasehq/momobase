@@ -24,6 +24,24 @@ type AdminService struct {
 	runtime   *RuntimeManager
 }
 
+// CreateAccountInput contains the public settings for a provider account.
+type CreateAccountInput struct {
+	ProviderCode string
+	Name         string
+	Environment  string
+	Country      string
+	Currency     string
+	Charges      *domain.ChargeSchedule
+	Config       map[string]any
+}
+
+// AccountSettings contains the routing location and future transaction charges.
+type AccountSettings struct {
+	Country  string
+	Currency string
+	Charges  domain.ChargeSchedule
+}
+
 // NewAdminService creates a provider administration service.
 func NewAdminService(
 	repos *repository.UnitOfWork,
@@ -45,38 +63,54 @@ func (s *AdminService) RegisteredProviders() []string {
 func (s *AdminService) CreateAccount(
 	ctx context.Context,
 	actor *domain.AdminUser,
-	code string,
-	name string,
-	environment string,
-	countries []string,
-	config map[string]any,
+	input CreateAccountInput,
 ) (*domain.ProviderAccount, error) {
-	if !s.registry.Has(code) {
-		return nil, fmt.Errorf("provider factory not registered: %s", code)
+	if !s.registry.Has(input.ProviderCode) {
+		return nil, fmt.Errorf("provider factory not registered: %s", input.ProviderCode)
 	}
-	name = strings.TrimSpace(name)
-	if name == "" {
+	input.Name = strings.TrimSpace(input.Name)
+	if input.Name == "" {
 		return nil, errors.New("provider name is required")
 	}
-	if environment != "sandbox" && environment != "production" {
+	if input.Environment != "sandbox" && input.Environment != "production" {
 		return nil, errors.New("environment must be sandbox or production")
 	}
-	countries, err := utils.NormalizeProviderCountries(countries)
+	country, err := utils.NormalizeTransactionCountry(input.Country)
 	if err != nil {
 		return nil, err
 	}
-	cleanProviderConfig(config)
-	if err = validateProviderConfig(config); err != nil {
+	currency, err := utils.NormalizeCurrency(input.Currency)
+	if err != nil {
 		return nil, err
 	}
-	cipher, hash, err := s.encode(config)
+	charges := domain.ChargeSchedule{}
+	if input.Charges == nil {
+		charges.Normalize()
+	} else {
+		charges = *input.Charges
+	}
+	if err = charges.Validate(); err != nil {
+		return nil, err
+	}
+	cleanProviderConfig(input.Config)
+	if err = validateProviderConfig(input.Config); err != nil {
+		return nil, err
+	}
+	cipher, hash, err := s.encode(input.Config)
 	if err != nil {
 		return nil, err
 	}
 	account := &domain.ProviderAccount{
-		BaseModel: domain.BaseModel{ID: platform.NewID("pacc")}, ProviderCode: code, Name: name,
-		Environment: environment, Countries: countries, ConfigVersion: 1,
-		EncryptedConfigJSON: cipher, ConfigHash: hash,
+		BaseModel:           domain.BaseModel{ID: platform.NewID("pacc")},
+		ProviderCode:        input.ProviderCode,
+		Name:                input.Name,
+		Environment:         input.Environment,
+		Country:             country,
+		Currency:            currency,
+		Charges:             charges,
+		ConfigVersion:       1,
+		EncryptedConfigJSON: cipher,
+		ConfigHash:          hash,
 	}
 	if err = s.repos.ProviderAccounts.Create(ctx, account); err != nil {
 		return nil, err
@@ -88,17 +122,35 @@ func (s *AdminService) CreateAccount(
 		"provider_account.created",
 		"provider_account",
 		account.ID,
-		map[string]any{"provider_code": code, "countries": countries},
+		map[string]any{
+			"provider_code": input.ProviderCode,
+			"country":       country,
+			"currency":      currency,
+			"charges":       charges,
+		},
 		"",
 		"",
 	)
 	return account, nil
 }
 
-// UpdateCountries replaces a provider account's supported countries and reloads an active runtime.
-func (s *AdminService) UpdateCountries(ctx context.Context, actor *domain.AdminUser, id string, countries []string) error {
-	countries, err := utils.NormalizeProviderCountries(countries)
+// UpdateSettings replaces a provider account's location and charges, reloading an
+// active runtime so its country metadata changes at the same time as the row.
+func (s *AdminService) UpdateSettings(
+	ctx context.Context,
+	actor *domain.AdminUser,
+	id string,
+	settings AccountSettings,
+) error {
+	country, err := utils.NormalizeTransactionCountry(settings.Country)
 	if err != nil {
+		return err
+	}
+	currency, err := utils.NormalizeCurrency(settings.Currency)
+	if err != nil {
+		return err
+	}
+	if err := settings.Charges.Validate(); err != nil {
 		return err
 	}
 	account, err := s.repos.ProviderAccounts.ByID(ctx, id)
@@ -112,12 +164,17 @@ func (s *AdminService) UpdateCountries(ctx context.Context, actor *domain.AdminU
 	if err = validateProviderConfig(plain); err != nil {
 		return err
 	}
-	if err = s.updateCountries(ctx, id, countries); err != nil {
+	updates := settingsUpdates(country, currency, settings.Charges)
+	if err = s.repos.ProviderAccounts.Update(ctx, id, updates); err != nil {
 		return err
 	}
 	if account.Active {
 		if err = s.runtime.Reload(ctx, id); err != nil {
-			if rollback := s.updateCountries(ctx, id, account.Countries); rollback != nil {
+			if rollback := s.repos.ProviderAccounts.Restore(ctx, id, settingsUpdates(
+				account.Country,
+				account.Currency,
+				account.Charges,
+			)); rollback != nil {
 				return errors.Join(err, rollback)
 			}
 			return err
@@ -127,22 +184,25 @@ func (s *AdminService) UpdateCountries(ctx context.Context, actor *domain.AdminU
 		ctx,
 		actor.ActorID(),
 		"admin",
-		"provider_countries.updated",
+		"provider_settings.updated",
 		"provider_account",
 		id,
-		map[string]any{"countries": countries},
+		map[string]any{"country": country, "currency": currency, "charges": settings.Charges},
 		"",
 		"",
 	)
 	return nil
 }
 
-func (s *AdminService) updateCountries(ctx context.Context, id string, countries []string) error {
-	raw, err := json.Marshal(countries)
-	if err != nil {
-		return err
+func settingsUpdates(country, currency string, charges domain.ChargeSchedule) map[string]any {
+	return map[string]any{
+		"country":                   country,
+		"currency":                  currency,
+		"collection_charge_type":    charges.Collection.Type,
+		"collection_charge_value":   charges.Collection.Value,
+		"disbursement_charge_type":  charges.Disbursement.Type,
+		"disbursement_charge_value": charges.Disbursement.Value,
 	}
-	return s.repos.ProviderAccounts.SetCountries(ctx, id, string(raw))
 }
 
 // UpdateConfig validates and encrypts replacement provider configuration and reloads an active runtime.

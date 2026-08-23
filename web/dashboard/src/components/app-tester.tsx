@@ -93,7 +93,7 @@ export function AppTester({ clientId, clientSecret }: AppTesterProps) {
       account: form.account,
       amount: Number(form.amount),
       currency: form.currency,
-      country: form.country || undefined,
+      country: form.country,
       reference: own,
       description: `Dashboard test ${service}`,
     }

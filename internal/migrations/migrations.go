@@ -49,6 +49,7 @@ func All() []Migration {
 	return []Migration{
 		{Version: "0001", Name: "baseline", Up: upBaseline},
 		{Version: "0002", Name: "customer_account", Up: upCustomerAccount},
+		{Version: "0003", Name: "account_location", Up: upAccountLocation},
 	}
 }
 

@@ -114,7 +114,8 @@ func (h *Handler) RuntimeProviders(c fiber.Ctx) error {
 			"active":              true,
 			"initialized":         true,
 			"capabilities":        runtime.Capabilities,
-			"countries":           runtime.Countries,
+			"country":             runtime.Country,
+			"currency":            runtime.Currency,
 		}
 		// A provider that has never been probed simply has no snapshot to report.
 		health, err := h.repos.ProviderHealth.ByAccount(c.Context(), runtime.AccountID)

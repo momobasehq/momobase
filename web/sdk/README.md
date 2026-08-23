@@ -67,16 +67,17 @@ await app.collections.create({
 
 `payment_method` and `scheme` come from the chosen method; `account` is what the user entered. `account` may be a mobile number, a bank account, a card token, or a wallet address, and the engine treats it as opaque. What counts as valid is the provider's to decide: an adapter that needs an MSISDN validates and canonicalizes it when the request is routed, and the normalized value is what the transaction records. `scheme` optionally names the network, bank, or card brand, and `metadata` passes provider-specific details through without being persisted.
 
-## Country routing
+## Location and fee routing
 
-`country` is an optional two-letter ISO code. Provider accounts expose `countries: string[]`: an account that lists countries serves only requests naming one of them, and an account with an empty list is unrestricted, which is how a rail with no country notion is modelled. Route priority decides among eligible providers; there is no global fallback country.
+`country` is a required two-letter ISO code. Each app has one currency, and each provider account has one country and currency. A route is eligible only when all four routing attributes match: service, payment method, country, and currency.
+
+Apps and provider accounts can define separate `collection` and `disbursement` charge rules. A flat rule's value is in minor units; a percentage rule uses basis points (`1000` means 10%). Calculated `platform_fee` and `provider_fee` values are snapshotted when the transaction is created. App APIs expose only `platform_fee`; admin transaction APIs expose both.
 
 ## Contract notes
 
 - `payment_method` is free-form and must match an active payment route. `momo` is a convention, not an enum.
-- `account` and `payment_method` are required. `scheme`, `metadata`, and `country` are optional, as are `customer` and `recipient`, which carry a name and email only.
-- Supported countries can be changed with `admin.providers.updateCountries(id, countries)`; an empty array leaves the account unrestricted.
-- `admin.providers.balance(id, country)` requires `country` only for a provider that declares more than one.
-- Provider configs should include `webhook_secret`; country eligibility is not stored in provider credential config.
-- Provider balances use `{ currency, available, ledger }`; active balance queries return one `{ provider_account_id, provider_code, country, status, balance?, error? }` item per supported country, or one item with an empty `country` for an unrestricted provider.
+- `account`, `payment_method`, and `country` are required. `scheme` and `metadata` are optional, as are `customer` and `recipient`, which carry a name and email only.
+- Provider country, currency, and charges are changed atomically with `admin.providers.updateSettings(id, settings)`.
+- Provider configs should include `webhook_secret`; location and fee settings are not stored in provider credential config.
+- Provider balances use `{ currency, available, ledger }`; active balance queries return one result per active provider account.
 - Provider capabilities report the service only — `{ service_type }`. Which rails reach an account is decided by its routes.

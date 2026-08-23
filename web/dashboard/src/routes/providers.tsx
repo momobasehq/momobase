@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import { DataTable, type Column } from "@/components/data-table"
+import { ChargeFields, zeroCharges } from "@/components/charge-fields"
 import { GuardedAction } from "@/components/guarded-action"
 import { PaginationControls } from "@/components/pagination-controls"
 import { StatusBadge } from "@/components/status-badge"
@@ -13,26 +14,36 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { AdminPermissions, type ProviderAccount } from "@momobase/sdk"
+import { AdminPermissions, type ChargeSchedule, type ProviderAccount } from "@momobase/sdk"
 
 import { useAuth } from "@/hooks/use-auth"
 import { usePagedQuery } from "@/hooks/use-paged-query"
 import { formatAmount, formatDateTime } from "@/lib/format"
 import { keys } from "@/lib/query-keys"
 
-/** Splits a comma-separated country list into the array the API expects. */
-function parseCountries(value: string) {
-  return value
-    .split(",")
-    .map((country) => country.trim().toUpperCase())
-    .filter(Boolean)
+interface ProviderForm {
+  provider_code: string
+  name: string
+  environment: "sandbox" | "production"
+  country: string
+  currency: string
+  charges: ChargeSchedule
+  config: string
 }
 
 /** CreateAccountDialog registers a provider account for a registered provider code. */
 function CreateAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { client } = useAuth()
   const queryClient = useQueryClient()
-  const [form, setForm] = useState({ provider_code: "", name: "", environment: "sandbox", countries: "", config: "{\n  \"webhook_secret\": \"\"\n}" })
+  const [form, setForm] = useState<ProviderForm>({
+    provider_code: "",
+    name: "",
+    environment: "sandbox",
+    country: "UG",
+    currency: "UGX",
+    charges: zeroCharges,
+    config: "{\n  \"webhook_secret\": \"\"\n}",
+  })
 
   // Provider codes come only from the running server's registry. A client-side preset
   // map would silently exclude every out-of-tree adapter, which is the whole point of
@@ -50,10 +61,10 @@ function CreateAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       return client.providers.createAccount({
         provider_code: form.provider_code,
         name: form.name,
-        environment: form.environment as "sandbox" | "production",
-        // An account with no countries is unrestricted — the right default for a rail
-        // that has no country notion at all.
-        countries: parseCountries(form.countries),
+        environment: form.environment,
+        country: form.country,
+        currency: form.currency,
+        charges: form.charges,
         config,
       })
     },
@@ -104,18 +115,27 @@ function CreateAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               </SelectContent>
             </Select>
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="provider-countries">Countries</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2">
+            <Label htmlFor="provider-country">Country</Label>
             <Input
-              id="provider-countries"
-              value={form.countries}
-              onChange={(e) => setForm({ ...form, countries: e.target.value })}
-              placeholder="UG, RW — leave empty for unrestricted"
+              id="provider-country"
+              maxLength={2}
+              value={form.country}
+              onChange={(event) => setForm({ ...form, country: event.target.value.toUpperCase() })}
             />
-            <p className="text-muted-foreground">
-              An account that declares countries only serves requests naming one of them. Leave it empty for a rail with no country notion.
-            </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="provider-currency">Currency</Label>
+              <Input
+                id="provider-currency"
+                maxLength={3}
+                value={form.currency}
+                onChange={(event) => setForm({ ...form, currency: event.target.value.toUpperCase() })}
+              />
+            </div>
           </div>
+          <ChargeFields id="new-provider-charges" value={form.charges} onChange={(charges) => setForm({ ...form, charges })} />
           <div className="flex flex-col gap-2">
             <Label htmlFor="provider-config">Configuration (JSON)</Label>
             <Textarea
@@ -132,7 +152,10 @@ function CreateAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !form.provider_code || !form.name}>
+          <Button
+            onClick={() => create.mutate()}
+            disabled={create.isPending || !form.provider_code || !form.name || form.country.length !== 2 || form.currency.length !== 3}
+          >
             Create
           </Button>
         </DialogFooter>
@@ -142,7 +165,7 @@ function CreateAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 }
 
 /**
- * ConfigureDialog edits an existing account's countries and encrypted configuration.
+ * ConfigureDialog edits an existing account's location, fees, and encrypted configuration.
  *
  * The two are separate API calls because they reload the runtime differently: a config
  * change rebuilds the adapter and rolls the row back if the reload fails, so sending
@@ -151,7 +174,7 @@ function CreateAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 function ConfigureDialog({ account, onClose }: { account?: ProviderAccount; onClose: () => void }) {
   const { client } = useAuth()
   const queryClient = useQueryClient()
-  const [countries, setCountries] = useState("")
+  const [settings, setSettings] = useState({ country: "UG", currency: "UGX", charges: zeroCharges })
   const [config, setConfig] = useState("")
   const [loaded, setLoaded] = useState<string>()
 
@@ -159,7 +182,7 @@ function ConfigureDialog({ account, onClose }: { account?: ProviderAccount; onCl
   // is encrypted and never returned, so the box starts empty: submitting replaces it.
   if (account && loaded !== account.id) {
     setLoaded(account.id)
-    setCountries(account.countries.join(", "))
+    setSettings({ country: account.country, currency: account.currency, charges: account.charges })
     setConfig("")
   }
 
@@ -167,10 +190,10 @@ function ConfigureDialog({ account, onClose }: { account?: ProviderAccount; onCl
     await queryClient.invalidateQueries({ queryKey: keys.providers.all })
   }
 
-  const saveCountries = useMutation({
-    mutationFn: () => client.providers.updateCountries(account!.id, parseCountries(countries)),
+  const saveSettings = useMutation({
+    mutationFn: () => client.providers.updateSettings(account!.id, settings),
     onSuccess: async () => {
-      toast.success("Countries updated")
+      toast.success("Provider settings updated")
       await refresh()
     },
     onError: (error: Error) => toast.error(error.message),
@@ -210,19 +233,36 @@ function ConfigureDialog({ account, onClose }: { account?: ProviderAccount; onCl
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="edit-countries">Countries</Label>
-          <div className="flex gap-2">
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-country">Country</Label>
             <Input
-              id="edit-countries"
-              value={countries}
-              onChange={(event) => setCountries(event.target.value)}
-              placeholder="Leave empty for unrestricted"
+                id="edit-country"
+                maxLength={2}
+                value={settings.country}
+                onChange={(event) => setSettings({ ...settings, country: event.target.value.toUpperCase() })}
             />
-            <GuardedAction permission={AdminPermissions.providersUpdate} variant="outline" disabled={saveCountries.isPending} onClick={() => saveCountries.mutate()}>
-              Save
-            </GuardedAction>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-currency">Currency</Label>
+              <Input
+                id="edit-currency"
+                maxLength={3}
+                value={settings.currency}
+                onChange={(event) => setSettings({ ...settings, currency: event.target.value.toUpperCase() })}
+              />
+            </div>
           </div>
+          <ChargeFields id="edit-provider-charges" value={settings.charges} onChange={(charges) => setSettings({ ...settings, charges })} />
+          <GuardedAction
+            permission={AdminPermissions.providersUpdate}
+            className="self-start"
+            disabled={saveSettings.isPending || settings.country.length !== 2 || settings.currency.length !== 3}
+            onClick={() => saveSettings.mutate()}
+          >
+            Save settings
+          </GuardedAction>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -252,7 +292,7 @@ function ConfigureDialog({ account, onClose }: { account?: ProviderAccount; onCl
           <Button
             variant="outline"
             disabled={balance.isPending}
-            onClick={() => balance.mutate(account?.countries[0] ?? "")}
+            onClick={() => balance.mutate(account?.country ?? "")}
           >
             Query balance
           </Button>
@@ -300,11 +340,11 @@ export function Providers() {
     { key: "code", header: "Provider", cell: (account) => <code>{account.provider_code}</code> },
     { key: "environment", header: "Environment", cell: (account) => <StatusBadge status={account.environment} /> },
     {
-      key: "countries",
-      header: "Countries",
-      cell: (account) =>
-        account.countries.length === 0 ? <span className="text-muted-foreground">Unrestricted</span> : account.countries.join(", "),
+      key: "country",
+      header: "Country",
+      cell: (account) => account.country,
     },
+    { key: "currency", header: "Currency", cell: (account) => account.currency },
     { key: "active", header: "Status", cell: (account) => <StatusBadge status={account.active ? "active" : "inactive"} /> },
     { key: "version", header: "Config", cell: (account) => `v${account.config_version}` },
     { key: "updated", header: "Updated", cell: (account) => formatDateTime(account.updated_at) },
@@ -339,7 +379,7 @@ export function Providers() {
       <Card>
         <CardHeader>
           <CardTitle>Provider accounts</CardTitle>
-          <CardDescription>Configured adapters and the countries each one serves.</CardDescription>
+          <CardDescription>Configured adapters and the country and currency each one serves.</CardDescription>
           <div className="ms-auto">
             <GuardedAction permission={AdminPermissions.providersCreate} size="sm" onClick={() => setCreating(true)}>
               New account
@@ -369,7 +409,7 @@ export function Providers() {
       <Card>
         <CardHeader>
           <CardTitle>Balances</CardTitle>
-          <CardDescription>Live balances for every active account, queried per country it serves.</CardDescription>
+          <CardDescription>Live balances for every active provider account.</CardDescription>
         </CardHeader>
         <CardContent>
           <DataTable
@@ -378,7 +418,7 @@ export function Providers() {
               {
                 key: "country",
                 header: "Country",
-                cell: (row) => row.country || <span className="text-muted-foreground">Global</span>,
+                cell: (row) => row.country,
               },
               { key: "status", header: "Status", cell: (row) => <StatusBadge status={row.status} /> },
               {

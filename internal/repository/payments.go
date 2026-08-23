@@ -63,12 +63,6 @@ func (r ProviderAccountRepo) Restore(ctx context.Context, id string, values map[
 	return r.touch(ctx, values, "id = ?", id)
 }
 
-// SetCountries replaces the countries a provider account serves, stored as the encoded
-// list the model carries.
-func (r ProviderAccountRepo) SetCountries(ctx context.Context, id, countries string) error {
-	return r.update(ctx, map[string]any{"countries": countries}, "id = ?", id)
-}
-
 // SetConfig replaces the encrypted configuration and bumps its version. The version is
 // an expression rather than a read-then-write, so two changes racing each other still
 // produce two versions.

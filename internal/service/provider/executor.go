@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"time"
 
 	"github.com/momobasehq/momobase/internal/domain"
@@ -113,21 +112,14 @@ func (e *Executor) QueryTransaction(
 	})
 }
 
-// QueryBalance retrieves a provider balance for a country, inferring the country
-// for single-country providers and querying without one for a provider that
-// declares no countries.
+// QueryBalance retrieves a provider balance for its configured country.
 func (e *Executor) QueryBalance(ctx context.Context, id, country string) (*providers.ProviderBalance, error) {
 	p, err := e.ready(id, "", country)
 	if err != nil {
 		return nil, err
 	}
 	if country == "" {
-		if len(p.Countries) > 1 {
-			return nil, errors.New("country is required for a provider that declares more than one")
-		}
-		if len(p.Countries) == 1 {
-			country = p.Countries[0]
-		}
+		country = p.Country
 	}
 	return execute(ctx, e, p, "balance", func(c context.Context) (*providers.ProviderBalance, error) {
 		return p.Adapter.QueryBalance(c, country)
@@ -162,9 +154,7 @@ func (e *Executor) VerifyWebhook(
 	return p.Adapter.VerifyWebhook(c, payload, headers)
 }
 
-// ready returns a loaded runtime that can serve the requested operation. A country
-// is checked only against a provider that declares one: an account with no declared
-// countries is unrestricted, which is what a rail without a country notion needs.
+// ready returns a loaded runtime that can serve the requested operation and country.
 func (e *Executor) ready(id, service, country string) (*Runtime, error) {
 	p, ok := e.runtime.Get(id)
 	if !ok || p.Adapter == nil {
@@ -173,7 +163,7 @@ func (e *Executor) ready(id, service, country string) (*Runtime, error) {
 	if service != "" && !providers.Supports(p.Capabilities, service) {
 		return nil, fmt.Errorf("provider does not support %s", service)
 	}
-	if country != "" && len(p.Countries) > 0 && !slices.Contains(p.Countries, country) {
+	if country != "" && p.Country != country {
 		return nil, fmt.Errorf("provider does not support country %s", country)
 	}
 	return p, nil

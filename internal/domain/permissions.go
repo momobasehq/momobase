@@ -63,7 +63,7 @@ var Permissions = []PermissionDefinition{
 	{"credentials:update", "Rotate or revoke application credentials", AudienceAdmin},
 	{"providers:read", "List provider accounts, the registry, and provider health", AudienceAdmin},
 	{"providers:create", "Register provider accounts", AudienceAdmin},
-	{"providers:update", "Change provider configuration, countries, or activation", AudienceAdmin},
+	{"providers:update", "Change provider configuration, location, fees, or activation", AudienceAdmin},
 	{"providers:test", "Run a provider configuration health check", AudienceAdmin},
 	{"balances:read", "Query provider balances", AudienceAdmin},
 	{"routes:read", "List payment routes", AudienceAdmin},

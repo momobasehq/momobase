@@ -5,6 +5,7 @@ import { ArrowLeft, Copy, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 
 import { DataTable, type Column } from "@/components/data-table"
+import { ChargeFields, zeroCharges } from "@/components/charge-fields"
 import { ServiceMixChart } from "@/components/analytics-charts"
 import { AnalyticsFilters, defaultRange, toQuery, type AnalyticsRange } from "@/components/analytics-filters"
 import { AppTester } from "@/components/app-tester"
@@ -21,7 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { AdminPermissions, type AppCredential, type CreatedCredential } from "@momobase/sdk"
+import { AdminPermissions, type AppCredential, type ChargeRule, type CreatedCredential } from "@momobase/sdk"
 
 import { useAuth } from "@/hooks/use-auth"
 import { usePagedQuery } from "@/hooks/use-paged-query"
@@ -86,7 +87,7 @@ export function AppDetail() {
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState("")
   const [editing, setEditing] = useState(false)
-  const [details, setDetails] = useState({ name: "", description: "" })
+  const [details, setDetails] = useState({ name: "", description: "", currency: "UGX", charges: zeroCharges })
   const [scopes, setScopes] = useState<string[]>([])
 
   // Scopes come from the server's app-audience catalogue, and the server validates
@@ -226,7 +227,12 @@ export function AppDetail() {
               variant="outline"
               size="sm"
               onClick={() => {
-                setDetails({ name: app.data?.name ?? "", description: app.data?.description ?? "" })
+                setDetails({
+                  name: app.data?.name ?? "",
+                  description: app.data?.description ?? "",
+                  currency: app.data?.currency ?? "UGX",
+                  charges: app.data?.charges ?? zeroCharges,
+                })
                 setEditing(true)
               }}
             >
@@ -242,6 +248,18 @@ export function AppDetail() {
           <div>
             <p className="text-muted-foreground">Status</p>
             <StatusBadge status={app.data?.status} />
+          </div>
+          <div>
+            <p className="text-muted-foreground">Currency</p>
+            <code>{app.data?.currency ?? "—"}</code>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Collection fee</p>
+            <span>{formatCharge(app.data?.charges.collection)}</span>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Disbursement fee</p>
+            <span>{formatCharge(app.data?.charges.disbursement)}</span>
           </div>
           <div>
             <p className="text-muted-foreground">App ID</p>
@@ -403,13 +421,27 @@ export function AppDetail() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit app</DialogTitle>
-            <DialogDescription>Name and description only; the environment is fixed at creation.</DialogDescription>
+            <DialogDescription>Changes apply only to future transactions.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2">
               <Label htmlFor="edit-app-name">Name</Label>
               <Input id="edit-app-name" value={details.name} onChange={(event) => setDetails({ ...details, name: event.target.value })} />
             </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-app-currency">Currency</Label>
+              <Input
+                id="edit-app-currency"
+                maxLength={3}
+                value={details.currency}
+                onChange={(event) => setDetails({ ...details, currency: event.target.value.toUpperCase() })}
+              />
+            </div>
+            <ChargeFields
+              id="edit-app-charges"
+              value={details.charges}
+              onChange={(charges) => setDetails({ ...details, charges })}
+            />
             <div className="flex flex-col gap-2">
               <Label htmlFor="edit-app-description">Description</Label>
               <Textarea
@@ -423,7 +455,7 @@ export function AppDetail() {
             <Button variant="outline" onClick={() => setEditing(false)}>
               Cancel
             </Button>
-            <Button onClick={() => save.mutate()} disabled={save.isPending || !details.name}>
+            <Button onClick={() => save.mutate()} disabled={save.isPending || !details.name || details.currency.length !== 3}>
               Save
             </Button>
           </DialogFooter>
@@ -433,4 +465,9 @@ export function AppDetail() {
       <SecretDialog created={created} onClose={() => setCreated(undefined)} />
     </div>
   )
+}
+
+function formatCharge(rule?: ChargeRule) {
+  if (!rule) return "—"
+  return rule.type === "percentage" ? `${rule.value / 100}%` : `${rule.value} minor units`
 }

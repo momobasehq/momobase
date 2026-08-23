@@ -97,11 +97,13 @@ type AuditLog struct {
 // Apps only create and query transactions through the public API. They do not receive webhooks.
 type App struct {
 	BaseModel
-	Name        string `gorm:"size:255;not null" json:"name"`
-	Description string `gorm:"type:text" json:"description"`
-	Status      string `gorm:"size:32;index;not null;default:active" json:"status"`
-	Environment string `gorm:"size:32;index;not null;default:production" json:"environment"`
-	CreatedBy   string `gorm:"size:40;index" json:"created_by"`
+	Name        string         `gorm:"size:255;not null" json:"name"`
+	Description string         `gorm:"type:text" json:"description"`
+	Status      string         `gorm:"size:32;index;not null;default:active" json:"status"`
+	Environment string         `gorm:"size:32;index;not null;default:production" json:"environment"`
+	Currency    string         `gorm:"size:3;index;not null;default:UGX" json:"currency"`
+	Charges     ChargeSchedule `gorm:"embedded" json:"charges"`
+	CreatedBy   string         `gorm:"size:40;index" json:"created_by"`
 }
 
 // AppCredential is an OAuth client_credentials identity for one App.
@@ -135,14 +137,16 @@ type AppSession struct {
 // activation state.
 type ProviderAccount struct {
 	BaseModel
-	ProviderCode        string   `gorm:"size:80;index" json:"provider_code"`
-	Name                string   `gorm:"size:255;not null" json:"name"`
-	Environment         string   `gorm:"size:32;not null;default:sandbox" json:"environment"`
-	Countries           []string `gorm:"serializer:json;type:text" json:"countries"`
-	Active              bool     `gorm:"index;not null;default:false" json:"active"`
-	ConfigVersion       int      `gorm:"not null;default:1" json:"config_version"`
-	EncryptedConfigJSON string   `gorm:"type:text;not null" json:"-"`
-	ConfigHash          string   `gorm:"size:128" json:"config_hash"`
+	ProviderCode        string         `gorm:"size:80;index" json:"provider_code"`
+	Name                string         `gorm:"size:255;not null" json:"name"`
+	Environment         string         `gorm:"size:32;not null;default:sandbox" json:"environment"`
+	Country             string         `gorm:"size:2;index;not null" json:"country"`
+	Currency            string         `gorm:"size:3;index;not null;default:UGX" json:"currency"`
+	Charges             ChargeSchedule `gorm:"embedded" json:"charges"`
+	Active              bool           `gorm:"index;not null;default:false" json:"active"`
+	ConfigVersion       int            `gorm:"not null;default:1" json:"config_version"`
+	EncryptedConfigJSON string         `gorm:"type:text;not null" json:"-"`
+	ConfigHash          string         `gorm:"size:128" json:"config_hash"`
 }
 
 // ProviderHealthSnapshot stores the latest observed provider and circuit state.
@@ -193,6 +197,8 @@ type Transaction struct {
 	CustomerEmail             string     `gorm:"size:255" json:"customer_email"`
 	CustomerName              string     `gorm:"size:255" json:"customer_name"`
 	Description               string     `gorm:"type:text" json:"description"`
+	ProviderFee               int64      `gorm:"not null;default:0" json:"provider_fee"`
+	PlatformFee               int64      `gorm:"not null;default:0" json:"platform_fee"`
 	RequestHash               string     `gorm:"size:128" json:"-"`
 	ReconciliationAttempts    int        `gorm:"not null;default:0" json:"reconciliation_attempts"`
 	LastReconciledAt          *time.Time `json:"last_reconciled_at"`

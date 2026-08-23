@@ -108,6 +108,7 @@ type Runtime struct {
 	Active            bool                           `json:"active" example:"true"`
 	Initialized       bool                           `json:"initialized" example:"true"`
 	Capabilities      []providers.Capability         `json:"capabilities"`
-	Countries         []string                       `json:"countries" example:"UG"`
+	Country           string                         `json:"country" example:"UG"`
+	Currency          string                         `json:"currency" example:"UGX"`
 	Health            *domain.ProviderHealthSnapshot `json:"health,omitempty"`
 }

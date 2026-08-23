@@ -1386,81 +1386,6 @@
                 }
             }
         },
-        "/api/admin/providers/accounts/{id}/countries": {
-            "patch": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Providers"
-                ],
-                "summary": "Update provider countries",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Provider account ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Countries",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UpdateCountriesRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.DocResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorResponse"
-                        }
-                    },
-                    "415": {
-                        "description": "Unsupported Media Type",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorResponse"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/admin/providers/accounts/{id}/deactivate": {
             "patch": {
                 "security": [
@@ -1505,6 +1430,81 @@
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/providers/accounts/{id}/settings": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Providers"
+                ],
+                "summary": "Update provider settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Provider settings",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateProviderSettingsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.DocResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/apidoc.ErrorResponse"
+                        }
+                    },
+                    "415": {
+                        "description": "Unsupported Media Type",
                         "schema": {
                             "$ref": "#/definitions/apidoc.ErrorResponse"
                         }
@@ -3458,6 +3458,28 @@
                 }
             }
         },
+        "domain.ChargeRule": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.ChargeSchedule": {
+            "type": "object",
+            "properties": {
+                "collection": {
+                    "$ref": "#/definitions/domain.ChargeRule"
+                },
+                "disbursement": {
+                    "$ref": "#/definitions/domain.ChargeRule"
+                }
+            }
+        },
         "dto.ChangeAdminStatusRequest": {
             "type": "object",
             "required": [
@@ -3555,9 +3577,17 @@
         "dto.CreateAppRequest": {
             "type": "object",
             "required": [
+                "currency",
                 "name"
             ],
             "properties": {
+                "charges": {
+                    "$ref": "#/definitions/domain.ChargeSchedule"
+                },
+                "currency": {
+                    "type": "string",
+                    "example": "UGX"
+                },
                 "description": {
                     "type": "string",
                     "maxLength": 1000,
@@ -3603,6 +3633,7 @@
             "type": "object",
             "required": [
                 "account",
+                "country",
                 "payment_method",
                 "reference"
             ],
@@ -3616,7 +3647,7 @@
                     "type": "integer"
                 },
                 "country": {
-                    "description": "Country is the optional ISO 3166-1 alpha-2 transaction country. Providers that\ndeclare supported countries are only eligible when it is present and matches.",
+                    "description": "Country is the ISO 3166-1 alpha-2 transaction country used for routing.",
                     "type": "string"
                 },
                 "currency": {
@@ -3668,23 +3699,26 @@
             "type": "object",
             "required": [
                 "config",
+                "country",
+                "currency",
                 "name",
                 "provider_code"
             ],
             "properties": {
+                "charges": {
+                    "$ref": "#/definitions/domain.ChargeSchedule"
+                },
                 "config": {
                     "description": "Config is the provider's own settings and must carry a webhook_secret. It is\nencrypted before it is stored and is never returned.",
                     "type": "object"
                 },
-                "countries": {
-                    "description": "Countries restricts the account to the listed ISO 3166-1 alpha-2 countries. An\nempty list leaves it unrestricted, which suits a rail with no country notion.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "UG"
-                    ]
+                "country": {
+                    "type": "string",
+                    "example": "UG"
+                },
+                "currency": {
+                    "type": "string",
+                    "example": "UGX"
                 },
                 "environment": {
                     "type": "string",
@@ -3787,6 +3821,13 @@
         "dto.UpdateAppRequest": {
             "type": "object",
             "properties": {
+                "charges": {
+                    "$ref": "#/definitions/domain.ChargeSchedule"
+                },
+                "currency": {
+                    "type": "string",
+                    "example": "UGX"
+                },
                 "description": {
                     "type": "string",
                     "maxLength": 1000,
@@ -3807,21 +3848,6 @@
                 }
             }
         },
-        "dto.UpdateCountriesRequest": {
-            "type": "object",
-            "properties": {
-                "countries": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "UG",
-                        "RW"
-                    ]
-                }
-            }
-        },
         "dto.UpdateProviderConfigRequest": {
             "type": "object",
             "required": [
@@ -3830,6 +3856,27 @@
             "properties": {
                 "config": {
                     "type": "object"
+                }
+            }
+        },
+        "dto.UpdateProviderSettingsRequest": {
+            "type": "object",
+            "required": [
+                "charges",
+                "country",
+                "currency"
+            ],
+            "properties": {
+                "charges": {
+                    "$ref": "#/definitions/domain.ChargeSchedule"
+                },
+                "country": {
+                    "type": "string",
+                    "example": "UG"
+                },
+                "currency": {
+                    "type": "string",
+                    "example": "UGX"
                 }
             }
         },
