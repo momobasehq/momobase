@@ -8,7 +8,7 @@ The backend is a modular monolith, layered so that each concern has one home:
 - `internal/dto`: every request body the API accepts, carrying its own validation rules and normalization.
 - `internal/service/*`: identity, payments, routing, provider runtime, health, webhooks, reconciliation, and auditing.
 - `internal/repository`: the only package that reaches the database — one repository per entity, and the single transaction boundary.
-- `providers`: the public provider contract and shared adapter helpers, plus the in-tree reference adapter in `providers/dummy`. Nothing here is registered automatically; a build chooses its providers through `momobase.WithProvider`.
+- `providers`: the public provider contract and shared adapter helpers, plus optional adapters in `providers/dummy` and `providers/mtn`. Nothing here is registered automatically; a build chooses its providers through `momobase.WithProvider`.
 - `internal/utils`: dependency-free helpers shared across the module — validation, country normalization, and redaction.
 - `internal/workers`: bounded health, reconciliation, and session-cleanup loops.
 - `internal/bootstrap`: configuration, database initialization, dependency wiring, migration, and process lifecycle.

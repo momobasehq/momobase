@@ -17,6 +17,8 @@ type Capability struct {
 }
 
 // ProviderConfig contains the provider-specific values used during initialization.
+// Momobase adds the provider account's authoritative "environment" value before
+// calling Init, overriding any value stored in the encrypted provider config.
 type ProviderConfig map[string]any
 
 // PaymentRequest contains the normalized details of a provider payment operation.
