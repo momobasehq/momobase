@@ -38,7 +38,7 @@ List responses unwrap to:
 
 The SDK uses the global `fetch()` directly. There is no `fetchImpl` option.
 
-Both clients cache access tokens and call the refresh endpoint when a `refresh_token` is available. If no refresh token exists, the app client requests a new `client_credentials` token and the admin client falls back to password grant when email/password are configured.
+Both clients cache access tokens and call the refresh endpoint when a `refresh_token` is available. They refresh before a known expiry and also refresh and retry once when an API request returns `401`. Concurrent requests share the same refresh operation so rotating refresh tokens are not replayed. If no refresh token exists, the app client requests a new `client_credentials` token and the admin client falls back to password grant when email/password are configured.
 
 ## Paying: discover, then charge
 

@@ -16,8 +16,8 @@ import "./index.css"
 /**
  * One policy for every failed request, so no screen has to restate it.
  *
- * - 401 means the refresh token is gone too, since the SDK refreshes proactively
- *   before a request rather than reacting to a rejection. The session is over.
+ * - The SDK refreshes and retries once when a request returns 401. A 401 that reaches
+ *   this handler means the refreshed request was also rejected, so the session is over.
  * - 403 is a role the admin does not have. Toast it, but do **not** sign them out:
  *   losing a whole session because one control was out of reach is worse than the
  *   denial itself.
