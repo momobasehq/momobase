@@ -54,6 +54,7 @@ abstract class SessionClient {
   protected readonly skew: number
   protected token?: CachedToken
   protected onTokenChange?: (token: TokenSnapshot | undefined) => void
+  private refreshPromise?: Promise<OAuthTokenResponse>
   constructor(baseUrl: string, skew = 30) { this.baseUrl = baseUrl.replace(/\/$/, ""); this.skew = skew }
   protected abstract authenticate(signal?: AbortSignal): Promise<OAuthTokenResponse>
   protected abstract refresh(signal?: AbortSignal): Promise<OAuthTokenResponse>
@@ -61,16 +62,34 @@ abstract class SessionClient {
   /** Returns the current session tokens, or undefined when there is no session. */
   getToken(): TokenSnapshot | undefined { return this.token ? { ...this.token } : undefined }
   protected setToken(t: OAuthTokenResponse) { this.token = cached(t, this.skew); this.onTokenChange?.({ ...this.token }); return t }
+  private async refreshOnce(signal?: AbortSignal) {
+    if (this.refreshPromise) return this.refreshPromise
+    const refresh = this.refresh(signal)
+    this.refreshPromise = refresh
+    try { return await refresh }
+    finally { if (this.refreshPromise === refresh) this.refreshPromise = undefined }
+  }
   protected async bearer(signal?: AbortSignal) {
     if (!this.token) await this.authenticate(signal)
-    else if (this.token.expiresAt <= Date.now()) await this.refresh(signal)
+    else if (this.token.expiresAt <= Date.now()) await this.refreshOnce(signal)
     return this.token!.accessToken
   }
-  protected async request<T>(method: Method, path: string, payload?: unknown, options: RequestOptions = {}) {
-    const headers: Record<string, string> = { Authorization: `Bearer ${await this.bearer(options.signal)}` }
+  private send(method: Method, path: string, payload: unknown, options: RequestOptions, accessToken: string) {
+    const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` }
     if (method !== "GET") headers["Content-Type"] = "application/json"
     if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey
-    return unwrap<T>(await fetch(this.baseUrl + path, { method, headers, body: method === "GET" ? undefined : JSON.stringify(payload ?? {}), signal: options.signal }))
+    return fetch(this.baseUrl + path, { method, headers, body: method === "GET" ? undefined : JSON.stringify(payload ?? {}), signal: options.signal })
+  }
+  protected async request<T>(method: Method, path: string, payload?: unknown, options: RequestOptions = {}) {
+    const accessToken = await this.bearer(options.signal)
+    let response = await this.send(method, path, payload, options, accessToken)
+    if (response.status === 401) {
+      // Another request may already have refreshed while this one was in flight. Only
+      // rotate again when the rejected access token is still the active token.
+      if (this.token?.accessToken === accessToken) await this.refreshOnce(options.signal)
+      response = await this.send(method, path, payload, options, await this.bearer(options.signal))
+    }
+    return unwrap<T>(response)
   }
   protected get<T>(path: string, options?: RequestOptions) { return this.request<T>("GET", path, undefined, options) }
   protected post<T>(path: string, payload?: unknown, options?: RequestOptions) { return this.request<T>("POST", path, payload, options) }
