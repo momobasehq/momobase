@@ -11,9 +11,10 @@ import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { AdminPermissions, type ChargeSchedule, type ProviderAccount } from "@momobase/sdk"
 
@@ -84,9 +85,9 @@ function CreateAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           <DialogTitle>New provider account</DialogTitle>
           <DialogDescription>Accounts are created inactive. Activate one after testing its configuration.</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="provider-code">Provider</Label>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="provider-code">Provider</FieldLabel>
             <Select value={form.provider_code} onValueChange={(code) => setForm({ ...form, provider_code: code ?? "" })}>
               <SelectTrigger id="provider-code">
                 <SelectValue placeholder={registry.isPending ? "Loading…" : "Select a registered provider"} />
@@ -99,13 +100,13 @@ function CreateAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="provider-name">Name</Label>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="provider-name">Name</FieldLabel>
             <Input id="provider-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="provider-environment">Environment</Label>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="provider-environment">Environment</FieldLabel>
             <Select value={form.environment} onValueChange={(env) => setForm({ ...form, environment: env ?? "sandbox" })}>
               <SelectTrigger id="provider-environment">
                 <SelectValue />
@@ -115,30 +116,30 @@ function CreateAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 <SelectItem value="production">Production</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2">
-            <Label htmlFor="provider-country">Country</Label>
-            <Input
-              id="provider-country"
-              maxLength={2}
-              value={form.country}
-              onChange={(event) => setForm({ ...form, country: event.target.value.toUpperCase() })}
-            />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="provider-currency">Currency</Label>
+          </Field>
+          <FieldGroup className="grid grid-cols-2 gap-3">
+            <Field>
+              <FieldLabel htmlFor="provider-country">Country</FieldLabel>
+              <Input
+                id="provider-country"
+                maxLength={2}
+                value={form.country}
+                onChange={(event) => setForm({ ...form, country: event.target.value.toUpperCase() })}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="provider-currency">Currency</FieldLabel>
               <Input
                 id="provider-currency"
                 maxLength={3}
                 value={form.currency}
                 onChange={(event) => setForm({ ...form, currency: event.target.value.toUpperCase() })}
               />
-            </div>
-          </div>
+            </Field>
+          </FieldGroup>
           <ChargeFields id="new-provider-charges" value={form.charges} onChange={(charges) => setForm({ ...form, charges })} />
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="provider-config">Configuration (JSON)</Label>
+          <Field>
+            <FieldLabel htmlFor="provider-config">Configuration (JSON)</FieldLabel>
             <Textarea
               id="provider-config"
               rows={6}
@@ -146,9 +147,9 @@ function CreateAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               value={form.config}
               onChange={(e) => setForm({ ...form, config: e.target.value })}
             />
-            <p className="text-muted-foreground">Encrypted at rest. Must include a long random <code>webhook_secret</code>.</p>
-          </div>
-        </div>
+            <FieldDescription>Encrypted at rest. Must include a long random <code>webhook_secret</code>.</FieldDescription>
+          </Field>
+        </FieldGroup>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
@@ -234,60 +235,71 @@ function ConfigureDialog({ account, onClose }: { account?: ProviderAccount; onCl
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="edit-country">Country</Label>
-            <Input
-                id="edit-country"
-                maxLength={2}
-                value={settings.country}
-                onChange={(event) => setSettings({ ...settings, country: event.target.value.toUpperCase() })}
-            />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="edit-currency">Currency</Label>
-              <Input
-                id="edit-currency"
-                maxLength={3}
-                value={settings.currency}
-                onChange={(event) => setSettings({ ...settings, currency: event.target.value.toUpperCase() })}
-              />
-            </div>
-          </div>
-          <ChargeFields id="edit-provider-charges" value={settings.charges} onChange={(charges) => setSettings({ ...settings, charges })} />
-          <GuardedAction
-            permission={AdminPermissions.providersUpdate}
-            className="self-start"
-            disabled={saveSettings.isPending || settings.country.length !== 2 || settings.currency.length !== 3}
-            onClick={() => saveSettings.mutate()}
-          >
-            Save settings
-          </GuardedAction>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="edit-config">Replacement configuration (JSON)</Label>
-          <Textarea
-            id="edit-config"
-            rows={6}
-            className="font-mono"
-            value={config}
-            onChange={(event) => setConfig(event.target.value)}
-            placeholder={'{\n  "webhook_secret": "…"\n}'}
-          />
-          <p className="text-muted-foreground">
-            The stored configuration is encrypted and never returned. Saving replaces it outright and reloads the adapter.
-          </p>
-          <GuardedAction
-            permission={AdminPermissions.providersUpdate}
-            className="self-start"
-            disabled={saveConfig.isPending || !config.trim()}
-            onClick={() => saveConfig.mutate()}
-          >
-            Replace configuration
-          </GuardedAction>
-        </div>
+        <Tabs defaultValue="settings">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="configuration">Configuration</TabsTrigger>
+          </TabsList>
+          <TabsContent value="settings">
+            <FieldGroup>
+              <FieldGroup className="grid grid-cols-2 gap-3">
+                <Field>
+                  <FieldLabel htmlFor="edit-country">Country</FieldLabel>
+                  <Input
+                    id="edit-country"
+                    maxLength={2}
+                    value={settings.country}
+                    onChange={(event) => setSettings({ ...settings, country: event.target.value.toUpperCase() })}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="edit-currency">Currency</FieldLabel>
+                  <Input
+                    id="edit-currency"
+                    maxLength={3}
+                    value={settings.currency}
+                    onChange={(event) => setSettings({ ...settings, currency: event.target.value.toUpperCase() })}
+                  />
+                </Field>
+              </FieldGroup>
+              <ChargeFields id="edit-provider-charges" value={settings.charges} onChange={(charges) => setSettings({ ...settings, charges })} />
+              <GuardedAction
+                permission={AdminPermissions.providersUpdate}
+                className="self-start"
+                disabled={saveSettings.isPending || settings.country.length !== 2 || settings.currency.length !== 3}
+                onClick={() => saveSettings.mutate()}
+              >
+                Save settings
+              </GuardedAction>
+            </FieldGroup>
+          </TabsContent>
+          <TabsContent value="configuration">
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="edit-config">Replacement configuration (JSON)</FieldLabel>
+                <Textarea
+                  id="edit-config"
+                  rows={6}
+                  className="font-mono"
+                  value={config}
+                  onChange={(event) => setConfig(event.target.value)}
+                  placeholder={'{\n  "webhook_secret": "…"\n}'}
+                />
+                <FieldDescription>
+                  The stored configuration is encrypted and never returned. Saving replaces it outright and reloads the adapter.
+                </FieldDescription>
+              </Field>
+              <GuardedAction
+                permission={AdminPermissions.providersUpdate}
+                className="self-start"
+                disabled={saveConfig.isPending || !config.trim()}
+                onClick={() => saveConfig.mutate()}
+              >
+                Replace configuration
+              </GuardedAction>
+            </FieldGroup>
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter>
           <Button
