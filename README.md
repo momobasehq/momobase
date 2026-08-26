@@ -63,7 +63,7 @@ The TypeScript SDK exposes it as `client.providers.registry()`, and the dashboar
 
 The root package also exports the helpers the bundled adapters use, so a third-party provider does not have to reimplement them: `DoJSON`, `Redact`, `ConfigString`/`ConfigBool`/`ConfigInt`/`ConfigPath`, `First`, `ParseAmountToMinor`, `FormatAmountMinor`, `PaymentStatus`, and the `Service*` and `Tx*` constants. The root package is the surface an out-of-tree adapter uses: `github.com/momobasehq/momobase/providers` carries the contract and the provider-specific helpers, while the configuration accessors and `First` live in `internal/utils` and reach adapters only through the root re-exports.
 
-See [`examples/customprovider`](examples/customprovider) for a complete provider implementing the whole contract against an HTTP API, and [`providers/dummy`](providers/dummy) for the in-tree reference adapter, which simulates payments in memory so a deployment can be exercised end to end without provider credentials.
+See [`examples/customprovider`](examples/customprovider) for a complete custom provider, [`providers/dummy`](providers/dummy) for the in-tree simulator, and [`examples/mtn`](examples/mtn) for opting into the MTN Mobile Money adapter.
 
 ### Options
 

@@ -21,6 +21,7 @@
 //
 // Momobase registers no providers on its own: a build carries exactly the
 // providers it asks for, and New reports an error when none are registered.
-// providers/dummy is a reference adapter that simulates payments in memory; real
-// adapters live outside this module and are registered like any other.
+// providers/dummy is a reference adapter that simulates payments in memory, and
+// providers/mtn is an optional MTN Mobile Money adapter. Applications register
+// either package explicitly, like any out-of-tree provider.
 package momobase

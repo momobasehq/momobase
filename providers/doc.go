@@ -2,9 +2,9 @@
 // configuring providers, issuing requests, and normalizing provider responses.
 //
 // Implementations register with a Momobase instance under a provider code and
-// are constructed on demand by a [Factory]. The adapters shipped with Momobase,
-// in providers/dummy, are built on this package and are
-// registered the same way as any third-party provider.
+// are constructed on demand by a [Factory]. The optional adapters in
+// providers/dummy and providers/mtn are built on this package and must be
+// registered explicitly by the application that uses them.
 //
 // The momobase root package re-exports this package's contract, so a provider
 // may be written against either import path.
