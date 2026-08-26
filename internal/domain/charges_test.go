@@ -14,7 +14,12 @@ func TestChargeRuleCalculate(t *testing.T) {
 		{name: "percentage exact", rule: ChargeRule{Type: ChargePercentage, Value: 1_000}, amount: 1_000, want: 100},
 		{name: "percentage rounds down", rule: ChargeRule{Type: ChargePercentage, Value: 1_000}, amount: 14, want: 1},
 		{name: "percentage rounds half up", rule: ChargeRule{Type: ChargePercentage, Value: 1_000}, amount: 15, want: 2},
-		{name: "maximum amount does not overflow", rule: ChargeRule{Type: ChargePercentage, Value: 10_000}, amount: int64(^uint64(0) >> 1), want: int64(^uint64(0) >> 1)},
+		{
+			name:   "maximum amount does not overflow",
+			rule:   ChargeRule{Type: ChargePercentage, Value: 10_000},
+			amount: int64(^uint64(0) >> 1),
+			want:   int64(^uint64(0) >> 1),
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
