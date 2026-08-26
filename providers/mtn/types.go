@@ -1,5 +1,13 @@
 package mtn
 
+type sandboxUserRequest struct {
+	ProviderCallbackHost string `json:"providerCallbackHost"`
+}
+
+type sandboxAPIKeyResponse struct {
+	APIKey string `json:"apiKey"`
+}
+
 type party struct {
 	PartyIDType string `json:"partyIdType"`
 	PartyID     string `json:"partyId"`

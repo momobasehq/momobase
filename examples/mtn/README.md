@@ -1,7 +1,8 @@
 # Run MTN MoMo with the dashboard
 
-You need an MTN MoMo API user, API key, and at least one collection or
-disbursement subscription key.
+For sandbox, you need at least one MTN MoMo collection or disbursement
+subscription key. For production, you also need the API user, API key, API base
+URL, and target environment supplied during MTN onboarding.
 
 From the repository root, create the local environment and replace the three
 security values with newly generated credentials:
@@ -41,26 +42,37 @@ go run -tags dashboard ./examples/mtn
 
 Open <http://localhost:9090/dashboard/> and sign in with the administrator
 credentials above. Go to **Providers**, select **New account**, choose `mtn`, and
-enter the country and currency assigned to the MTN account. Use this configuration
-JSON, omitting any product subscription key that is not enabled:
+set **Environment** to `sandbox`. Enter the country and currency assigned to the
+MTN account, then use this configuration JSON, omitting any product subscription
+key that is not enabled:
 
 ```json
 {
-  "api_user": "replace-with-mtn-api-user",
-  "api_key": "replace-with-mtn-api-key",
   "collection_subscription_key": "replace-with-collection-key",
   "disbursement_subscription_key": "replace-with-disbursement-key",
-  "target_environment": "sandbox",
-  "base_url": "https://sandbox.momodeveloper.mtn.com",
   "balance_service": "collection",
   "webhook_secret": "replace-with-a-long-random-secret"
 }
 ```
 
 If only disbursement is enabled, change `balance_service` to `disbursement` or
-omit it so the provider selects the enabled product. For production, replace
-the sandbox URL and target environment with the values supplied during MTN
-onboarding.
+omit it so the provider selects the enabled product. The provider automatically
+creates an MTN sandbox API user and key when the account is initialized.
+
+For production, set **Environment** to `production` and add the required
+production credentials and endpoints to the configuration:
+
+```json
+{
+  "api_user": "replace-with-production-api-user",
+  "api_key": "replace-with-production-api-key",
+  "collection_subscription_key": "replace-with-collection-key",
+  "target_environment": "replace-with-production-target",
+  "base_url": "https://replace-with-production-api-host",
+  "balance_service": "collection",
+  "webhook_secret": "replace-with-a-long-random-secret"
+}
+```
 
 Generate `webhook_secret` with `openssl rand -hex 32`. After creating the
 account, click **Test** to verify the MTN credentials, then **Activate**.

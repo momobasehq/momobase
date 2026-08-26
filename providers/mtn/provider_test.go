@@ -22,6 +22,9 @@ const testWebhookSecret = "long-random-webhook-secret"
 func testProvider(t *testing.T, overrides providers.ProviderConfig) *Provider {
 	t.Helper()
 	config := providers.ProviderConfig{
+		"environment":                 "production",
+		"base_url":                    "https://mtn.test",
+		"target_environment":          "mtnuganda",
 		"api_user":                    "api-user",
 		"api_key":                     "api-key",
 		"collection_subscription_key": "collection-key",
@@ -53,16 +56,31 @@ func payment(id string) providers.PaymentRequest {
 }
 
 func TestParseConfigDefaultsAndCapabilities(t *testing.T) {
+	cfg, err := parseConfig(providers.ProviderConfig{
+		"environment":                 "sandbox",
+		"collection_subscription_key": "collection-key",
+		"webhook_secret":              testWebhookSecret,
+	})
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+	if cfg.Environment != "sandbox" {
+		t.Errorf("Environment = %q, want sandbox", cfg.Environment)
+	}
+	if cfg.BaseURL != defaultBaseURL {
+		t.Errorf("BaseURL = %q, want %q", cfg.BaseURL, defaultBaseURL)
+	}
+	if cfg.TargetEnvironment != "sandbox" {
+		t.Errorf("TargetEnvironment = %q, want sandbox", cfg.TargetEnvironment)
+	}
+	if cfg.APIUser != "" || cfg.APIKey != "" {
+		t.Errorf("sandbox credentials = %q/%q, want empty for provisioning", cfg.APIUser, cfg.APIKey)
+	}
+	if cfg.BalanceService != domain.ServiceCollection {
+		t.Errorf("BalanceService = %q, want collection", cfg.BalanceService)
+	}
+
 	provider := testProvider(t, nil)
-	if got := provider.config().BaseURL; got != defaultBaseURL {
-		t.Errorf("BaseURL = %q, want %q", got, defaultBaseURL)
-	}
-	if got := provider.config().TargetEnvironment; got != "sandbox" {
-		t.Errorf("TargetEnvironment = %q, want sandbox", got)
-	}
-	if got := provider.config().BalanceService; got != domain.ServiceCollection {
-		t.Errorf("BalanceService = %q, want collection", got)
-	}
 	capabilities := provider.Capabilities()
 	if len(capabilities) != 1 || capabilities[0].ServiceType != domain.ServiceCollection {
 		t.Fatalf("Capabilities() = %v, want collection", capabilities)
@@ -79,31 +97,46 @@ func TestParseConfigDefaultsAndCapabilities(t *testing.T) {
 
 func TestParseConfigRejectsInvalidValues(t *testing.T) {
 	valid := providers.ProviderConfig{
+		"environment":                 "production",
+		"base_url":                    "https://mtn.example.com",
+		"target_environment":          "mtnuganda",
 		"api_user":                    "api-user",
 		"api_key":                     "api-key",
 		"collection_subscription_key": "collection-key",
 		"webhook_secret":              testWebhookSecret,
 	}
 	tests := map[string]providers.ProviderConfig{
-		"missing credentials": {
-			"collection_subscription_key": "collection-key",
-			"webhook_secret":              testWebhookSecret,
-		},
-		"missing webhook secret": {
-			"api_user":                    "api-user",
-			"api_key":                     "api-key",
-			"collection_subscription_key": "collection-key",
-		},
-		"missing subscription": {
-			"api_user":       "api-user",
-			"api_key":        "api-key",
-			"webhook_secret": testWebhookSecret,
-		},
+		"production missing credentials": mergeConfig(valid, providers.ProviderConfig{
+			"api_user": "",
+			"api_key":  "",
+		}),
+		"production missing base URL": mergeConfig(valid, providers.ProviderConfig{
+			"base_url": "",
+		}),
+		"production missing target environment": mergeConfig(valid, providers.ProviderConfig{
+			"target_environment": "",
+		}),
+		"invalid environment": mergeConfig(valid, providers.ProviderConfig{
+			"environment": "staging",
+		}),
+		"sandbox partial credentials": mergeConfig(valid, providers.ProviderConfig{
+			"environment": "sandbox",
+			"api_key":     "",
+		}),
+		"missing webhook secret": mergeConfig(valid, providers.ProviderConfig{
+			"webhook_secret": "",
+		}),
+		"missing subscription": mergeConfig(valid, providers.ProviderConfig{
+			"collection_subscription_key": "",
+		}),
 		"insecure remote base URL": mergeConfig(valid, providers.ProviderConfig{
 			"base_url": "http://example.com",
 		}),
 		"invalid callback URL": mergeConfig(valid, providers.ProviderConfig{
 			"callback_url": "/webhooks/mtn",
+		}),
+		"invalid provider callback host": mergeConfig(valid, providers.ProviderConfig{
+			"provider_callback_host": "127.0.0.1",
 		}),
 		"disabled balance service": mergeConfig(valid, providers.ProviderConfig{
 			"balance_service": "disbursement",
@@ -118,6 +151,87 @@ func TestParseConfigRejectsInvalidValues(t *testing.T) {
 				t.Fatalf("parseConfig() error = nil, want an error")
 			}
 		})
+	}
+}
+
+func TestInitAutoProvisionsSandboxCredentials(t *testing.T) {
+	var apiUser string
+	userCalls := 0
+	keyCalls := 0
+	tokenCalls := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1_0/apiuser", func(w http.ResponseWriter, r *http.Request) {
+		userCalls++
+		if got := r.Header.Get("Ocp-Apim-Subscription-Key"); got != "collection-key" {
+			t.Errorf("subscription key = %q, want collection-key", got)
+		}
+		apiUser = r.Header.Get("X-Reference-Id")
+		id, err := uuid.Parse(apiUser)
+		if err != nil || id.Version() != 4 {
+			t.Errorf("X-Reference-Id = %q, want a version 4 UUID", apiUser)
+		}
+		var body sandboxUserRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("Decode() error = %v", err)
+		}
+		if body.ProviderCallbackHost != "hooks.example.com" {
+			t.Errorf("provider callback host = %q, want hooks.example.com", body.ProviderCallbackHost)
+		}
+		w.WriteHeader(http.StatusCreated)
+	})
+	mux.HandleFunc("POST /v1_0/apiuser/{apiUser}/apikey", func(w http.ResponseWriter, r *http.Request) {
+		keyCalls++
+		if got := r.PathValue("apiUser"); got != apiUser {
+			t.Errorf("API user path = %q, want %q", got, apiUser)
+		}
+		if got := r.Header.Get("Ocp-Apim-Subscription-Key"); got != "collection-key" {
+			t.Errorf("subscription key = %q, want collection-key", got)
+		}
+		if got := r.Header.Get("X-Reference-Id"); got != "" {
+			t.Errorf("X-Reference-Id = %q, want omitted", got)
+		}
+		w.WriteHeader(http.StatusCreated)
+		writeJSON(t, w, sandboxAPIKeyResponse{APIKey: "sandbox-api-key"})
+	})
+	mux.HandleFunc("POST /collection/token/", func(w http.ResponseWriter, r *http.Request) {
+		tokenCalls++
+		assertTokenRequestCredentials(t, r, "collection-key", apiUser+":sandbox-api-key")
+		writeJSON(t, w, map[string]any{"access_token": "sandbox-token", "expires_in": 3600})
+	})
+
+	provider, ok := New(slog.New(slog.NewTextHandler(io.Discard, nil))).(*Provider)
+	if !ok {
+		t.Fatal("New() did not return *Provider")
+	}
+	provider.client = &http.Client{Transport: handlerTransport{handler: mux}}
+	err := provider.Init(context.Background(), providers.ProviderConfig{
+		"environment":                 "sandbox",
+		"base_url":                    "https://mtn.test",
+		"callback_url":                "https://hooks.example.com/mtn",
+		"collection_subscription_key": "collection-key",
+		"webhook_secret":              testWebhookSecret,
+	})
+	if err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	if got := provider.config(); got.APIUser != apiUser || got.APIKey != "sandbox-api-key" {
+		t.Errorf("provisioned credentials = %q/%q, want generated user and key", got.APIUser, got.APIKey)
+	}
+	if err := provider.HealthCheck(context.Background()); err != nil {
+		t.Fatalf("HealthCheck() error = %v", err)
+	}
+	if userCalls != 1 || keyCalls != 1 || tokenCalls != 1 {
+		t.Errorf("calls = user %d, key %d, token %d; want one each", userCalls, keyCalls, tokenCalls)
+	}
+}
+
+func TestInitReusesProvidedSandboxCredentials(t *testing.T) {
+	provider := testProvider(t, providers.ProviderConfig{
+		"environment":        "sandbox",
+		"target_environment": "sandbox",
+	})
+	if got := provider.config(); got.APIUser != "api-user" || got.APIKey != "api-key" {
+		t.Errorf("credentials = %q/%q, want provided sandbox credentials", got.APIUser, got.APIKey)
 	}
 }
 
@@ -294,7 +408,17 @@ func TestVerifyWebhookNormalizesCollectionAndDisbursement(t *testing.T) {
 
 func assertTokenRequest(t *testing.T, r *http.Request, subscriptionKey string) {
 	t.Helper()
-	wantAuthorization := "Basic " + base64.StdEncoding.EncodeToString([]byte("api-user:api-key"))
+	assertTokenRequestCredentials(t, r, subscriptionKey, "api-user:api-key")
+}
+
+func assertTokenRequestCredentials(
+	t *testing.T,
+	r *http.Request,
+	subscriptionKey string,
+	credentials string,
+) {
+	t.Helper()
+	wantAuthorization := "Basic " + base64.StdEncoding.EncodeToString([]byte(credentials))
 	if got := r.Header.Get("Authorization"); got != wantAuthorization {
 		t.Errorf("Authorization = %q, want Basic credentials", got)
 	}
@@ -327,8 +451,8 @@ func assertAPIHeaders(t *testing.T, r *http.Request, token, subscriptionKey stri
 	if got := r.Header.Get("Ocp-Apim-Subscription-Key"); got != subscriptionKey {
 		t.Errorf("subscription key = %q, want %q", got, subscriptionKey)
 	}
-	if got := r.Header.Get("X-Target-Environment"); got != "sandbox" {
-		t.Errorf("X-Target-Environment = %q, want sandbox", got)
+	if got := r.Header.Get("X-Target-Environment"); got != "mtnuganda" {
+		t.Errorf("X-Target-Environment = %q, want mtnuganda", got)
 	}
 }
 

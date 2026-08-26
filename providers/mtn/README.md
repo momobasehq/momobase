@@ -1,16 +1,44 @@
 # MTN Mobile Money provider
 
-Register the provider with code `mtn` and configure an account with MTN's API
-user/key plus at least one product subscription key:
+Register the provider with code `mtn`. The provider account's environment controls
+how MTN credentials are loaded.
+
+## Sandbox
+
+Select `sandbox` as the provider account environment and supply at least one MTN
+MoMo sandbox product subscription key:
 
 ```json
 {
-  "api_user": "00000000-0000-4000-8000-000000000000",
-  "api_key": "replace-with-api-key",
   "collection_subscription_key": "replace-with-collection-key",
   "disbursement_subscription_key": "replace-with-disbursement-key",
-  "target_environment": "sandbox",
-  "base_url": "https://sandbox.momodeveloper.mtn.com",
+  "balance_service": "collection",
+  "webhook_secret": "replace-with-long-random-secret"
+}
+```
+
+During initialization, the provider creates an MTN sandbox API user and API key.
+It defaults to `https://sandbox.momodeveloper.mtn.com` with the target environment
+`sandbox`. Set `provider_callback_host` when MTN should register a specific callback
+domain; otherwise the provider uses the host from `callback_url`, then `localhost`.
+
+Supplying both `api_user` and `api_key` in sandbox mode reuses those credentials
+instead of provisioning another user. Supplying only one is rejected.
+
+## Production
+
+Select `production` as the provider account environment. Production does not
+provision credentials: provide the API user, API key, base URL, target environment,
+and at least one product subscription key issued during MTN onboarding:
+
+```json
+{
+  "api_user": "replace-with-production-api-user",
+  "api_key": "replace-with-production-api-key",
+  "collection_subscription_key": "replace-with-collection-key",
+  "disbursement_subscription_key": "replace-with-disbursement-key",
+  "target_environment": "replace-with-production-target",
+  "base_url": "https://replace-with-production-api-host",
   "balance_service": "collection",
   "webhook_secret": "replace-with-long-random-secret"
 }

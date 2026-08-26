@@ -25,7 +25,8 @@ type (
 	Capability = providers.Capability
 
 	// ProviderConfig contains the provider-specific values used during initialization.
-	// It holds the decrypted configuration recorded for a provider account.
+	// It holds the decrypted configuration recorded for a provider account plus the
+	// account's authoritative "environment" value.
 	ProviderConfig = providers.ProviderConfig
 
 	// PaymentRequest contains the normalized details of a provider payment operation.

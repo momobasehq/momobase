@@ -71,12 +71,18 @@ func (p *Provider) Capabilities() []providers.Capability {
 	return capabilities
 }
 
-// Init validates and applies the provider configuration, clearing any cached
-// product access tokens.
-func (p *Provider) Init(_ context.Context, raw providers.ProviderConfig) error {
+// Init validates and applies the provider configuration, provisioning sandbox
+// credentials when needed and clearing any cached product access tokens.
+func (p *Provider) Init(ctx context.Context, raw providers.ProviderConfig) error {
 	cfg, err := parseConfig(raw)
 	if err != nil {
 		return err
+	}
+	if cfg.Environment == "sandbox" && cfg.APIUser == "" {
+		cfg, err = p.provisionSandbox(ctx, cfg)
+		if err != nil {
+			return err
+		}
 	}
 	p.mu.Lock()
 	p.cfg = cfg
@@ -84,10 +90,39 @@ func (p *Provider) Init(_ context.Context, raw providers.ProviderConfig) error {
 	p.mu.Unlock()
 	p.log.Info(
 		"mtn momo provider initialized",
+		slog.String("environment", cfg.Environment),
 		slog.String("target_environment", cfg.TargetEnvironment),
 		slog.Int("services", len(p.Capabilities())),
 	)
 	return nil
+}
+
+func (p *Provider) provisionSandbox(ctx context.Context, cfg Config) (Config, error) {
+	apiUser := uuid.NewString()
+	headers := map[string]string{
+		"Ocp-Apim-Subscription-Key": cfg.provisioningKey(),
+		"X-Reference-Id":            apiUser,
+	}
+	body := sandboxUserRequest{ProviderCallbackHost: cfg.ProviderCallbackHost}
+	endpoint := cfg.BaseURL + "/v1_0/apiuser"
+	if err := providers.DoJSON(ctx, p.client, http.MethodPost, endpoint, headers, body, nil); err != nil {
+		return Config{}, fmt.Errorf("mtn: provision sandbox api user: %w", err)
+	}
+	var out sandboxAPIKeyResponse
+	endpoint += "/" + url.PathEscape(apiUser) + "/apikey"
+	apiKeyHeaders := map[string]string{
+		"Ocp-Apim-Subscription-Key": cfg.provisioningKey(),
+	}
+	if err := providers.DoJSON(ctx, p.client, http.MethodPost, endpoint, apiKeyHeaders, nil, &out); err != nil {
+		return Config{}, fmt.Errorf("mtn: provision sandbox api key: %w", err)
+	}
+	apiKey := strings.TrimSpace(out.APIKey)
+	if apiKey == "" {
+		return Config{}, errors.New("mtn: sandbox api key response is incomplete")
+	}
+	cfg.APIUser = apiUser
+	cfg.APIKey = apiKey
+	return cfg, nil
 }
 
 // HealthCheck verifies that every enabled product can issue an OAuth access

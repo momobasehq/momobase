@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 
@@ -165,7 +166,7 @@ func (m *RuntimeManager) Reload(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	adapter, err := m.build(ctx, account.ProviderCode, plain)
+	adapter, err := m.build(ctx, account.ProviderCode, account.Environment, plain)
 	if err != nil {
 		return err
 	}
@@ -198,19 +199,20 @@ func (m *RuntimeManager) TestProviderConfig(ctx context.Context, id string) erro
 	if err != nil {
 		return err
 	}
-	_, err = m.build(ctx, account.ProviderCode, plain)
+	_, err = m.build(ctx, account.ProviderCode, account.Environment, plain)
 	return err
 }
 func (m *RuntimeManager) build(
 	ctx context.Context,
 	code string,
+	environment string,
 	plain providers.ProviderConfig,
 ) (providers.PaymentProvider, error) {
 	adapter, err := m.registry.Create(code, m.logger.With(slog.String("provider", code)))
 	if err != nil {
 		return nil, err
 	}
-	if err = adapter.Init(ctx, plain); err != nil {
+	if err = adapter.Init(ctx, providerInitConfig(plain, environment)); err != nil {
 		return nil, err
 	}
 	check, cancel := context.WithTimeout(ctx, 45*time.Second)
@@ -221,6 +223,16 @@ func (m *RuntimeManager) build(
 	}
 	return adapter, nil
 }
+
+func providerInitConfig(plain providers.ProviderConfig, environment string) providers.ProviderConfig {
+	config := maps.Clone(plain)
+	if config == nil {
+		config = providers.ProviderConfig{}
+	}
+	config["environment"] = environment
+	return config
+}
+
 func (m *RuntimeManager) plain(account *domain.ProviderAccount) (providers.ProviderConfig, error) {
 	data, err := m.encryptor.Decrypt(account.EncryptedConfigJSON)
 	if err != nil {

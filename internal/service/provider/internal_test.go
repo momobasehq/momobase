@@ -18,3 +18,20 @@ func TestGuardValidatedRequest(t *testing.T) {
 		t.Fatal("guardValidatedRequest() = nil, want an error for an emptied account")
 	}
 }
+
+func TestProviderInitConfigAddsAuthoritativeEnvironment(t *testing.T) {
+	plain := providers.ProviderConfig{
+		"environment": "sandbox",
+		"api_key":     "secret",
+	}
+	config := providerInitConfig(plain, "production")
+	if got := config["environment"]; got != "production" {
+		t.Errorf("environment = %v, want production", got)
+	}
+	if got := config["api_key"]; got != "secret" {
+		t.Errorf("api_key = %v, want original value", got)
+	}
+	if got := plain["environment"]; got != "sandbox" {
+		t.Errorf("original environment = %v, want unchanged sandbox", got)
+	}
+}

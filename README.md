@@ -51,7 +51,7 @@ type PaymentProvider interface {
 }
 ```
 
-Register a factory for it under a provider code, then create, configure, and activate accounts for that code through the Admin API. The configuration stored for an account is encrypted at rest and handed to `Init` as a `ProviderConfig` whenever the account is loaded or changed.
+Register a factory for it under a provider code, then create, configure, and activate accounts for that code through the Admin API. The configuration stored for an account is encrypted at rest and handed to `Init` as a `ProviderConfig` whenever the account is loaded or changed. Momobase adds the account's authoritative `environment` value to that configuration before initialization.
 
 `GET /api/admin/providers/registry` reports the codes the running build accepts, so clients discover custom providers instead of hardcoding a list:
 
