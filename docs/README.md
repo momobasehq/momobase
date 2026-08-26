@@ -403,32 +403,44 @@ The engine ships no account-format logic of its own — an adapter that needs mo
 
 `payment_method` is free-form: it must match an active route, and Momobase only ever compares it. There are no built-in payment-method constants.
 
-## Country routing
+## Location and transaction fees
 
-`country` is optional on a payment. A provider account that lists `countries` — ISO 3166-1 alpha-2 codes, for example `["UG", "RW"]` — serves only requests naming one of them. An account with an empty list is unrestricted and is eligible for any request, including one that carries no country, which is how a rail with no country notion is modelled. There is no global fallback among country-scoped accounts.
+`country` is required on a payment. Each app is pinned to one currency, and each provider account is pinned to one ISO country and currency. A route is eligible only when its service and method match and the provider account matches the payment's country and app currency.
 
-Create a country-scoped provider account:
+Create a provider account with independent collection and disbursement charges:
 
 ```json
 {
   "provider_code": "dummy",
   "name": "Sandbox provider",
   "environment": "production",
-  "countries": ["UG", "RW"],
+  "country": "UG",
+  "currency": "UGX",
+  "charges": {
+    "collection": { "type": "percentage", "value": 1000 },
+    "disbursement": { "type": "flat", "value": 500 }
+  },
   "config": {
     "webhook_secret": "replace-with-long-random-secret"
   }
 }
 ```
 
-Update its supported countries independently of credentials, passing an empty array to leave the account unrestricted:
+Update its location and charges independently of credentials:
 
 ```text
-PATCH /api/admin/providers/accounts/{id}/countries
-{ "countries": ["UG", "RW"] }
+PATCH /api/admin/providers/accounts/{id}/settings
+{
+  "country": "UG",
+  "currency": "UGX",
+  "charges": {
+    "collection": { "type": "percentage", "value": 1000 },
+    "disbursement": { "type": "flat", "value": 500 }
+  }
+}
 ```
 
-A balance lookup may include `?country=UG`; it is required only when an account declares more than one country. Active-balance queries return one result per provider and supported country, or one result with an empty country for an unrestricted provider.
+Flat values are currency minor units; percentage values are basis points, rounded half-up. Momobase records the calculated `provider_fee` and `platform_fee` once when it creates a transaction without changing the amount sent to the provider. App-facing APIs expose `platform_fee`; admin transaction APIs expose both values.
 
 ## TypeScript SDK and dashboard
 

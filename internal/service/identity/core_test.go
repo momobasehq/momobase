@@ -101,13 +101,13 @@ func TestCoreFlows(t *testing.T) {
 	t.Run("country routing and health fallback", func(t *testing.T) {
 		s := testsupport.New(t)
 		primary, backup, kenya :=
-			s.Provider(t, testsupport.DummyConfig(nil), "UG", "RW"),
+			s.Provider(t, testsupport.DummyConfig(nil), "UG"),
 			s.Provider(t, testsupport.DummyConfig(nil), "UG"),
 			s.Provider(t, testsupport.DummyConfig(nil), "KE")
 		s.Route(t, primary.ID, 1)
 		s.Route(t, backup.ID, 2)
 		s.Route(t, kenya.ID, 0)
-		selected := testsupport.Must(s.Routing.SelectProvider(context.Background(), domain.ServiceCollection, testsupport.Method, "UG"))
+		selected := testsupport.Must(s.Routing.SelectProvider(context.Background(), domain.ServiceCollection, testsupport.Method, "UG", "UGX"))
 		if selected.Account.ID != primary.ID {
 			t.Fatal("highest-priority provider supporting UG was not selected")
 		}
@@ -116,7 +116,7 @@ func TestCoreFlows(t *testing.T) {
 			Status:            domain.ProviderDown,
 			CircuitState:      domain.CircuitOpen,
 		}).Error)
-		selected = testsupport.Must(s.Routing.SelectProvider(context.Background(), domain.ServiceCollection, testsupport.Method, "UG"))
+		selected = testsupport.Must(s.Routing.SelectProvider(context.Background(), domain.ServiceCollection, testsupport.Method, "UG", "UGX"))
 		if selected.Account.ID != backup.ID {
 			t.Fatal("healthy UG backup was not selected")
 		}
@@ -125,6 +125,7 @@ func TestCoreFlows(t *testing.T) {
 			domain.ServiceCollection,
 			testsupport.Method,
 			"TZ",
+			"UGX",
 		); !errors.Is(err, routing.ErrNoRouteAvailable) {
 			t.Fatalf("unexpected fallback for unsupported country: %v", err)
 		}

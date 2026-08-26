@@ -10,6 +10,7 @@ import (
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
+	"github.com/momobasehq/momobase/internal/utils"
 )
 
 // CreatedCredential contains a persisted application credential and its one-time plaintext secret.
@@ -26,6 +27,25 @@ type AppService struct {
 	auth  *AppAuthService
 	audit *audit.Service
 	cache cache.Store
+}
+
+// CreateAppInput contains the attributes persisted for a new application.
+type CreateAppInput struct {
+	Name        string
+	Description string
+	Environment string
+	Currency    string
+	Charges     *domain.ChargeSchedule
+}
+
+// UpdateAppInput contains mutable application attributes. Nil Charges leaves the
+// existing schedule unchanged.
+type UpdateAppInput struct {
+	Name        string
+	Description string
+	Environment string
+	Currency    string
+	Charges     *domain.ChargeSchedule
 }
 
 // NewAppService creates an application management service.
@@ -63,36 +83,75 @@ func (s *AppService) GetApp(ctx context.Context, id string) (*domain.App, error)
 }
 
 // CreateApp validates and persists an active application.
-func (s *AppService) CreateApp(ctx context.Context, actor *domain.AdminUser, name, description, env string) (*domain.App, error) {
-	if env == "" {
-		env = "production"
+func (s *AppService) CreateApp(
+	ctx context.Context,
+	actor *domain.AdminUser,
+	input CreateAppInput,
+) (*domain.App, error) {
+	if input.Environment == "" {
+		input.Environment = "production"
+	}
+	currency, err := utils.NormalizeCurrency(input.Currency)
+	if err != nil {
+		return nil, err
+	}
+	charges := domain.ChargeSchedule{}
+	if input.Charges == nil {
+		charges.Normalize()
+	} else {
+		charges = *input.Charges
+	}
+	if err := charges.Validate(); err != nil {
+		return nil, err
 	}
 	app := &domain.App{
 		BaseModel:   domain.BaseModel{ID: platform.NewID("app")},
-		Name:        name,
-		Description: description,
-		Environment: env,
+		Name:        input.Name,
+		Description: input.Description,
+		Environment: input.Environment,
+		Currency:    currency,
+		Charges:     charges,
 		Status:      "active",
 	}
 	if actor != nil {
 		app.CreatedBy = actor.ID
 	}
-	err := s.repos.Apps.Create(ctx, app)
+	err = s.repos.Apps.Create(ctx, app)
 	if err == nil {
-		s.auditChange(ctx, actor, "app.created", "app", app.ID, map[string]any{"name": name})
+		s.auditChange(ctx, actor, "app.created", "app", app.ID, map[string]any{
+			"name": input.Name, "currency": currency, "charges": charges,
+		})
 		cache.Set(ctx, s.cache, appCacheKey(app.ID), app)
 	}
 	return app, err
 }
 
 // UpdateApp validates and applies mutable application attributes, then returns the updated application.
-func (s *AppService) UpdateApp(ctx context.Context, actor *domain.AdminUser, id, name, description, env string) (*domain.App, error) {
-	updates := map[string]any{"description": description}
-	if name != "" {
-		updates["name"] = name
+func (s *AppService) UpdateApp(
+	ctx context.Context,
+	actor *domain.AdminUser,
+	id string,
+	input UpdateAppInput,
+) (*domain.App, error) {
+	updates := map[string]any{"description": input.Description}
+	if input.Name != "" {
+		updates["name"] = input.Name
 	}
-	if env != "" {
-		updates["environment"] = env
+	if input.Environment != "" {
+		updates["environment"] = input.Environment
+	}
+	if input.Currency != "" {
+		currency, err := utils.NormalizeCurrency(input.Currency)
+		if err != nil {
+			return nil, err
+		}
+		updates["currency"] = currency
+	}
+	if input.Charges != nil {
+		if err := input.Charges.Validate(); err != nil {
+			return nil, err
+		}
+		addChargeUpdates(updates, *input.Charges)
 	}
 	if err := s.repos.Apps.Update(ctx, id, updates); err != nil {
 		return nil, err
@@ -131,7 +190,14 @@ func (s *AppService) ChangeAppStatus(ctx context.Context, actor *domain.AdminUse
 }
 
 func appCacheKey(id string) string {
-	return "app:v1:" + id
+	return "app:v2:" + id
+}
+
+func addChargeUpdates(updates map[string]any, charges domain.ChargeSchedule) {
+	updates["collection_charge_type"] = charges.Collection.Type
+	updates["collection_charge_value"] = charges.Collection.Value
+	updates["disbursement_charge_type"] = charges.Disbursement.Type
+	updates["disbursement_charge_value"] = charges.Disbursement.Value
 }
 
 func (s *AppService) newSecret() (string, string, error) {

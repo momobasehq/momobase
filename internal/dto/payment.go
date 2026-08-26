@@ -35,9 +35,8 @@ type CreatePayment struct {
 	Amount int64 `json:"amount" validate:"gt=0"`
 	// Currency is the three-letter currency code.
 	Currency string `json:"currency" validate:"len=3"`
-	// Country is the optional ISO 3166-1 alpha-2 transaction country. Providers that
-	// declare supported countries are only eligible when it is present and matches.
-	Country string `json:"country,omitempty" validate:"country"`
+	// Country is the ISO 3166-1 alpha-2 transaction country used for routing.
+	Country string `json:"country" validate:"required,country"`
 	// Reference is the application's unique business reference.
 	Reference string `json:"reference" validate:"required,max=128"`
 	// Description is optional payment context shown to downstream systems.

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { Link } from "react-router"
 import { toast } from "sonner"
 import { AdminPermissions, type PaymentRoute, type ServiceType } from "@momobase/sdk"
 
@@ -147,7 +148,15 @@ export function PaymentRoutes() {
   const columns: Column<PaymentRoute>[] = [
     { key: "service", header: "Service", cell: (route) => titleCase(route.service_type) },
     { key: "method", header: "Method", cell: (route) => <code className="font-medium">{route.payment_method}</code> },
-    { key: "account", header: "Provider account", cell: (route) => <code>{route.provider_account_id}</code> },
+    {
+      key: "account",
+      header: "Provider account",
+      cell: (route) => (
+        <Link className="font-medium underline-offset-4 hover:underline" to={`/providers/${route.provider_account_id}`}>
+          {route.provider_name || route.provider_account_id}
+        </Link>
+      ),
+    },
     { key: "priority", header: "Priority", align: "end", cell: (route) => route.priority },
     { key: "active", header: "Status", cell: (route) => <StatusBadge status={route.active ? "active" : "inactive"} /> },
     {

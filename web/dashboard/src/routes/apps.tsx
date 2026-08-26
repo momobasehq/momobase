@@ -3,9 +3,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { ChevronRight } from "lucide-react"
 import { Link } from "react-router"
 import { toast } from "sonner"
-import { AdminPermissions, type App } from "@momobase/sdk"
+import { AdminPermissions, type App, type ChargeSchedule } from "@momobase/sdk"
 
 import { DataTable, type Column } from "@/components/data-table"
+import { ChargeFields, zeroCharges } from "@/components/charge-fields"
 import { GuardedAction } from "@/components/guarded-action"
 import { PaginationControls } from "@/components/pagination-controls"
 import { StatusBadge } from "@/components/status-badge"
@@ -23,14 +24,24 @@ import { keys } from "@/lib/query-keys"
 
 const environments = ["sandbox", "production"] as const
 
+interface AppForm {
+  name: string
+  description: string
+  environment: (typeof environments)[number]
+  currency: string
+  charges: ChargeSchedule
+}
+
 /** CreateAppDialog registers a new integrating application. */
 function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { client } = useAuth()
   const queryClient = useQueryClient()
-  const [form, setForm] = useState<{ name: string; description: string; environment: (typeof environments)[number] }>({
-    name: "",
-    description: "",
-    environment: "sandbox",
+  const [form, setForm] = useState<AppForm>({
+	name: "",
+	description: "",
+	environment: "sandbox",
+	currency: "UGX",
+	charges: zeroCharges,
   })
 
   const create = useMutation({
@@ -38,7 +49,7 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
     onSuccess: async (app) => {
       toast.success(`Created ${app.name}`)
       onOpenChange(false)
-      setForm({ name: "", description: "", environment: "sandbox" })
+      setForm({ name: "", description: "", environment: "sandbox", currency: "UGX", charges: zeroCharges })
       await queryClient.invalidateQueries({ queryKey: keys.apps.all })
     },
     onError: (error: Error) => toast.error(error.message),
@@ -56,6 +67,16 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
             <Label htmlFor="app-name">Name</Label>
             <Input id="app-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="app-currency">Currency</Label>
+            <Input
+              id="app-currency"
+              maxLength={3}
+              value={form.currency}
+              onChange={(event) => setForm({ ...form, currency: event.target.value.toUpperCase() })}
+            />
+          </div>
+          <ChargeFields id="new-app-charges" value={form.charges} onChange={(charges) => setForm({ ...form, charges })} />
           <div className="flex flex-col gap-2">
             <Label htmlFor="app-description">Description</Label>
             <Textarea id="app-description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -83,7 +104,7 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !form.name}>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !form.name || form.currency.length !== 3}>
             Create
           </Button>
         </DialogFooter>
@@ -112,6 +133,7 @@ export function Apps() {
       ),
     },
     { key: "environment", header: "Environment", cell: (app) => <StatusBadge status={app.environment} /> },
+    { key: "currency", header: "Currency", cell: (app) => app.currency },
     { key: "status", header: "Status", cell: (app) => <StatusBadge status={app.status} /> },
     { key: "description", header: "Description", cell: (app) => app.description || "—" },
     { key: "created", header: "Created", cell: (app) => formatDateTime(app.created_at) },

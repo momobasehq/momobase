@@ -1,6 +1,6 @@
 import { MomobaseAPIError } from "./errors.js"
 import type {
-  AdminUser, AnalyticsQuery, APIEnvelope, App, AppCredential, AuditLog, CreateCollectionRequest,
+  AdminTransaction, AdminUser, AnalyticsQuery, APIEnvelope, App, AppCredential, AuditLog, ChargeSchedule, CreateCollectionRequest,
   CreateDisbursementRequest, CreatePaymentResponse, CreatedCredential, ListOptions,
   AvailablePaymentMethods, OAuthTokenResponse, PaginatedData, PaymentRoute, ProviderAccount, ProviderBalance,
   ProviderBalanceResult, ProviderHealthSnapshot, ProviderRegistry, RequestOptions,
@@ -46,7 +46,7 @@ function validatePayment(_kind: "collection" | "disbursement", p: CreateCollecti
   // decide, so the client only checks what the API requires of every payment.
   if (!p.payment_method) throw new Error("payment_method is required")
   if (!p.account) throw new Error("account is required")
-  if (p.country !== undefined && p.country.length !== 2) throw new Error("country must be a 2-letter ISO code")
+  if (!p.country || p.country.length !== 2) throw new Error("country must be a 2-letter ISO code")
 }
 
 abstract class SessionClient {
@@ -162,8 +162,8 @@ export class MomobaseAdminClient extends SessionClient {
     changeRole: (id: string, role: string) => this.patch<unknown>(endpoint("/api/admin/users", id) + "/role", { role })
   }
   readonly apps = {
-    list: (o?: ListOptions) => this.get<PaginatedData<App>>(`/api/admin/apps${query(o)}`), create: (p: { name: string; description?: string; environment?: "sandbox" | "production" }) => this.post<App>("/api/admin/apps", p),
-    get: (id: string) => this.get<App>(endpoint("/api/admin/apps", id)), update: (id: string, p: Partial<Pick<App, "name" | "description" | "environment">>) => this.patch<App>(endpoint("/api/admin/apps", id), p),
+    list: (o?: ListOptions) => this.get<PaginatedData<App>>(`/api/admin/apps${query(o)}`), create: (p: { name: string; description?: string; environment?: "sandbox" | "production"; currency: string; charges?: ChargeSchedule }) => this.post<App>("/api/admin/apps", p),
+    get: (id: string) => this.get<App>(endpoint("/api/admin/apps", id)), update: (id: string, p: Partial<Pick<App, "name" | "description" | "environment" | "currency" | "charges">>) => this.patch<App>(endpoint("/api/admin/apps", id), p),
     changeStatus: (id: string, status: "active" | "disabled" | "suspended") => this.patch<unknown>(endpoint("/api/admin/apps", id) + "/status", { status }),
     credentials: (id: string, o?: ListOptions) => this.get<PaginatedData<AppCredential>>(`${endpoint("/api/admin/apps", id)}/credentials${query(o)}`),
     createCredential: (id: string, p: { name?: string; scopes?: string; expires_at?: string }) => this.post<CreatedCredential>(endpoint("/api/admin/apps", id) + "/credentials", p),
@@ -172,20 +172,21 @@ export class MomobaseAdminClient extends SessionClient {
   }
   readonly providers = {
     list: (o?: ListOptions) => this.get<PaginatedData<ProviderAccount>>(`/api/admin/providers${query(o)}`),
+    get: (id: string) => this.get<ProviderAccount>(endpoint("/api/admin/providers/accounts", id)),
     registry: () => this.get<ProviderRegistry>("/api/admin/providers/registry"),
-    createAccount: (p: { provider_code: string; name: string; environment: "sandbox" | "production"; countries: string[]; config: Record<string, unknown> }) => this.post<ProviderAccount>("/api/admin/providers/accounts", p),
-    updateCountries: (id: string, countries: string[]) => this.patch<unknown>(endpoint("/api/admin/providers/accounts", id) + "/countries", { countries }),
+    createAccount: (p: { provider_code: string; name: string; environment: "sandbox" | "production"; country: string; currency: string; charges?: ChargeSchedule; config: Record<string, unknown> }) => this.post<ProviderAccount>("/api/admin/providers/accounts", p),
+    updateSettings: (id: string, p: { country: string; currency: string; charges: ChargeSchedule }) => this.patch<unknown>(endpoint("/api/admin/providers/accounts", id) + "/settings", p),
     updateConfig: (id: string, config: Record<string, unknown>) => this.patch<unknown>(endpoint("/api/admin/providers/accounts", id) + "/config", { config }),
     activate: (id: string) => this.patch<unknown>(endpoint("/api/admin/providers/accounts", id) + "/activate"), deactivate: (id: string) => this.patch<unknown>(endpoint("/api/admin/providers/accounts", id) + "/deactivate"),
     test: (id: string) => this.post<unknown>(endpoint("/api/admin/providers/accounts", id) + "/test"), balance: (id: string, country?: string) => this.get<ProviderBalance>(endpoint("/api/admin/providers/accounts", id) + "/balance" + (country ? `?country=${encodeURIComponent(country)}` : "")),
     activeBalances: (o?: ListOptions) => this.get<PaginatedData<ProviderBalanceResult>>(`/api/admin/balances/providers${query(o)}`), health: (o?: ListOptions) => this.get<PaginatedData<ProviderHealthSnapshot>>(`/api/admin/health/providers${query(o)}`)
   }
   readonly routes = {
-    list: (o?: ListOptions) => this.get<PaginatedData<PaymentRoute>>(`/api/admin/routes${query(o)}`), create: (p: Omit<PaymentRoute, "id" | "created_at" | "updated_at">) => this.post<PaymentRoute>("/api/admin/routes", p),
+    list: (o?: ListOptions) => this.get<PaginatedData<PaymentRoute>>(`/api/admin/routes${query(o)}`), create: (p: Omit<PaymentRoute, "id" | "provider_name" | "created_at" | "updated_at">) => this.post<PaymentRoute>("/api/admin/routes", p),
     update: (id: string, p: { priority: number; active: boolean }) => this.patch<unknown>(endpoint("/api/admin/routes", id), p)
   }
   readonly transactions = {
-    list: (o?: ListOptions) => this.get<PaginatedData<Transaction>>(`/api/admin/transactions${query(o)}`), auditLogs: (o?: ListOptions) => this.get<PaginatedData<AuditLog>>(`/api/admin/audit-logs${query(o)}`)
+    list: (o?: ListOptions) => this.get<PaginatedData<AdminTransaction>>(`/api/admin/transactions${query(o)}`), auditLogs: (o?: ListOptions) => this.get<PaginatedData<AuditLog>>(`/api/admin/audit-logs${query(o)}`)
   }
   /** Aggregates of the same rows transactions.list exposes, bucketed for charting. */
   readonly analytics = {

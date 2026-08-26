@@ -3,7 +3,6 @@ package routing
 import (
 	"context"
 	"errors"
-	"slices"
 
 	"github.com/momobasehq/momobase/internal/cache"
 	"github.com/momobasehq/momobase/internal/domain"
@@ -46,11 +45,20 @@ func NewEngine(
 	return &Engine{repos: repos, runtime: runtime, cache: store}
 }
 
-// SelectProvider returns the highest-priority active provider that supports the
-// requested service, method, and country. The country may be empty, which only
-// provider accounts that declare no countries of their own can serve.
-func (e *Engine) SelectProvider(ctx context.Context, service, method, country string) (*SelectedProvider, error) {
-	country, err := utils.NormalizeOptionalCountry(country)
+// SelectProvider returns the highest-priority active provider matching the payment's
+// service, method, country, and currency.
+func (e *Engine) SelectProvider(
+	ctx context.Context,
+	service string,
+	method string,
+	country string,
+	currency string,
+) (*SelectedProvider, error) {
+	country, err := utils.NormalizeTransactionCountry(country)
+	if err != nil {
+		return nil, err
+	}
+	currency, err = utils.NormalizeCurrency(currency)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +73,7 @@ func (e *Engine) SelectProvider(ctx context.Context, service, method, country st
 		cache.Set(ctx, e.cache, key, loaded)
 	}
 	for _, route := range *routes {
-		if candidate, ok := e.candidate(ctx, route, service, country); ok {
+		if candidate, ok := e.candidate(ctx, route, service, country, currency); ok {
 			return candidate, nil
 		}
 	}
@@ -81,8 +89,7 @@ type AvailablePaymentMethod struct {
 }
 
 // AvailablePaymentMethods lists the methods that would route right now, ordered by
-// service then method. Both filters are optional: an empty service covers both, and
-// an empty country only matches provider accounts that declare no countries.
+// service then method. An empty service covers both.
 //
 // Availability is decided by the same candidate check SelectProvider uses, so a
 // listed method is one SelectProvider will find. Answering from a second query would
@@ -91,11 +98,20 @@ type AvailablePaymentMethod struct {
 // Schemes are deliberately absent. Nothing registers them server-side: a scheme is
 // free-form text the selected provider interprets, so what values are valid is the
 // provider's to document, not Momobase's to enumerate.
-func (e *Engine) AvailablePaymentMethods(ctx context.Context, service, country string) ([]AvailablePaymentMethod, error) {
+func (e *Engine) AvailablePaymentMethods(
+	ctx context.Context,
+	service string,
+	country string,
+	currency string,
+) ([]AvailablePaymentMethod, error) {
 	if service != "" && service != domain.ServiceCollection && service != domain.ServiceDisbursement {
 		return nil, errors.New("service_type must be collection or disbursement")
 	}
-	country, err := utils.NormalizeOptionalCountry(country)
+	country, err := utils.NormalizeTransactionCountry(country)
+	if err != nil {
+		return nil, err
+	}
+	currency, err = utils.NormalizeCurrency(currency)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +134,7 @@ func (e *Engine) AvailablePaymentMethods(ctx context.Context, service, country s
 		if _, done := seen[method]; done {
 			continue
 		}
-		if _, ok := e.candidate(ctx, route, route.ServiceType, country); !ok {
+		if _, ok := e.candidate(ctx, route, route.ServiceType, country, currency); !ok {
 			continue
 		}
 		seen[method] = struct{}{}
@@ -131,9 +147,15 @@ func routeCacheKey(query, service, method string) string {
 	return "routes:v1:" + query + ":" + service + ":" + method
 }
 
-func (e *Engine) candidate(ctx context.Context, route domain.PaymentRoute, service, country string) (*SelectedProvider, bool) {
+func (e *Engine) candidate(
+	ctx context.Context,
+	route domain.PaymentRoute,
+	service string,
+	country string,
+	currency string,
+) (*SelectedProvider, bool) {
 	account, err := e.repos.ProviderAccounts.ActiveByID(ctx, route.ProviderAccountID)
-	if err != nil || !countryEligible(account.Countries, country) {
+	if err != nil || account.Country != country || account.Currency != currency {
 		return nil, false
 	}
 	rp, ok := e.runtime.Get(account.ID)
@@ -153,15 +175,4 @@ func (e *Engine) candidate(ctx context.Context, route domain.PaymentRoute, servi
 		return nil, false
 	}
 	return &SelectedProvider{route, *account, rp}, true
-}
-
-// countryEligible reports whether a provider account may serve a request country.
-// An account that declares no countries is unrestricted, which is how a rail with
-// no country notion is modelled; an account that declares them requires a request
-// country it lists, so there is still no global or fallback country.
-func countryEligible(countries []string, country string) bool {
-	if len(countries) == 0 {
-		return true
-	}
-	return country != "" && slices.Contains(countries, country)
 }

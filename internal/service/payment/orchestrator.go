@@ -35,6 +35,8 @@ type CreatePaymentResponse struct {
 	SelectedProvider string `json:"selected_provider"`
 	// ProviderReference is the provider-assigned transaction reference, when available.
 	ProviderReference string `json:"provider_reference"`
+	// PlatformFee is the fee charged to the application in currency minor units.
+	PlatformFee int64 `json:"platform_fee"`
 	// Message contains a human-readable result or replay description.
 	Message string `json:"message"`
 }
@@ -110,7 +112,20 @@ func (o *Orchestrator) Create(
 	} else if !repository.IsNotFound(err) {
 		return nil, err
 	}
-	selected, err := o.router.SelectProvider(ctx, service, req.PaymentMethod, req.Country)
+	app, err := o.repos.Apps.ActiveByID(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+	if req.Currency != app.Currency {
+		return nil, fmt.Errorf("currency must match app currency %s", app.Currency)
+	}
+	selected, err := o.router.SelectProvider(
+		ctx,
+		service,
+		req.PaymentMethod,
+		req.Country,
+		req.Currency,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +154,14 @@ func (o *Orchestrator) Create(
 	if err = o.executor.ValidateRequest(ctx, selected.Account.ID, &call); err != nil {
 		return nil, err
 	}
+	providerFee, err := calculateCharge(selected.Account.Charges, service, call.Amount)
+	if err != nil {
+		return nil, fmt.Errorf("calculate provider fee: %w", err)
+	}
+	platformFee, err := calculateCharge(app.Charges, service, call.Amount)
+	if err != nil {
+		return nil, fmt.Errorf("calculate platform fee: %w", err)
+	}
 	tx := &domain.Transaction{
 		BaseModel:                 domain.BaseModel{ID: call.TransactionID},
 		AppID:                     appID,
@@ -156,6 +179,8 @@ func (o *Orchestrator) Create(
 		CustomerEmail:             email,
 		CustomerName:              name,
 		Description:               req.Description,
+		ProviderFee:               providerFee,
+		PlatformFee:               platformFee,
 		RequestHash:               hash,
 	}
 	attempt := &domain.TransactionAttempt{
@@ -245,8 +270,14 @@ func (o *Orchestrator) persist(
 		Status:            tx.Status,
 		SelectedProvider:  providerCode,
 		ProviderReference: tx.ProviderReference,
+		PlatformFee:       tx.PlatformFee,
 		Message:           message,
 	}, nil
+}
+
+func calculateCharge(charges domain.ChargeSchedule, service string, amount int64) (int64, error) {
+	charges.Normalize()
+	return charges.Rule(service).Calculate(amount)
 }
 
 func (o *Orchestrator) find(ctx context.Context, appID, key string) (*domain.Transaction, error) {
@@ -264,6 +295,7 @@ func replay(tx *domain.Transaction, hash, _ string, _ *dto.CreatePayment) (*Crea
 		PaymentMethod:     tx.PaymentMethod,
 		Status:            tx.Status,
 		ProviderReference: tx.ProviderReference,
+		PlatformFee:       tx.PlatformFee,
 		Message:           "idempotent replay",
 	}, nil
 }

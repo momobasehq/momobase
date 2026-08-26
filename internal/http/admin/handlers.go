@@ -191,7 +191,13 @@ func (h *Handler) ListAuditLogs(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/health/providers [get]
 func (h *Handler) ListProviderHealth(c fiber.Ctx) error {
-	return page(c, h.repos.ProviderHealth.Page)
+	return providerPage(
+		c,
+		h.repos.ProviderAccounts,
+		h.repos.ProviderHealth.Page,
+		func(row *domain.ProviderHealthSnapshot) string { return row.ProviderAccountID },
+		func(row *domain.ProviderHealthSnapshot, name string) { row.ProviderName = name },
+	)
 }
 
 // ListAdmins documents administrator listing.
@@ -351,7 +357,13 @@ func (h *Handler) CreateApp(c fiber.Ctx) error {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
 	return reply(c, 201, "APP_CREATE_FAILED", func() (*domain.App, error) {
-		return h.apps.CreateApp(c.Context(), actor(c), req.Name, req.Description, req.Environment)
+		return h.apps.CreateApp(c.Context(), actor(c), identity.CreateAppInput{
+			Name:        req.Name,
+			Description: req.Description,
+			Environment: req.Environment,
+			Currency:    req.Currency,
+			Charges:     req.Charges,
+		})
 	})
 }
 
@@ -377,7 +389,13 @@ func (h *Handler) UpdateApp(c fiber.Ctx) error {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
 	return reply(c, 200, "APP_UPDATE_FAILED", func() (*domain.App, error) {
-		return h.apps.UpdateApp(c.Context(), actor(c), id(c), req.Name, req.Description, req.Environment)
+		return h.apps.UpdateApp(c.Context(), actor(c), id(c), identity.UpdateAppInput{
+			Name:        req.Name,
+			Description: req.Description,
+			Environment: req.Environment,
+			Currency:    req.Currency,
+			Charges:     req.Charges,
+		})
 	})
 }
 
@@ -555,33 +573,43 @@ func (h *Handler) CreateProvider(c fiber.Ctx) error {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
 	return reply(c, 201, "PROVIDER_CREATE_FAILED", func() (*domain.ProviderAccount, error) {
-		return h.providers.CreateAccount(c.Context(), actor(c), req.ProviderCode, req.Name, req.Environment, req.Countries, req.Config)
+		return h.providers.CreateAccount(c.Context(), actor(c), provider.CreateAccountInput{
+			ProviderCode: req.ProviderCode,
+			Name:         req.Name,
+			Environment:  req.Environment,
+			Country:      req.Country,
+			Currency:     req.Currency,
+			Charges:      req.Charges,
+			Config:       req.Config,
+		})
 	})
 }
 
-// UpdateProviderCountries documents provider country updates.
+// UpdateProviderSettings documents provider routing and fee updates.
 //
-// @Summary Update provider countries
+// @Summary Update provider settings
 // @Tags Admin - Providers
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Provider account ID"
-// @Param request body dto.UpdateCountriesRequest true "Countries"
+// @Param request body dto.UpdateProviderSettingsRequest true "Provider settings"
 // @Success 200 {object} apidoc.DocResponse
 // @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 403 {object} apidoc.ErrorResponse
 // @Failure 415 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
-// @Router /api/admin/providers/accounts/{id}/countries [patch]
-func (h *Handler) UpdateProviderCountries(c fiber.Ctx) error {
-	req, err := bind[dto.UpdateCountriesRequest](c)
+// @Router /api/admin/providers/accounts/{id}/settings [patch]
+func (h *Handler) UpdateProviderSettings(c fiber.Ctx) error {
+	req, err := bind[dto.UpdateProviderSettingsRequest](c)
 	if err != nil {
 		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
 	}
-	return reply(c, 200, "COUNTRIES_UPDATE_FAILED", func() (apidoc.OK, error) {
-		return apidoc.OK{OK: true}, h.providers.UpdateCountries(c.Context(), actor(c), id(c), req.Countries)
+	return reply(c, 200, "SETTINGS_UPDATE_FAILED", func() (apidoc.OK, error) {
+		return apidoc.OK{OK: true}, h.providers.UpdateSettings(c.Context(), actor(c), id(c), provider.AccountSettings{
+			Country: req.Country, Currency: req.Currency, Charges: req.Charges,
+		})
 	})
 }
 
@@ -696,7 +724,13 @@ func (h *Handler) TestProvider(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/routes [get]
 func (h *Handler) ListRoutes(c fiber.Ctx) error {
-	return page(c, h.repos.PaymentRoutes.Page)
+	return providerPage(
+		c,
+		h.repos.ProviderAccounts,
+		h.repos.PaymentRoutes.Page,
+		func(row *domain.PaymentRoute) string { return row.ProviderAccountID },
+		func(row *domain.PaymentRoute, name string) { row.ProviderName = name },
+	)
 }
 
 // CreateRoute documents payment route creation.
@@ -768,6 +802,40 @@ func page[T any](c fiber.Ctx, read func(context.Context, int, int) (repository.P
 	result, err := read(c.Context(), number, size)
 	if err != nil {
 		return platform.Error(c, 500, "SERVER_ERROR", err.Error())
+	}
+	return platform.JSON(c, 200, platform.PageData[T]{
+		Page:  number,
+		Total: int(result.Total),
+		Items: result.Items,
+		Count: len(result.Items),
+	})
+}
+
+// providerPage enriches provider-owned rows without changing the repositories used by
+// routing and health workers. Names are presentation data, resolved in one query for
+// the current page.
+func providerPage[T any](
+	c fiber.Ctx,
+	accounts repository.ProviderAccountRepo,
+	read func(context.Context, int, int) (repository.Page[T], error),
+	accountID func(*T) string,
+	setName func(*T, string),
+) error {
+	number, size := platform.Pagination(c)
+	result, err := read(c.Context(), number, size)
+	if err != nil {
+		return platform.Error(c, 500, "SERVER_ERROR", err.Error())
+	}
+	ids := make([]string, 0, len(result.Items))
+	for index := range result.Items {
+		ids = append(ids, accountID(&result.Items[index]))
+	}
+	names, err := accounts.NamesByIDs(c.Context(), ids)
+	if err != nil {
+		return platform.Error(c, 500, "SERVER_ERROR", err.Error())
+	}
+	for index := range result.Items {
+		setName(&result.Items[index], names[accountID(&result.Items[index])])
 	}
 	return platform.JSON(c, 200, platform.PageData[T]{
 		Page:  number,

@@ -143,15 +143,17 @@ func New(t *testing.T) *Stack {
 // which is only ever available at creation time.
 func (s *Stack) App(t *testing.T) (*domain.App, *domain.AppCredential, string) {
 	t.Helper()
-	app := Must(s.Apps.CreateApp(context.Background(), s.Actor, "Test", "", "sandbox"))
+	app := Must(s.Apps.CreateApp(context.Background(), s.Actor, identity.CreateAppInput{
+		Name: "Test", Environment: "sandbox", Currency: "UGX",
+	}))
 	created := Must(s.Apps.CreateCredential(context.Background(), s.Actor, app.ID, "Default", "", nil))
 	return app, &created.Credential, created.ClientSecret
 }
 
 // Provider creates and activates an account for the bundled dummy adapter.
-func (s *Stack) Provider(t *testing.T, config map[string]any, countries ...string) *domain.ProviderAccount {
+func (s *Stack) Provider(t *testing.T, config map[string]any, requestedCountry ...string) *domain.ProviderAccount {
 	t.Helper()
-	return s.ProviderFor(t, ProviderCode, config, countries...)
+	return s.ProviderFor(t, ProviderCode, config, requestedCountry...)
 }
 
 // ProviderFor creates and activates an account for a registered provider code,
@@ -160,17 +162,24 @@ func (s *Stack) ProviderFor(
 	t *testing.T,
 	code string,
 	config map[string]any,
-	countries ...string,
+	requestedCountry ...string,
 ) *domain.ProviderAccount {
 	t.Helper()
+	country := "UG"
+	if len(requestedCountry) > 0 {
+		country = requestedCountry[0]
+	}
 	account := Must(s.ProviderAdmin.CreateAccount(
 		context.Background(),
 		s.Actor,
-		code,
-		"Test",
-		"sandbox",
-		countries,
-		config,
+		provider.CreateAccountInput{
+			ProviderCode: code,
+			Name:         "Test",
+			Environment:  "sandbox",
+			Country:      country,
+			Currency:     "UGX",
+			Config:       config,
+		},
 	))
 	NoError(s.ProviderAdmin.Activate(context.Background(), s.Actor, account.ID))
 	return account

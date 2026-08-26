@@ -104,10 +104,15 @@ func NewHandler(p *payment.Orchestrator, routes *routing.Engine, repos *reposito
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Router /api/v1/payment-methods [get]
 func (h *Handler) ListPaymentMethods(c fiber.Ctx) error {
+	id := authmw.App(c)
+	if id == nil {
+		return platform.Error(c, 401, "UNAUTHORIZED", "missing app identity")
+	}
 	methods, err := h.routes.AvailablePaymentMethods(
 		c.Context(),
 		strings.ToLower(strings.TrimSpace(c.Query("service_type"))),
 		c.Query("country"),
+		id.App.Currency,
 	)
 	if err != nil {
 		return platform.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", err.Error())
@@ -225,5 +230,5 @@ func (h *Handler) get(c fiber.Ctx, field, value string) error {
 	if err != nil {
 		return platform.Error(c, 404, "NOT_FOUND", "transaction not found")
 	}
-	return platform.JSON(c, 200, tx)
+	return platform.JSON(c, 200, payment.PublicTransaction(tx))
 }

@@ -37,6 +37,7 @@ export const keys = {
   providers: {
     all: ["providers"] as const,
     list: (page: Page) => [...keys.providers.all, "list", page] as const,
+    detail: (id: string) => [...keys.providers.all, "detail", id] as const,
     registry: () => [...keys.providers.all, "registry"] as const,
     health: (page: Page) => [...keys.providers.all, "health", page] as const,
     balances: (page: Page) => [...keys.providers.all, "balances", page] as const,

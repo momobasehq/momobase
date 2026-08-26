@@ -1,6 +1,10 @@
 package dto
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/momobasehq/momobase/internal/domain"
+)
 
 // The administrative request payloads.
 //
@@ -77,27 +81,33 @@ type CreateAppRequest struct {
 	Name        string `json:"name" validate:"required,max=255" example:"Checkout"`
 	Description string `json:"description" validate:"max=1000" example:"Checkout payment application"`
 	// Environment is defaulted by the service when omitted.
-	Environment string `json:"environment" enums:"sandbox,production" validate:"omitempty,oneof=sandbox production" example:"sandbox"`
+	Environment string                 `json:"environment" enums:"sandbox,production" validate:"omitempty,oneof=sandbox production" example:"sandbox"`
+	Currency    string                 `json:"currency" validate:"required,len=3" example:"UGX"`
+	Charges     *domain.ChargeSchedule `json:"charges,omitempty"`
 }
 
 // Normalize trims the name and lowercases the environment.
 func (r *CreateAppRequest) Normalize() {
 	r.Name = strings.TrimSpace(r.Name)
 	r.Environment = strings.ToLower(strings.TrimSpace(r.Environment))
+	r.Currency = strings.ToUpper(strings.TrimSpace(r.Currency))
 }
 
 // UpdateAppRequest updates mutable application fields. An omitted field is left as it
 // is, which is why nothing here is required.
 type UpdateAppRequest struct {
-	Name        string `json:"name,omitempty" validate:"max=255" example:"Checkout"`
-	Description string `json:"description" validate:"max=1000" example:"Checkout payment application"`
-	Environment string `json:"environment,omitempty" enums:"sandbox,production" validate:"omitempty,oneof=sandbox production" example:"sandbox"`
+	Name        string                 `json:"name,omitempty" validate:"max=255" example:"Checkout"`
+	Description string                 `json:"description" validate:"max=1000" example:"Checkout payment application"`
+	Environment string                 `json:"environment,omitempty" enums:"sandbox,production" validate:"omitempty,oneof=sandbox production" example:"sandbox"`
+	Currency    string                 `json:"currency,omitempty" validate:"omitempty,len=3" example:"UGX"`
+	Charges     *domain.ChargeSchedule `json:"charges,omitempty"`
 }
 
 // Normalize trims the name and lowercases the environment.
 func (r *UpdateAppRequest) Normalize() {
 	r.Name = strings.TrimSpace(r.Name)
 	r.Environment = strings.ToLower(strings.TrimSpace(r.Environment))
+	r.Currency = strings.ToUpper(strings.TrimSpace(r.Currency))
 }
 
 // ChangeAppStatusRequest changes an application's status.
@@ -130,12 +140,12 @@ func (r *CreateCredentialRequest) Normalize() {
 type CreateProviderAccountRequest struct {
 	// ProviderCode names an adapter registered in the running build; list them with
 	// GET /api/admin/providers/registry.
-	ProviderCode string `json:"provider_code" validate:"required,identifier" example:"dummy"`
-	Name         string `json:"name" validate:"required,max=255" example:"Sandbox provider"`
-	Environment  string `json:"environment" enums:"sandbox,production" validate:"omitempty,oneof=sandbox production" example:"sandbox"`
-	// Countries restricts the account to the listed ISO 3166-1 alpha-2 countries. An
-	// empty list leaves it unrestricted, which suits a rail with no country notion.
-	Countries []string `json:"countries" example:"UG"`
+	ProviderCode string                 `json:"provider_code" validate:"required,identifier" example:"dummy"`
+	Name         string                 `json:"name" validate:"required,max=255" example:"Sandbox provider"`
+	Environment  string                 `json:"environment" enums:"sandbox,production" validate:"omitempty,oneof=sandbox production" example:"sandbox"`
+	Country      string                 `json:"country" validate:"required,country" example:"UG"`
+	Currency     string                 `json:"currency" validate:"required,len=3" example:"UGX"`
+	Charges      *domain.ChargeSchedule `json:"charges,omitempty"`
 	// Config is the provider's own settings and must carry a webhook_secret. It is
 	// encrypted before it is stored and is never returned.
 	Config map[string]any `json:"config" swaggertype:"object" validate:"required"`
@@ -146,17 +156,23 @@ func (r *CreateProviderAccountRequest) Normalize() {
 	r.ProviderCode = strings.ToLower(strings.TrimSpace(r.ProviderCode))
 	r.Name = strings.TrimSpace(r.Name)
 	r.Environment = strings.ToLower(strings.TrimSpace(r.Environment))
+	r.Country = strings.ToUpper(strings.TrimSpace(r.Country))
+	r.Currency = strings.ToUpper(strings.TrimSpace(r.Currency))
 }
 
-// UpdateCountriesRequest replaces a provider account's countries. An empty list
-// leaves the account unrestricted by country.
-type UpdateCountriesRequest struct {
-	Countries []string `json:"countries" example:"UG,RW"`
+// UpdateProviderSettingsRequest atomically replaces a provider account's routing
+// location and fee schedule.
+type UpdateProviderSettingsRequest struct {
+	Country  string                `json:"country" validate:"required,country" example:"UG"`
+	Currency string                `json:"currency" validate:"required,len=3" example:"UGX"`
+	Charges  domain.ChargeSchedule `json:"charges" validate:"required"`
 }
 
-// Normalize leaves the list alone: the country codes are normalized by the service,
-// which is also what rejects an unknown one.
-func (r *UpdateCountriesRequest) Normalize() {}
+// Normalize canonicalizes the settings before validation and persistence.
+func (r *UpdateProviderSettingsRequest) Normalize() {
+	r.Country = strings.ToUpper(strings.TrimSpace(r.Country))
+	r.Currency = strings.ToUpper(strings.TrimSpace(r.Currency))
+}
 
 // UpdateProviderConfigRequest replaces provider configuration.
 type UpdateProviderConfigRequest struct {

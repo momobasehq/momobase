@@ -51,6 +51,32 @@ func (r ProviderAccountRepo) Page(ctx context.Context, number, size int) (Page[d
 	return r.page(ctx, "created_at desc", number, size)
 }
 
+// NamesByIDs returns provider account display names keyed by ID. List endpoints use
+// this to enrich rows in one query instead of looking up every provider separately.
+func (r ProviderAccountRepo) NamesByIDs(ctx context.Context, ids []string) (map[string]string, error) {
+	names := make(map[string]string, len(ids))
+	if len(ids) == 0 {
+		return names, nil
+	}
+	type row struct {
+		ID   string
+		Name string
+	}
+	rows := []row{}
+	err := r.session(ctx).
+		Model(&domain.ProviderAccount{}).
+		Select("id", "name").
+		Where("id IN ?", ids).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range rows {
+		names[item.ID] = item.Name
+	}
+	return names, nil
+}
+
 // Update applies the supplied changes to one provider account.
 func (r ProviderAccountRepo) Update(ctx context.Context, id string, values map[string]any) error {
 	return r.update(ctx, values, "id = ?", id)
@@ -61,12 +87,6 @@ func (r ProviderAccountRepo) Update(ctx context.Context, id string, values map[s
 // the reload ended.
 func (r ProviderAccountRepo) Restore(ctx context.Context, id string, values map[string]any) error {
 	return r.touch(ctx, values, "id = ?", id)
-}
-
-// SetCountries replaces the countries a provider account serves, stored as the encoded
-// list the model carries.
-func (r ProviderAccountRepo) SetCountries(ctx context.Context, id, countries string) error {
-	return r.update(ctx, map[string]any{"countries": countries}, "id = ?", id)
 }
 
 // SetConfig replaces the encrypted configuration and bumps its version. The version is

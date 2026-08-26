@@ -8,6 +8,8 @@ import (
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/dto"
+	"github.com/momobasehq/momobase/internal/service/identity"
+	providerService "github.com/momobasehq/momobase/internal/service/provider"
 	"github.com/momobasehq/momobase/internal/testsupport"
 	"github.com/momobasehq/momobase/providers"
 )
@@ -37,13 +39,10 @@ func TestCreatePaymentPayloadRules(t *testing.T) {
 		}
 	})
 
-	t.Run("accepts an opaque account without a country or a party", func(t *testing.T) {
+	t.Run("requires a country", func(t *testing.T) {
 		req := testsupport.PaymentRequest("ORDER-2", "", "GB33BUKB20201555555555")
-		if err := dto.Check(req); err != nil {
-			t.Fatalf("dto.Check() error = %v, want a rail-agnostic account accepted", err)
-		}
-		if req.Country != "" {
-			t.Errorf("Country = %q, want it left empty", req.Country)
+		if err := dto.Check(req); err == nil {
+			t.Fatal("dto.Check() = nil, want a missing-country error")
 		}
 	})
 
@@ -77,6 +76,103 @@ func TestCreatePaymentPayloadRules(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestCreateSnapshotsFeesOnce(t *testing.T) {
+	s := testsupport.New(t)
+	account := s.Provider(t, testsupport.DummyConfig(nil), "UG")
+	s.Route(t, account.ID, 1)
+	app, _, _ := s.App(t)
+
+	appCharges := domain.ChargeSchedule{
+		Collection:   domain.ChargeRule{Type: domain.ChargePercentage, Value: 1_000},
+		Disbursement: domain.ChargeRule{Type: domain.ChargeFlat},
+	}
+	providerCharges := domain.ChargeSchedule{
+		Collection:   domain.ChargeRule{Type: domain.ChargeFlat, Value: 75},
+		Disbursement: domain.ChargeRule{Type: domain.ChargeFlat},
+	}
+	_, err := s.Apps.UpdateApp(context.Background(), s.Actor, app.ID, identity.UpdateAppInput{
+		Description: app.Description,
+		Charges:     &appCharges,
+	})
+	testsupport.NoError(err)
+	testsupport.NoError(s.ProviderAdmin.UpdateSettings(
+		context.Background(),
+		s.Actor,
+		account.ID,
+		providerService.AccountSettings{Country: "UG", Currency: "UGX", Charges: providerCharges},
+	))
+
+	req := testsupport.PaymentRequest("ORDER-FEES", "UG", "256770000000")
+	created := testsupport.Must(s.Payments.Create(
+		context.Background(),
+		app.ID,
+		domain.ServiceCollection,
+		"idem-fees",
+		req,
+	))
+	if created.PlatformFee != 150 {
+		t.Fatalf("PlatformFee = %d, want 150", created.PlatformFee)
+	}
+	var tx domain.Transaction
+	testsupport.NoError(s.DB.First(&tx, "id = ?", created.TransactionID).Error)
+	if tx.Amount != 1_500 || tx.ProviderFee != 75 || tx.PlatformFee != 150 {
+		t.Fatalf("transaction amount/fees = %d/%d/%d, want 1500/75/150", tx.Amount, tx.ProviderFee, tx.PlatformFee)
+	}
+
+	zero := domain.ChargeSchedule{}
+	zero.Normalize()
+	_, err = s.Apps.UpdateApp(context.Background(), s.Actor, app.ID, identity.UpdateAppInput{
+		Description: app.Description,
+		Charges:     &zero,
+	})
+	testsupport.NoError(err)
+	testsupport.NoError(s.ProviderAdmin.UpdateSettings(
+		context.Background(),
+		s.Actor,
+		account.ID,
+		providerService.AccountSettings{Country: "UG", Currency: "UGX", Charges: zero},
+	))
+	replayed := testsupport.Must(s.Payments.Create(
+		context.Background(),
+		app.ID,
+		domain.ServiceCollection,
+		"idem-fees",
+		testsupport.PaymentRequest("ORDER-FEES", "UG", "256770000000"),
+	))
+	if replayed.PlatformFee != 150 {
+		t.Errorf("replay PlatformFee = %d, want original 150", replayed.PlatformFee)
+	}
+	testsupport.NoError(s.DB.First(&tx, "id = ?", created.TransactionID).Error)
+	if tx.ProviderFee != 75 || tx.PlatformFee != 150 {
+		t.Errorf("stored replay fees = %d/%d, want 75/150", tx.ProviderFee, tx.PlatformFee)
+	}
+}
+
+func TestCreateRejectsCurrencyOutsideApp(t *testing.T) {
+	s := testsupport.New(t)
+	account := s.Provider(t, testsupport.DummyConfig(nil), "UG")
+	s.Route(t, account.ID, 1)
+	app, _, _ := s.App(t)
+	req := testsupport.PaymentRequest("ORDER-USD", "UG", "256770000000")
+	req.Currency = "USD"
+
+	_, err := s.Payments.Create(
+		context.Background(),
+		app.ID,
+		domain.ServiceCollection,
+		"idem-usd",
+		req,
+	)
+	if err == nil || !strings.Contains(err.Error(), "must match app currency UGX") {
+		t.Fatalf("Create() error = %v, want app currency rejection", err)
+	}
+	var count int64
+	testsupport.NoError(s.DB.Model(&domain.Transaction{}).Count(&count).Error)
+	if count != 0 {
+		t.Errorf("transactions = %d, want none for a currency mismatch", count)
+	}
 }
 
 func TestProviderRequestValidation(t *testing.T) {

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"sync"
 	"time"
 
@@ -65,10 +64,13 @@ func (c *circuit) after(now time.Time, err error) {
 type Runtime struct {
 	// AccountID is the persisted provider account identifier.
 	AccountID string
+	// ProviderName is the operator-facing name of the loaded account.
+	ProviderName string
 	// ProviderCode identifies the registered provider adapter implementation.
 	ProviderCode string
-	// Countries lists the transaction countries supported by the account.
-	Countries []string
+	// Country and Currency identify the transactions served by the account.
+	Country  string
+	Currency string
 	// ConfigVersion is the provider configuration version loaded into the adapter.
 	ConfigVersion int
 	// Adapter is the initialized payment provider implementation.
@@ -170,8 +172,10 @@ func (m *RuntimeManager) Reload(ctx context.Context, id string) error {
 	caps := adapter.Capabilities()
 	fresh := &Runtime{
 		AccountID:     id,
+		ProviderName:  account.Name,
 		ProviderCode:  account.ProviderCode,
-		Countries:     slices.Clone(account.Countries),
+		Country:       account.Country,
+		Currency:      account.Currency,
 		ConfigVersion: account.ConfigVersion,
 		Adapter:       adapter,
 		Capabilities:  caps,
@@ -248,30 +252,23 @@ type BalanceResult struct {
 	Error string `json:"error,omitempty"`
 }
 
-// QueryActiveBalances queries every loaded provider for each of its configured
-// countries, and once without a country for a provider that declares none.
+// QueryActiveBalances queries every loaded provider for its configured country.
 func (m *RuntimeManager) QueryActiveBalances(ctx context.Context) ([]BalanceResult, error) {
-	var out []BalanceResult
+	out := []BalanceResult{}
 	for _, runtime := range m.List() {
-		countries := runtime.Countries
-		if len(countries) == 0 {
-			countries = []string{""}
+		item := BalanceResult{
+			ProviderAccountID: runtime.AccountID,
+			ProviderCode:      runtime.ProviderCode,
+			Country:           runtime.Country,
+			Status:            "failed",
 		}
-		for _, country := range countries {
-			item := BalanceResult{
-				ProviderAccountID: runtime.AccountID,
-				ProviderCode:      runtime.ProviderCode,
-				Country:           country,
-				Status:            "failed",
-			}
-			balance, err := m.QueryBalance(ctx, runtime.AccountID, country)
-			if err != nil {
-				item.Error = providers.Redact(err.Error())
-			} else {
-				item.Status, item.Balance = "success", balance
-			}
-			out = append(out, item)
+		balance, err := m.QueryBalance(ctx, runtime.AccountID, runtime.Country)
+		if err != nil {
+			item.Error = providers.Redact(err.Error())
+		} else {
+			item.Status, item.Balance = "success", balance
 		}
+		out = append(out, item)
 	}
 	return out, nil
 }

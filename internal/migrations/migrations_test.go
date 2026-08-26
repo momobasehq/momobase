@@ -290,3 +290,63 @@ func TestUpCustomerAccountSkipsADatabaseWithoutTheColumn(t *testing.T) {
 		t.Fatalf("upCustomerAccount() with no transactions table error = %v", err)
 	}
 }
+
+type legacyProviderAccount struct {
+	ID        string `gorm:"primaryKey"`
+	Countries string `gorm:"type:text"`
+}
+
+func (legacyProviderAccount) TableName() string { return "provider_accounts" }
+
+type legacyApp struct {
+	ID string `gorm:"primaryKey"`
+}
+
+func (legacyApp) TableName() string { return "apps" }
+
+func TestUpAccountLocationBackfillsFirstCountryAndUGX(t *testing.T) {
+	db := testDatabase(t)
+	if err := db.AutoMigrate(&legacyProviderAccount{}, &legacyApp{}); err != nil {
+		t.Fatalf("prepare legacy schema: %v", err)
+	}
+	if err := db.Create(&legacyProviderAccount{ID: "pacc_1", Countries: `["RW","UG"]`}).Error; err != nil {
+		t.Fatalf("seed provider: %v", err)
+	}
+	if err := db.Create(&legacyApp{ID: "app_1"}).Error; err != nil {
+		t.Fatalf("seed app: %v", err)
+	}
+	if err := upAccountLocation(db); err != nil {
+		t.Fatalf("upAccountLocation() error = %v", err)
+	}
+
+	var provider struct{ Country, Currency string }
+	if err := db.Table("provider_accounts").Where("id = ?", "pacc_1").Scan(&provider).Error; err != nil {
+		t.Fatalf("read provider location: %v", err)
+	}
+	if provider.Country != "RW" || provider.Currency != "UGX" {
+		t.Errorf("provider location = %+v, want RW/UGX", provider)
+	}
+	var currency string
+	if err := db.Table("apps").Where("id = ?", "app_1").Pluck("currency", &currency).Error; err != nil {
+		t.Fatalf("read app currency: %v", err)
+	}
+	if currency != "UGX" {
+		t.Errorf("app currency = %q, want UGX", currency)
+	}
+	if db.Migrator().HasColumn("provider_accounts", "countries") {
+		t.Error("legacy countries column still exists")
+	}
+}
+
+func TestUpAccountLocationRejectsProviderWithoutCountry(t *testing.T) {
+	db := testDatabase(t)
+	if err := db.AutoMigrate(&legacyProviderAccount{}); err != nil {
+		t.Fatalf("prepare legacy schema: %v", err)
+	}
+	if err := db.Create(&legacyProviderAccount{ID: "pacc_empty", Countries: `[]`}).Error; err != nil {
+		t.Fatalf("seed provider: %v", err)
+	}
+	if err := upAccountLocation(db); err == nil || !strings.Contains(err.Error(), "pacc_empty has no country") {
+		t.Fatalf("upAccountLocation() error = %v, want account guidance", err)
+	}
+}

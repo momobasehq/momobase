@@ -124,6 +124,8 @@ func TestGetTransactionByIDAndReference(t *testing.T) {
 		Reference:      "order-1",
 		IdempotencyKey: "idem-1",
 		Status:         domain.TxPending,
+		ProviderFee:    80,
+		PlatformFee:    120,
 	}
 	if err := h.repos.Transactions.Create(context.Background(), &tx); err != nil {
 		t.Fatalf("create transaction: %v", err)
@@ -133,6 +135,9 @@ func TestGetTransactionByIDAndReference(t *testing.T) {
 	res := serveAuthenticated(t, auth, token, "/transactions/:id", h.GetTransaction, req)
 	if res.Code != http.StatusOK || !strings.Contains(res.Body, "order-1") {
 		t.Fatalf("GetTransaction() = %d %s", res.Code, res.Body)
+	}
+	if strings.Contains(res.Body, "provider_fee") || !strings.Contains(res.Body, `"platform_fee":120`) {
+		t.Fatalf("GetTransaction() fee visibility = %s", res.Body)
 	}
 
 	const byReference = "/transactions/by-reference/:reference"

@@ -16,6 +16,7 @@ import { Operations } from "@/routes/operations"
 import { Overview } from "@/routes/overview"
 import { PaymentRoutes } from "@/routes/payment-routes"
 import { Providers } from "@/routes/providers"
+import { ProviderDetail } from "@/routes/provider-detail"
 import { Roles } from "@/routes/roles"
 import { Transactions } from "@/routes/transactions"
 import { Users } from "@/routes/users"
@@ -91,6 +92,15 @@ export function App() {
           element={
             <Guard permission={AdminPermissions.appsRead}>
               <AppDetail />
+            </Guard>
+          }
+        />
+        {/* Not in the nav: reached through provider names in account-owned tables. */}
+        <Route
+          path="providers/:providerId"
+          element={
+            <Guard permission={AdminPermissions.providersRead}>
+              <ProviderDetail />
             </Guard>
           }
         />

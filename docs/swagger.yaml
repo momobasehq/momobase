@@ -111,6 +111,20 @@ definitions:
       token_type:
         type: string
     type: object
+  domain.ChargeRule:
+    properties:
+      type:
+        type: string
+      value:
+        type: integer
+    type: object
+  domain.ChargeSchedule:
+    properties:
+      collection:
+        $ref: '#/definitions/domain.ChargeRule'
+      disbursement:
+        $ref: '#/definitions/domain.ChargeRule'
+    type: object
   dto.ChangeAdminStatusRequest:
     properties:
       status:
@@ -187,6 +201,11 @@ definitions:
     type: object
   dto.CreateAppRequest:
     properties:
+      charges:
+        $ref: '#/definitions/domain.ChargeSchedule'
+      currency:
+        example: UGX
+        type: string
       description:
         example: Checkout payment application
         maxLength: 1000
@@ -203,6 +222,7 @@ definitions:
         maxLength: 255
         type: string
     required:
+    - currency
     - name
     type: object
   dto.CreateCredentialRequest:
@@ -235,9 +255,8 @@ definitions:
         description: Amount is the payment amount in the currency's minor unit.
         type: integer
       country:
-        description: |-
-          Country is the optional ISO 3166-1 alpha-2 transaction country. Providers that
-          declare supported countries are only eligible when it is present and matches.
+        description: Country is the ISO 3166-1 alpha-2 transaction country used for
+          routing.
         type: string
       currency:
         description: Currency is the three-letter currency code.
@@ -279,25 +298,25 @@ definitions:
         type: string
     required:
     - account
+    - country
     - payment_method
     - reference
     type: object
   dto.CreateProviderAccountRequest:
     properties:
+      charges:
+        $ref: '#/definitions/domain.ChargeSchedule'
       config:
         description: |-
           Config is the provider's own settings and must carry a webhook_secret. It is
           encrypted before it is stored and is never returned.
         type: object
-      countries:
-        description: |-
-          Countries restricts the account to the listed ISO 3166-1 alpha-2 countries. An
-          empty list leaves it unrestricted, which suits a rail with no country notion.
-        example:
-        - UG
-        items:
-          type: string
-        type: array
+      country:
+        example: UG
+        type: string
+      currency:
+        example: UGX
+        type: string
       environment:
         enum:
         - sandbox
@@ -316,6 +335,8 @@ definitions:
         type: string
     required:
     - config
+    - country
+    - currency
     - name
     - provider_code
     type: object
@@ -381,6 +402,11 @@ definitions:
     type: object
   dto.UpdateAppRequest:
     properties:
+      charges:
+        $ref: '#/definitions/domain.ChargeSchedule'
+      currency:
+        example: UGX
+        type: string
       description:
         example: Checkout payment application
         maxLength: 1000
@@ -396,22 +422,27 @@ definitions:
         maxLength: 255
         type: string
     type: object
-  dto.UpdateCountriesRequest:
-    properties:
-      countries:
-        example:
-        - UG
-        - RW
-        items:
-          type: string
-        type: array
-    type: object
   dto.UpdateProviderConfigRequest:
     properties:
       config:
         type: object
     required:
     - config
+    type: object
+  dto.UpdateProviderSettingsRequest:
+    properties:
+      charges:
+        $ref: '#/definitions/domain.ChargeSchedule'
+      country:
+        example: UG
+        type: string
+      currency:
+        example: UGX
+        type: string
+    required:
+    - charges
+    - country
+    - currency
     type: object
   dto.UpdateRouteRequest:
     properties:
@@ -1196,6 +1227,42 @@ paths:
       summary: Create a provider account
       tags:
       - Admin - Providers
+  /api/admin/providers/accounts/{id}:
+    get:
+      parameters:
+      - description: Provider account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a provider account
+      tags:
+      - Admin - Providers
   /api/admin/providers/accounts/{id}/activate:
     patch:
       parameters:
@@ -1320,54 +1387,6 @@ paths:
       summary: Update provider configuration
       tags:
       - Admin - Providers
-  /api/admin/providers/accounts/{id}/countries:
-    patch:
-      consumes:
-      - application/json
-      parameters:
-      - description: Provider account ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Countries
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateCountriesRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/apidoc.DocResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/apidoc.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/apidoc.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/apidoc.ErrorResponse'
-        "415":
-          description: Unsupported Media Type
-          schema:
-            $ref: '#/definitions/apidoc.ErrorResponse'
-        "429":
-          description: Too Many Requests
-          schema:
-            $ref: '#/definitions/apidoc.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Update provider countries
-      tags:
-      - Admin - Providers
   /api/admin/providers/accounts/{id}/deactivate:
     patch:
       parameters:
@@ -1402,6 +1421,54 @@ paths:
       security:
       - BearerAuth: []
       summary: Deactivate a provider account
+      tags:
+      - Admin - Providers
+  /api/admin/providers/accounts/{id}/settings:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Provider account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Provider settings
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProviderSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update provider settings
       tags:
       - Admin - Providers
   /api/admin/providers/accounts/{id}/test:

@@ -22,6 +22,8 @@ interface DataTableProps<T> {
   loading?: boolean
   /** Shown instead of rows when the result set is empty. */
   empty?: ReactNode
+  /** Makes each populated row an accessible action. */
+  onRowClick?: (row: T) => void
 }
 
 /**
@@ -29,7 +31,7 @@ interface DataTableProps<T> {
  * Table parts rather than a component of its own, so it inherits the theme and every
  * screen's tables stay identical without a shared abstraction to maintain.
  */
-export function DataTable<T>({ columns, rows, rowKey, loading, empty }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, loading, empty, onRowClick }: DataTableProps<T>) {
   return (
     // Wide tables scroll inside their own container rather than the page.
     <div className="w-full overflow-x-auto">
@@ -55,7 +57,19 @@ export function DataTable<T>({ columns, rows, rowKey, loading, empty }: DataTabl
                 </TableRow>
               ))
             : rows.map((row) => (
-                <TableRow key={rowKey(row)}>
+                <TableRow
+                  key={rowKey(row)}
+                  role={onRowClick ? "button" : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  className={onRowClick ? "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px]" : undefined}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  onKeyDown={onRowClick ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      onRowClick(row)
+                    }
+                  } : undefined}
+                >
                   {columns.map((column) => (
                     <TableCell key={column.key} className={column.align === "end" ? "text-end" : undefined}>
                       {column.cell(row)}
