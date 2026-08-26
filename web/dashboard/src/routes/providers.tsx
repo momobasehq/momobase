@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { AdminPermissions, type ChargeSchedule, type ProviderAccount } from "@momobase/sdk"
 
@@ -234,62 +235,71 @@ function ConfigureDialog({ account, onClose }: { account?: ProviderAccount; onCl
           </DialogDescription>
         </DialogHeader>
 
-        <FieldGroup>
-          <FieldGroup className="grid grid-cols-2 gap-3">
-            <Field>
-              <FieldLabel htmlFor="edit-country">Country</FieldLabel>
-              <Input
-                id="edit-country"
-                maxLength={2}
-                value={settings.country}
-                onChange={(event) => setSettings({ ...settings, country: event.target.value.toUpperCase() })}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="edit-currency">Currency</FieldLabel>
-              <Input
-                id="edit-currency"
-                maxLength={3}
-                value={settings.currency}
-                onChange={(event) => setSettings({ ...settings, currency: event.target.value.toUpperCase() })}
-              />
-            </Field>
-          </FieldGroup>
-          <ChargeFields id="edit-provider-charges" value={settings.charges} onChange={(charges) => setSettings({ ...settings, charges })} />
-          <GuardedAction
-            permission={AdminPermissions.providersUpdate}
-            className="self-start"
-            disabled={saveSettings.isPending || settings.country.length !== 2 || settings.currency.length !== 3}
-            onClick={() => saveSettings.mutate()}
-          >
-            Save settings
-          </GuardedAction>
-        </FieldGroup>
-
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="edit-config">Replacement configuration (JSON)</FieldLabel>
-            <Textarea
-              id="edit-config"
-              rows={6}
-              className="font-mono"
-              value={config}
-              onChange={(event) => setConfig(event.target.value)}
-              placeholder={'{\n  "webhook_secret": "…"\n}'}
-            />
-            <FieldDescription>
-              The stored configuration is encrypted and never returned. Saving replaces it outright and reloads the adapter.
-            </FieldDescription>
-          </Field>
-          <GuardedAction
-            permission={AdminPermissions.providersUpdate}
-            className="self-start"
-            disabled={saveConfig.isPending || !config.trim()}
-            onClick={() => saveConfig.mutate()}
-          >
-            Replace configuration
-          </GuardedAction>
-        </FieldGroup>
+        <Tabs defaultValue="settings">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="configuration">Configuration</TabsTrigger>
+          </TabsList>
+          <TabsContent value="settings">
+            <FieldGroup>
+              <FieldGroup className="grid grid-cols-2 gap-3">
+                <Field>
+                  <FieldLabel htmlFor="edit-country">Country</FieldLabel>
+                  <Input
+                    id="edit-country"
+                    maxLength={2}
+                    value={settings.country}
+                    onChange={(event) => setSettings({ ...settings, country: event.target.value.toUpperCase() })}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="edit-currency">Currency</FieldLabel>
+                  <Input
+                    id="edit-currency"
+                    maxLength={3}
+                    value={settings.currency}
+                    onChange={(event) => setSettings({ ...settings, currency: event.target.value.toUpperCase() })}
+                  />
+                </Field>
+              </FieldGroup>
+              <ChargeFields id="edit-provider-charges" value={settings.charges} onChange={(charges) => setSettings({ ...settings, charges })} />
+              <GuardedAction
+                permission={AdminPermissions.providersUpdate}
+                className="self-start"
+                disabled={saveSettings.isPending || settings.country.length !== 2 || settings.currency.length !== 3}
+                onClick={() => saveSettings.mutate()}
+              >
+                Save settings
+              </GuardedAction>
+            </FieldGroup>
+          </TabsContent>
+          <TabsContent value="configuration">
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="edit-config">Replacement configuration (JSON)</FieldLabel>
+                <Textarea
+                  id="edit-config"
+                  rows={6}
+                  className="font-mono"
+                  value={config}
+                  onChange={(event) => setConfig(event.target.value)}
+                  placeholder={'{\n  "webhook_secret": "…"\n}'}
+                />
+                <FieldDescription>
+                  The stored configuration is encrypted and never returned. Saving replaces it outright and reloads the adapter.
+                </FieldDescription>
+              </Field>
+              <GuardedAction
+                permission={AdminPermissions.providersUpdate}
+                className="self-start"
+                disabled={saveConfig.isPending || !config.trim()}
+                onClick={() => saveConfig.mutate()}
+              >
+                Replace configuration
+              </GuardedAction>
+            </FieldGroup>
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter>
           <Button

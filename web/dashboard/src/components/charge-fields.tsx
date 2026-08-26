@@ -1,5 +1,6 @@
 import type { ChargeRule, ChargeSchedule, ChargeType } from "@momobase/sdk"
 
+import { ButtonGroup } from "@/components/ui/button-group"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -21,26 +22,28 @@ function RuleField({
   onChange: (rule: ChargeRule) => void
 }) {
   return (
-    <div className="grid grid-cols-[1fr_9rem_9rem] items-end gap-2">
+    <div className="grid gap-2">
       <Label htmlFor={`${id}-value`}>{label}</Label>
-      <Select value={rule.type} onValueChange={(type) => onChange({ ...rule, type: (type ?? "flat") as ChargeType })}>
-        <SelectTrigger id={`${id}-type`} aria-label={`${label} charge type`}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="flat">Flat</SelectItem>
-          <SelectItem value="percentage">Percentage</SelectItem>
-        </SelectContent>
-      </Select>
-      <Input
-        id={`${id}-value`}
-        type="number"
-        min={0}
-        step={1}
-        max={rule.type === "percentage" ? 10_000 : undefined}
-        value={rule.value}
-        onChange={(event) => onChange({ ...rule, value: Math.max(0, Math.trunc(Number(event.target.value) || 0)) })}
-      />
+      <ButtonGroup className="w-full">
+        <Select value={rule.type} onValueChange={(type) => onChange({ ...rule, type: (type ?? "flat") as ChargeType })}>
+          <SelectTrigger id={`${id}-type`} aria-label={`${label} charge type`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="flat">Flat</SelectItem>
+            <SelectItem value="percentage">Percentage</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          id={`${id}-value`}
+          type="number"
+          min={0}
+          step={1}
+          max={rule.type === "percentage" ? 10_000 : undefined}
+          value={rule.value}
+          onChange={(event) => onChange({ ...rule, value: Math.max(0, Math.trunc(Number(event.target.value) || 0)) })}
+        />
+      </ButtonGroup>
     </div>
   )
 }
