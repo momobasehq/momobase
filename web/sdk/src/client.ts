@@ -172,6 +172,7 @@ export class MomobaseAdminClient extends SessionClient {
   }
   readonly providers = {
     list: (o?: ListOptions) => this.get<PaginatedData<ProviderAccount>>(`/api/admin/providers${query(o)}`),
+    get: (id: string) => this.get<ProviderAccount>(endpoint("/api/admin/providers/accounts", id)),
     registry: () => this.get<ProviderRegistry>("/api/admin/providers/registry"),
     createAccount: (p: { provider_code: string; name: string; environment: "sandbox" | "production"; country: string; currency: string; charges?: ChargeSchedule; config: Record<string, unknown> }) => this.post<ProviderAccount>("/api/admin/providers/accounts", p),
     updateSettings: (id: string, p: { country: string; currency: string; charges: ChargeSchedule }) => this.patch<unknown>(endpoint("/api/admin/providers/accounts", id) + "/settings", p),
@@ -181,7 +182,7 @@ export class MomobaseAdminClient extends SessionClient {
     activeBalances: (o?: ListOptions) => this.get<PaginatedData<ProviderBalanceResult>>(`/api/admin/balances/providers${query(o)}`), health: (o?: ListOptions) => this.get<PaginatedData<ProviderHealthSnapshot>>(`/api/admin/health/providers${query(o)}`)
   }
   readonly routes = {
-    list: (o?: ListOptions) => this.get<PaginatedData<PaymentRoute>>(`/api/admin/routes${query(o)}`), create: (p: Omit<PaymentRoute, "id" | "created_at" | "updated_at">) => this.post<PaymentRoute>("/api/admin/routes", p),
+    list: (o?: ListOptions) => this.get<PaginatedData<PaymentRoute>>(`/api/admin/routes${query(o)}`), create: (p: Omit<PaymentRoute, "id" | "provider_name" | "created_at" | "updated_at">) => this.post<PaymentRoute>("/api/admin/routes", p),
     update: (id: string, p: { priority: number; active: boolean }) => this.patch<unknown>(endpoint("/api/admin/routes", id), p)
   }
   readonly transactions = {

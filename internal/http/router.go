@@ -286,6 +286,7 @@ func mountAdmin(app *fiber.App, d RouterDeps) {
 
 	get("/providers", "providers:read", h.ListProviders)
 	get("/providers/registry", "providers:read", h.ProviderRegistry)
+	get("/providers/accounts/:id", "providers:read", h.GetProviderAccount)
 	get("/health/providers", "providers:read", h.ListProviderHealth)
 	get("/runtime/providers", "providers:read", h.RuntimeProviders)
 	post("/providers/accounts", "providers:create", h.CreateProvider, middlewarex.JSONOnly)

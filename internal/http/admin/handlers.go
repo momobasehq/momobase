@@ -191,7 +191,13 @@ func (h *Handler) ListAuditLogs(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/health/providers [get]
 func (h *Handler) ListProviderHealth(c fiber.Ctx) error {
-	return page(c, h.repos.ProviderHealth.Page)
+	return providerPage(
+		c,
+		h.repos.ProviderAccounts,
+		h.repos.ProviderHealth.Page,
+		func(row *domain.ProviderHealthSnapshot) string { return row.ProviderAccountID },
+		func(row *domain.ProviderHealthSnapshot, name string) { row.ProviderName = name },
+	)
 }
 
 // ListAdmins documents administrator listing.
@@ -718,7 +724,13 @@ func (h *Handler) TestProvider(c fiber.Ctx) error {
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/routes [get]
 func (h *Handler) ListRoutes(c fiber.Ctx) error {
-	return page(c, h.repos.PaymentRoutes.Page)
+	return providerPage(
+		c,
+		h.repos.ProviderAccounts,
+		h.repos.PaymentRoutes.Page,
+		func(row *domain.PaymentRoute) string { return row.ProviderAccountID },
+		func(row *domain.PaymentRoute, name string) { row.ProviderName = name },
+	)
 }
 
 // CreateRoute documents payment route creation.
@@ -790,6 +802,40 @@ func page[T any](c fiber.Ctx, read func(context.Context, int, int) (repository.P
 	result, err := read(c.Context(), number, size)
 	if err != nil {
 		return platform.Error(c, 500, "SERVER_ERROR", err.Error())
+	}
+	return platform.JSON(c, 200, platform.PageData[T]{
+		Page:  number,
+		Total: int(result.Total),
+		Items: result.Items,
+		Count: len(result.Items),
+	})
+}
+
+// providerPage enriches provider-owned rows without changing the repositories used by
+// routing and health workers. Names are presentation data, resolved in one query for
+// the current page.
+func providerPage[T any](
+	c fiber.Ctx,
+	accounts repository.ProviderAccountRepo,
+	read func(context.Context, int, int) (repository.Page[T], error),
+	accountID func(*T) string,
+	setName func(*T, string),
+) error {
+	number, size := platform.Pagination(c)
+	result, err := read(c.Context(), number, size)
+	if err != nil {
+		return platform.Error(c, 500, "SERVER_ERROR", err.Error())
+	}
+	ids := make([]string, 0, len(result.Items))
+	for index := range result.Items {
+		ids = append(ids, accountID(&result.Items[index]))
+	}
+	names, err := accounts.NamesByIDs(c.Context(), ids)
+	if err != nil {
+		return platform.Error(c, 500, "SERVER_ERROR", err.Error())
+	}
+	for index := range result.Items {
+		setName(&result.Items[index], names[accountID(&result.Items[index])])
 	}
 	return platform.JSON(c, 200, platform.PageData[T]{
 		Page:  number,

@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { Link } from "react-router"
 import { toast } from "sonner"
 
 import { DataTable, type Column } from "@/components/data-table"
@@ -336,7 +337,15 @@ export function Providers() {
   })
 
   const columns: Column<ProviderAccount>[] = [
-    { key: "name", header: "Name", cell: (account) => <span className="font-medium">{account.name}</span> },
+    {
+      key: "name",
+      header: "Name",
+      cell: (account) => (
+        <Link className="font-medium underline-offset-4 hover:underline" to={`/providers/${account.id}`}>
+          {account.name}
+        </Link>
+      ),
+    },
     { key: "code", header: "Provider", cell: (account) => <code>{account.provider_code}</code> },
     { key: "environment", header: "Environment", cell: (account) => <StatusBadge status={account.environment} /> },
     {

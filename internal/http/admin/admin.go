@@ -5,6 +5,7 @@ import (
 
 	httpcommon "github.com/momobasehq/momobase/internal/http/common"
 	"github.com/momobasehq/momobase/internal/platform"
+	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
@@ -80,6 +81,31 @@ func (h *Handler) GetApp(c fiber.Ctx) error {
 		return platform.Error(c, 404, "NOT_FOUND", "app not found")
 	}
 	return platform.JSON(c, 200, app)
+}
+
+// GetProviderAccount writes the provider account identified by the request path.
+// Encrypted configuration is excluded by the domain model and is never returned.
+//
+// @Summary Get a provider account
+// @Tags Admin - Providers
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Provider account ID"
+// @Success 200 {object} apidoc.DocResponse
+// @Failure 401 {object} apidoc.ErrorResponse
+// @Failure 404 {object} apidoc.ErrorResponse
+// @Failure 429 {object} apidoc.ErrorResponse
+// @Failure 500 {object} apidoc.ErrorResponse
+// @Router /api/admin/providers/accounts/{id} [get]
+func (h *Handler) GetProviderAccount(c fiber.Ctx) error {
+	account, err := h.repos.ProviderAccounts.ByID(c.Context(), id(c))
+	if repository.IsNotFound(err) {
+		return platform.Error(c, 404, "NOT_FOUND", "provider account not found")
+	}
+	if err != nil {
+		return platform.Error(c, 500, "SERVER_ERROR", err.Error())
+	}
+	return platform.JSON(c, 200, account)
 }
 
 // ActiveProviderBalances queries balances for active provider runtimes and

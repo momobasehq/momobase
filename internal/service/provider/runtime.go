@@ -64,6 +64,8 @@ func (c *circuit) after(now time.Time, err error) {
 type Runtime struct {
 	// AccountID is the persisted provider account identifier.
 	AccountID string
+	// ProviderName is the operator-facing name of the loaded account.
+	ProviderName string
 	// ProviderCode identifies the registered provider adapter implementation.
 	ProviderCode string
 	// Country and Currency identify the transactions served by the account.
@@ -170,6 +172,7 @@ func (m *RuntimeManager) Reload(ctx context.Context, id string) error {
 	caps := adapter.Capabilities()
 	fresh := &Runtime{
 		AccountID:     id,
+		ProviderName:  account.Name,
 		ProviderCode:  account.ProviderCode,
 		Country:       account.Country,
 		Currency:      account.Currency,

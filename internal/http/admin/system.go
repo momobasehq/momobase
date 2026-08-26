@@ -109,6 +109,7 @@ func (h *Handler) RuntimeProviders(c fiber.Ctx) error {
 	for _, runtime := range h.runtime.List() {
 		item := map[string]any{
 			"provider_account_id": runtime.AccountID,
+			"provider_name":       runtime.ProviderName,
 			"provider_code":       runtime.ProviderCode,
 			"config_version":      runtime.ConfigVersion,
 			"active":              true,

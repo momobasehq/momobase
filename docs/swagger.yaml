@@ -1227,6 +1227,42 @@ paths:
       summary: Create a provider account
       tags:
       - Admin - Providers
+  /api/admin/providers/accounts/{id}:
+    get:
+      parameters:
+      - description: Provider account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/apidoc.DocResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/apidoc.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a provider account
+      tags:
+      - Admin - Providers
   /api/admin/providers/accounts/{id}/activate:
     patch:
       parameters:

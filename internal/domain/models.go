@@ -152,6 +152,7 @@ type ProviderAccount struct {
 // ProviderHealthSnapshot stores the latest observed provider and circuit state.
 type ProviderHealthSnapshot struct {
 	ProviderAccountID      string     `gorm:"primaryKey;size:40" json:"provider_account_id"`
+	ProviderName           string     `gorm:"-" json:"provider_name"`
 	Status                 string     `gorm:"size:32;index;not null;default:unknown" json:"status"`
 	CircuitState           string     `gorm:"size:32;not null;default:closed" json:"circuit_state"`
 	LastCheckedAt          *time.Time `json:"last_checked_at"`
@@ -174,6 +175,7 @@ type PaymentRoute struct {
 	ServiceType       string `gorm:"size:64;uniqueIndex:idx_route_service_method_provider;not null" json:"service_type"`
 	PaymentMethod     string `gorm:"size:64;uniqueIndex:idx_route_service_method_provider;not null" json:"payment_method"`
 	ProviderAccountID string `gorm:"size:40;uniqueIndex:idx_route_service_method_provider;not null" json:"provider_account_id"`
+	ProviderName      string `gorm:"-" json:"provider_name"`
 	Priority          int    `gorm:"index;not null;default:100" json:"priority"`
 	Active            bool   `gorm:"index;not null;default:true" json:"active"`
 }

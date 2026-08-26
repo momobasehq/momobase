@@ -3,6 +3,7 @@ import { PaginationControls } from "@/components/pagination-controls"
 import { StatusBadge } from "@/components/status-badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AdminPermissions, type ProviderHealthSnapshot, type RuntimeProvider, type WorkerState } from "@momobase/sdk"
+import { Link } from "react-router"
 
 import { useAuth } from "@/hooks/use-auth"
 import { usePagedQuery } from "@/hooks/use-paged-query"
@@ -16,7 +17,15 @@ const workerColumns: Column<WorkerState>[] = [
 ]
 
 const healthColumns: Column<ProviderHealthSnapshot>[] = [
-  { key: "account", header: "Provider account", cell: (row) => <code>{row.provider_account_id}</code> },
+  {
+    key: "account",
+    header: "Provider account",
+    cell: (row) => (
+      <Link className="font-medium underline-offset-4 hover:underline" to={`/providers/${row.provider_account_id}`}>
+        {row.provider_name || row.provider_account_id}
+      </Link>
+    ),
+  },
   { key: "status", header: "Status", cell: (row) => <StatusBadge status={row.status} /> },
   { key: "circuit", header: "Circuit", cell: (row) => <StatusBadge status={row.circuit_state} /> },
   { key: "failures", header: "Failures", align: "end", cell: (row) => row.consecutive_failures },
@@ -26,8 +35,16 @@ const healthColumns: Column<ProviderHealthSnapshot>[] = [
 ]
 
 const runtimeColumns: Column<RuntimeProvider>[] = [
-  { key: "code", header: "Provider", cell: (row) => <code className="font-medium">{row.provider_code}</code> },
-  { key: "account", header: "Account", cell: (row) => <code>{row.provider_account_id}</code> },
+  { key: "code", header: "Provider", cell: (row) => <code>{row.provider_code}</code> },
+  {
+    key: "account",
+    header: "Account",
+    cell: (row) => (
+      <Link className="font-medium underline-offset-4 hover:underline" to={`/providers/${row.provider_account_id}`}>
+        {row.provider_name || row.provider_account_id}
+      </Link>
+    ),
+  },
   { key: "initialized", header: "Initialized", cell: (row) => <StatusBadge status={row.initialized ? "active" : "inactive"} /> },
   { key: "version", header: "Config", cell: (row) => `v${row.config_version}` },
   { key: "country", header: "Country", cell: (row) => row.country },

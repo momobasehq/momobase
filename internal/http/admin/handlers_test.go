@@ -22,6 +22,7 @@ import (
 	"github.com/momobasehq/momobase/internal/service/identity"
 	"github.com/momobasehq/momobase/internal/service/provider"
 	"github.com/momobasehq/momobase/providers"
+	"github.com/momobasehq/momobase/providers/dummy"
 )
 
 func handlerDatabase(t *testing.T) *gorm.DB {
@@ -180,6 +181,106 @@ func TestHandlerListAndGetApp(t *testing.T) {
 	res = serve(t, "/apps/:id", h.GetApp, httptest.NewRequest(http.MethodGet, "/apps/missing", nil))
 	if res.Code != http.StatusNotFound {
 		t.Fatalf("GetApp(missing) status = %d", res.Code)
+	}
+}
+
+func TestHandlerProviderResponsesIncludeAccountName(t *testing.T) {
+	h := testHandler(t)
+	ctx := context.Background()
+	account := domain.ProviderAccount{
+		BaseModel:           domain.BaseModel{ID: "provider-1"},
+		ProviderCode:        "acme_pay",
+		Name:                "Primary Acme",
+		Environment:         "sandbox",
+		Country:             "UG",
+		Currency:            "UGX",
+		EncryptedConfigJSON: "encrypted",
+	}
+	if err := h.repos.ProviderAccounts.Create(ctx, &account); err != nil {
+		t.Fatalf("create provider account: %v", err)
+	}
+	route := domain.PaymentRoute{
+		BaseModel:         domain.BaseModel{ID: "route-1"},
+		ServiceType:       domain.ServiceCollection,
+		PaymentMethod:     "momo",
+		ProviderAccountID: account.ID,
+		Priority:          1,
+		Active:            true,
+	}
+	if err := h.repos.PaymentRoutes.Create(ctx, &route); err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+	health := domain.ProviderHealthSnapshot{
+		ProviderAccountID: account.ID,
+		Status:            domain.ProviderHealthy,
+		CircuitState:      domain.CircuitClosed,
+	}
+	if err := h.repos.ProviderHealth.Save(ctx, &health); err != nil {
+		t.Fatalf("create health snapshot: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		pattern string
+		target  string
+		handler fiber.Handler
+	}{
+		{name: "account", pattern: "/providers/accounts/:id", target: "/providers/accounts/provider-1", handler: h.GetProviderAccount},
+		{name: "routes", pattern: "/routes", target: "/routes", handler: h.ListRoutes},
+		{name: "health", pattern: "/health/providers", target: "/health/providers", handler: h.ListProviderHealth},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			res := serve(t, test.pattern, test.handler, httptest.NewRequest(http.MethodGet, test.target, nil))
+			if res.Code != http.StatusOK || !strings.Contains(res.Body, `"name":"Primary Acme"`) &&
+				!strings.Contains(res.Body, `"provider_name":"Primary Acme"`) {
+				t.Fatalf("response = %d %s, want provider name", res.Code, res.Body)
+			}
+		})
+	}
+
+	res := serve(
+		t,
+		"/providers/accounts/:id",
+		h.GetProviderAccount,
+		httptest.NewRequest(http.MethodGet, "/providers/accounts/missing", nil),
+	)
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("GetProviderAccount(missing) status = %d", res.Code)
+	}
+}
+
+func TestRuntimeProviderResponseIncludesAccountName(t *testing.T) {
+	registry := providers.NewRegistry()
+	registry.Register("dummy", dummy.New)
+	h := testHandlerWithProviders(t, registry)
+	account, err := h.providers.CreateAccount(
+		context.Background(),
+		nil,
+		provider.CreateAccountInput{
+			ProviderCode: "dummy",
+			Name:         "Primary Dummy",
+			Environment:  "sandbox",
+			Country:      "UG",
+			Currency:     "UGX",
+			Config:       map[string]any{"webhook_secret": "a-long-random-test-webhook-secret"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("create provider account: %v", err)
+	}
+	if err := h.providers.Activate(context.Background(), nil, account.ID); err != nil {
+		t.Fatalf("activate provider account: %v", err)
+	}
+
+	res := serve(
+		t,
+		"/runtime/providers",
+		h.RuntimeProviders,
+		httptest.NewRequest(http.MethodGet, "/runtime/providers", nil),
+	)
+	if res.Code != http.StatusOK || !strings.Contains(res.Body, `"provider_name":"Primary Dummy"`) {
+		t.Fatalf("RuntimeProviders() response = %d %s, want provider name", res.Code, res.Body)
 	}
 }
 

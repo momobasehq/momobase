@@ -44,7 +44,10 @@ export interface Transaction {
   platform_fee: number
   created_at: string; updated_at: string
 }
-export interface AdminTransaction extends Transaction { provider_fee: number }
+export interface AdminTransaction extends Transaction {
+  provider_fee: number; reconciliation_attempts: number
+  last_reconciled_at?: string; next_reconcile_at?: string
+}
 export interface OAuthTokenResponse {
   access_token: string; token_type: string; expires_in: number; refresh_token?: string; scope?: string
   app_id?: string; app_name?: string; credential_id?: string; client_id?: string
@@ -92,16 +95,16 @@ export interface CreatedCredential { credential: AppCredential; client_secret: s
 export interface ProviderAccount {
   id: string; provider_code: string; name: string; environment: string
   country: string; currency: string; charges: ChargeSchedule
-  active: boolean; config_version: number; created_at: string; updated_at: string
+  active: boolean; config_version: number; config_hash: string; created_at: string; updated_at: string
 }
 /** Provider codes registered in the running server, including custom providers. */
 export interface ProviderRegistry { providers: string[] }
 export interface PaymentRoute {
   id: string; service_type: ServiceType; payment_method: PaymentMethod; provider_account_id: string
-  priority: number; active: boolean; created_at: string; updated_at: string
+  provider_name: string; priority: number; active: boolean; created_at: string; updated_at: string
 }
 export interface ProviderHealthSnapshot {
-  provider_account_id: string; status: string; circuit_state: string; last_checked_at?: string
+  provider_account_id: string; provider_name: string; status: string; circuit_state: string; last_checked_at?: string
   last_success_at?: string; last_failure_at?: string; consecutive_failures: number; latency_ms: number
   collections_available: boolean; disbursements_available: boolean; balance_query_available: boolean
   last_error_code?: string; last_error_message?: string; created_at?: string; updated_at?: string
@@ -111,7 +114,7 @@ export interface AuditLog {
   metadata_json: string; ip_address: string; user_agent: string; created_at: string; updated_at: string
 }
 export interface RuntimeProvider {
-  provider_account_id: string; provider_code: string; config_version: number; active: boolean
+  provider_account_id: string; provider_name: string; provider_code: string; config_version: number; active: boolean
   initialized: boolean; capabilities: unknown[]; country: string; currency: string; health?: ProviderHealthSnapshot
 }
 export interface ProviderBalance { currency: string; available: number; ledger: number }

@@ -56,6 +56,8 @@ interface AnalyticsFiltersProps {
   onChange: (range: AnalyticsRange) => void
   /** Hides the app selector where the app is already fixed by the page. */
   showApp?: boolean
+  /** Hides the provider selector where the provider is already fixed by the page. */
+  showProvider?: boolean
 }
 
 /**
@@ -65,7 +67,7 @@ interface AnalyticsFiltersProps {
  * of the same window — per-chart filters are how dashboards end up showing two periods
  * side by side and inviting a false conclusion.
  */
-export function AnalyticsFilters({ range, onChange, showApp = true }: AnalyticsFiltersProps) {
+export function AnalyticsFilters({ range, onChange, showApp = true, showProvider = true }: AnalyticsFiltersProps) {
   const { client, can } = useAuth()
 
   // Both selectors are populated from the API, and each is skipped when the viewer
@@ -79,7 +81,7 @@ export function AnalyticsFilters({ range, onChange, showApp = true }: AnalyticsF
   const providers = useQuery({
     queryKey: keys.providers.list({ page: 1, perPage: 100 }),
     queryFn: () => client.providers.list({ page: 1, perPage: 100 }),
-    enabled: can(AdminPermissions.providersRead),
+    enabled: showProvider && can(AdminPermissions.providersRead),
   })
 
   function shiftDays(days: number) {
@@ -161,27 +163,29 @@ export function AnalyticsFilters({ range, onChange, showApp = true }: AnalyticsF
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="range-provider">Provider</Label>
-        <Select
-          value={range.providerAccountId ?? anyValue}
-          onValueChange={(value) =>
-            onChange({ ...range, providerAccountId: value === anyValue ? undefined : (value ?? undefined) })
-          }
-        >
-          <SelectTrigger id="range-provider" className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={anyValue}>All providers</SelectItem>
-            {(providers.data?.items ?? []).map((account) => (
-              <SelectItem key={account.id} value={account.id}>
-                {account.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {showProvider && (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="range-provider">Provider</Label>
+          <Select
+            value={range.providerAccountId ?? anyValue}
+            onValueChange={(value) =>
+              onChange({ ...range, providerAccountId: value === anyValue ? undefined : (value ?? undefined) })
+            }
+          >
+            <SelectTrigger id="range-provider" className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={anyValue}>All providers</SelectItem>
+              {(providers.data?.items ?? []).map((account) => (
+                <SelectItem key={account.id} value={account.id}>
+                  {account.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
     </div>
   )
 }
