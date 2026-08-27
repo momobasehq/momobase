@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/momobasehq/momobase"
+	"github.com/momobasehq/momobase/providers"
 	"github.com/momobasehq/momobase/providers/dummy"
 )
 
@@ -88,8 +89,8 @@ func newServeCommand() *cobra.Command {
 // that a fresh deployment can be exercised end to end before real credentials
 // exist; creating and activating an account for it remains an explicit
 // administrative action.
-func providerFactories() map[string]momobase.ProviderFactory {
-	return map[string]momobase.ProviderFactory{
+func providerFactories() map[string]providers.Factory {
+	return map[string]providers.Factory{
 		"dummy": dummy.New,
 	}
 }

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/momobasehq/momobase"
+	"github.com/momobasehq/momobase/providers"
 )
 
 const webhookSecret = "acme-webhook-signing-credential"
@@ -53,10 +53,10 @@ func acmeServer(t *testing.T) (*httptest.Server, *map[string]any) {
 	return server, &received
 }
 
-func newTestProvider(t *testing.T, baseURL string) momobase.PaymentProvider {
+func newTestProvider(t *testing.T, baseURL string) providers.PaymentProvider {
 	t.Helper()
 	provider := newAcmeProvider(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	config := momobase.ProviderConfig{
+	config := providers.ProviderConfig{
 		"api_key":        "test-api-key",
 		"base_url":       baseURL,
 		"webhook_secret": webhookSecret,
@@ -69,7 +69,7 @@ func newTestProvider(t *testing.T, baseURL string) momobase.PaymentProvider {
 
 func TestInitRequiresAnAPIKeyAndDefaultsTheBaseURL(t *testing.T) {
 	provider := newAcmeProvider(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err := provider.Init(context.Background(), momobase.ProviderConfig{}); err == nil {
+	if err := provider.Init(context.Background(), providers.ProviderConfig{}); err == nil {
 		t.Fatal("Init() without an api key = nil, want an error")
 	}
 
@@ -77,7 +77,7 @@ func TestInitRequiresAnAPIKeyAndDefaultsTheBaseURL(t *testing.T) {
 	if !ok {
 		t.Fatal("newAcmeProvider() did not return *acmeProvider")
 	}
-	if err := provider.Init(context.Background(), momobase.ProviderConfig{"api_key": "k"}); err != nil {
+	if err := provider.Init(context.Background(), providers.ProviderConfig{"api_key": "k"}); err != nil {
 		t.Fatalf("Init() error = %v", err)
 	}
 	if !strings.HasPrefix(acme.baseURL, "https://") {
@@ -88,8 +88,8 @@ func TestInitRequiresAnAPIKeyAndDefaultsTheBaseURL(t *testing.T) {
 func TestCapabilitiesCoverBothServices(t *testing.T) {
 	server, _ := acmeServer(t)
 	caps := newTestProvider(t, server.URL).Capabilities()
-	for _, service := range []string{momobase.ServiceCollection, momobase.ServiceDisbursement} {
-		if !slices.ContainsFunc(caps, func(c momobase.Capability) bool { return c.ServiceType == service }) {
+	for _, service := range []string{providers.ServiceCollection, providers.ServiceDisbursement} {
+		if !slices.ContainsFunc(caps, func(c providers.Capability) bool { return c.ServiceType == service }) {
 			t.Errorf("Capabilities() is missing %s", service)
 		}
 	}
@@ -102,7 +102,7 @@ func TestHealthCheckAuthenticates(t *testing.T) {
 	}
 
 	unauthorized := newAcmeProvider(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	config := momobase.ProviderConfig{"api_key": "wrong", "base_url": server.URL}
+	config := providers.ProviderConfig{"api_key": "wrong", "base_url": server.URL}
 	if err := unauthorized.Init(context.Background(), config); err != nil {
 		t.Fatalf("Init() error = %v", err)
 	}
@@ -114,7 +114,7 @@ func TestHealthCheckAuthenticates(t *testing.T) {
 func TestCollectAndDisburseFormatTheRequest(t *testing.T) {
 	server, received := acmeServer(t)
 	provider := newTestProvider(t, server.URL)
-	request := momobase.PaymentRequest{
+	request := providers.PaymentRequest{
 		TransactionID: "txn_1",
 		Amount:        150000,
 		Currency:      "UGX",
@@ -124,11 +124,11 @@ func TestCollectAndDisburseFormatTheRequest(t *testing.T) {
 		Description:   "test payment",
 	}
 
-	for name, call := range map[string]func() (*momobase.ProviderPaymentResponse, error){
-		"collect": func() (*momobase.ProviderPaymentResponse, error) {
+	for name, call := range map[string]func() (*providers.ProviderPaymentResponse, error){
+		"collect": func() (*providers.ProviderPaymentResponse, error) {
 			return provider.Collect(context.Background(), request)
 		},
-		"disburse": func() (*momobase.ProviderPaymentResponse, error) {
+		"disburse": func() (*providers.ProviderPaymentResponse, error) {
 			return provider.Disburse(context.Background(), request)
 		},
 	} {
@@ -137,7 +137,7 @@ func TestCollectAndDisburseFormatTheRequest(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s() error = %v", name, err)
 			}
-			if result.ProviderReference != "acme_1" || result.Status != momobase.TxSucceeded {
+			if result.ProviderReference != "acme_1" || result.Status != providers.TxSucceeded {
 				t.Fatalf("%s() = %+v, want a succeeded acme_1 response", name, result)
 			}
 			// UGX is a zero-decimal currency, so minor units reach the API unscaled.
@@ -159,7 +159,7 @@ func TestQueryTransactionAndBalance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueryTransaction() error = %v", err)
 	}
-	if status.Status != momobase.TxProcessing || status.ProviderReference != "acme_1" {
+	if status.Status != providers.TxProcessing || status.ProviderReference != "acme_1" {
 		t.Fatalf("QueryTransaction() = %+v, want processing for acme_1", status)
 	}
 
@@ -192,7 +192,7 @@ func TestVerifyWebhook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("VerifyWebhook() error = %v", err)
 	}
-	if event.ProviderReference != "acme_1" || event.Status != momobase.TxSucceeded {
+	if event.ProviderReference != "acme_1" || event.Status != providers.TxSucceeded {
 		t.Fatalf("VerifyWebhook() = %+v, want a succeeded acme_1 event", event)
 	}
 	if event.Amount == nil || *event.Amount != 2500 {
@@ -215,7 +215,7 @@ func TestVerifyWebhook(t *testing.T) {
 	}
 
 	unsigned := newAcmeProvider(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err = unsigned.Init(context.Background(), momobase.ProviderConfig{"api_key": "k"}); err != nil {
+	if err = unsigned.Init(context.Background(), providers.ProviderConfig{"api_key": "k"}); err != nil {
 		t.Fatalf("Init() error = %v", err)
 	}
 	if _, err = unsigned.VerifyWebhook(context.Background(), payload, signed(payload)); err == nil {
@@ -226,12 +226,12 @@ func TestVerifyWebhook(t *testing.T) {
 func TestValidateRequestNormalizesTheAccount(t *testing.T) {
 	server, _ := acmeServer(t)
 	provider := newTestProvider(t, server.URL)
-	validator, ok := provider.(momobase.RequestValidator)
+	validator, ok := provider.(providers.RequestValidator)
 	if !ok {
-		t.Fatal("the provider does not implement momobase.RequestValidator")
+		t.Fatal("the provider does not implement providers.RequestValidator")
 	}
 	for _, account := range []string{"0770000000", "+256770000000", "256770000000", " 077 000 0000 ", "770000000"} {
-		req := momobase.PaymentRequest{Country: "UG", Account: account}
+		req := providers.PaymentRequest{Country: "UG", Account: account}
 		if err := validator.ValidateRequest(context.Background(), &req); err != nil {
 			t.Fatalf("ValidateRequest(%q) error = %v", account, err)
 		}
@@ -240,7 +240,7 @@ func TestValidateRequestNormalizesTheAccount(t *testing.T) {
 		}
 	}
 
-	for name, req := range map[string]momobase.PaymentRequest{
+	for name, req := range map[string]providers.PaymentRequest{
 		"letters":         {Country: "UG", Account: "not-a-number"},
 		"too short":       {Country: "UG", Account: "0770000"},
 		"too long":        {Country: "UG", Account: "07700000001234"},

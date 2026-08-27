@@ -21,9 +21,10 @@ import (
 	"time"
 
 	"github.com/momobasehq/momobase"
+	"github.com/momobasehq/momobase/providers"
 )
 
-// acmeProvider implements momobase.PaymentProvider for the Acme Pay API.
+// acmeProvider implements providers.PaymentProvider for the Acme Pay API.
 type acmeProvider struct {
 	log           *slog.Logger
 	client        *http.Client
@@ -34,36 +35,36 @@ type acmeProvider struct {
 
 // newAcmeProvider is the factory Momobase calls to build a provider instance.
 // The logger is never nil and is already tagged with the provider code.
-func newAcmeProvider(log *slog.Logger) momobase.PaymentProvider {
+func newAcmeProvider(log *slog.Logger) providers.PaymentProvider {
 	return &acmeProvider{log: log, client: &http.Client{Timeout: 30 * time.Second}}
 }
 
 // Init applies the configuration recorded for an Acme Pay account. It is called
 // whenever an account is created, updated, or reloaded, so it must not retain
 // state from a previous call.
-func (p *acmeProvider) Init(_ context.Context, cfg momobase.ProviderConfig) error {
-	p.apiKey = momobase.ConfigString(cfg, "api_key")
+func (p *acmeProvider) Init(_ context.Context, cfg providers.ProviderConfig) error {
+	p.apiKey = providers.ConfigString(cfg, "api_key")
 	if p.apiKey == "" {
 		return errors.New("acme_pay: api_key is required")
 	}
-	p.baseURL = momobase.First(momobase.ConfigString(cfg, "base_url"), "https://api.acme.example")
-	p.webhookSecret = momobase.ConfigString(cfg, "webhook_secret")
+	p.baseURL = providers.First(providers.ConfigString(cfg, "base_url"), "https://api.acme.example")
+	p.webhookSecret = providers.ConfigString(cfg, "webhook_secret")
 	return nil
 }
 
 // Capabilities reports the services this configuration can perform. Momobase only
 // routes a payment to a provider that reports a capability for its service; which
 // rails reach this account is decided by the payment routes created for it.
-func (p *acmeProvider) Capabilities() []momobase.Capability {
-	return []momobase.Capability{
-		{ServiceType: momobase.ServiceCollection},
-		{ServiceType: momobase.ServiceDisbursement},
+func (p *acmeProvider) Capabilities() []providers.Capability {
+	return []providers.Capability{
+		{ServiceType: providers.ServiceCollection},
+		{ServiceType: providers.ServiceDisbursement},
 	}
 }
 
 // HealthCheck verifies that the configured credentials still authenticate.
 func (p *acmeProvider) HealthCheck(ctx context.Context) error {
-	return momobase.DoJSON(ctx, p.client, http.MethodGet, p.baseURL+"/v1/ping", p.headers(), nil, nil)
+	return providers.DoJSON(ctx, p.client, http.MethodGet, p.baseURL+"/v1/ping", p.headers(), nil, nil)
 }
 
 // acmeDiallingCodes maps the countries Acme Pay settles in to their E.164 calling
@@ -74,14 +75,14 @@ var acmeDiallingCodes = map[string]string{"UG": "256", "KE": "254", "TZ": "255"}
 // acmeSubscriberDigits is the national number length shared by Acme Pay's markets.
 const acmeSubscriberDigits = 9
 
-// ValidateRequest implements the optional momobase.RequestValidator interface.
+// ValidateRequest implements the optional providers.RequestValidator interface.
 //
 // Momobase treats an account as opaque, so a provider that needs a particular kind
 // of identifier enforces it here, before a transaction row exists. Acme Pay is a
 // mobile-money API, so the account must be a reachable mobile number; rewriting it
 // in place canonicalizes what Momobase records and what its webhooks are matched
 // against. Only Account and Scheme may be rewritten.
-func (p *acmeProvider) ValidateRequest(_ context.Context, req *momobase.PaymentRequest) error {
+func (p *acmeProvider) ValidateRequest(_ context.Context, req *providers.PaymentRequest) error {
 	code, ok := acmeDiallingCodes[strings.ToUpper(strings.TrimSpace(req.Country))]
 	if !ok {
 		return fmt.Errorf("acme_pay: no mobile-money coverage in country %q", req.Country)
@@ -121,28 +122,28 @@ func acmeMSISDN(account, code string) (string, error) {
 // Collect requests a payment from a customer.
 func (p *acmeProvider) Collect(
 	ctx context.Context,
-	req momobase.PaymentRequest,
-) (*momobase.ProviderPaymentResponse, error) {
+	req providers.PaymentRequest,
+) (*providers.ProviderPaymentResponse, error) {
 	return p.pay(ctx, "/v1/collections", req)
 }
 
 // Disburse sends a payment to a recipient.
 func (p *acmeProvider) Disburse(
 	ctx context.Context,
-	req momobase.PaymentRequest,
-) (*momobase.ProviderPaymentResponse, error) {
+	req providers.PaymentRequest,
+) (*providers.ProviderPaymentResponse, error) {
 	return p.pay(ctx, "/v1/payouts", req)
 }
 
 func (p *acmeProvider) pay(
 	ctx context.Context,
 	path string,
-	req momobase.PaymentRequest,
-) (*momobase.ProviderPaymentResponse, error) {
+	req providers.PaymentRequest,
+) (*providers.ProviderPaymentResponse, error) {
 	// Amounts reach the provider in minor units and are formatted for the API.
 	body := map[string]any{
-		"reference": momobase.First(req.Reference, momobase.RandomRef("acme")),
-		"amount":    momobase.FormatAmountMinor(req.Amount, req.Currency),
+		"reference": providers.First(req.Reference, providers.RandomRef("acme")),
+		"amount":    providers.FormatAmountMinor(req.Amount, req.Currency),
 		"currency":  req.Currency,
 		"country":   req.Country,
 		"msisdn":    req.Account,
@@ -153,14 +154,14 @@ func (p *acmeProvider) pay(
 		Status  string `json:"status"`
 		Message string `json:"message"`
 	}
-	if err := momobase.DoJSON(ctx, p.client, http.MethodPost, p.baseURL+path, p.headers(), body, &out); err != nil {
+	if err := providers.DoJSON(ctx, p.client, http.MethodPost, p.baseURL+path, p.headers(), body, &out); err != nil {
 		return nil, err
 	}
-	return &momobase.ProviderPaymentResponse{
+	return &providers.ProviderPaymentResponse{
 		ProviderReference: out.ID,
 		// PaymentStatus maps common provider vocabularies onto Momobase
 		// statuses; map bespoke values yourself and return a Tx constant.
-		Status:  momobase.PaymentStatus(out.Status),
+		Status:  providers.PaymentStatus(out.Status),
 		Message: out.Message,
 	}, nil
 }
@@ -171,42 +172,42 @@ func (p *acmeProvider) QueryTransaction(
 	ctx context.Context,
 	providerReference string,
 	_ string,
-) (*momobase.ProviderTransactionStatus, error) {
+) (*providers.ProviderTransactionStatus, error) {
 	var out struct {
 		Status  string `json:"status"`
 		Message string `json:"message"`
 	}
 	url := p.baseURL + "/v1/transactions/" + providerReference
-	if err := momobase.DoJSON(ctx, p.client, http.MethodGet, url, p.headers(), nil, &out); err != nil {
+	if err := providers.DoJSON(ctx, p.client, http.MethodGet, url, p.headers(), nil, &out); err != nil {
 		return nil, err
 	}
-	return &momobase.ProviderTransactionStatus{
+	return &providers.ProviderTransactionStatus{
 		ProviderReference: providerReference,
-		Status:            momobase.PaymentStatus(out.Status),
+		Status:            providers.PaymentStatus(out.Status),
 		Message:           out.Message,
 	}, nil
 }
 
 // QueryBalance retrieves the account balance for a country in minor units.
-func (p *acmeProvider) QueryBalance(ctx context.Context, country string) (*momobase.ProviderBalance, error) {
+func (p *acmeProvider) QueryBalance(ctx context.Context, country string) (*providers.ProviderBalance, error) {
 	var out struct {
 		Currency  string `json:"currency"`
 		Available string `json:"available"`
 		Ledger    string `json:"ledger"`
 	}
 	url := fmt.Sprintf("%s/v1/balance?country=%s", p.baseURL, country)
-	if err := momobase.DoJSON(ctx, p.client, http.MethodGet, url, p.headers(), nil, &out); err != nil {
+	if err := providers.DoJSON(ctx, p.client, http.MethodGet, url, p.headers(), nil, &out); err != nil {
 		return nil, err
 	}
-	available, err := momobase.ParseAmountToMinor(out.Available, out.Currency)
+	available, err := providers.ParseAmountToMinor(out.Available, out.Currency)
 	if err != nil {
 		return nil, err
 	}
-	ledger, err := momobase.ParseAmountToMinor(out.Ledger, out.Currency)
+	ledger, err := providers.ParseAmountToMinor(out.Ledger, out.Currency)
 	if err != nil {
 		return nil, err
 	}
-	return &momobase.ProviderBalance{Currency: out.Currency, Available: available, Ledger: ledger}, nil
+	return &providers.ProviderBalance{Currency: out.Currency, Available: available, Ledger: ledger}, nil
 }
 
 // VerifyWebhook authenticates an incoming callback and normalizes it. Returning
@@ -216,7 +217,7 @@ func (p *acmeProvider) VerifyWebhook(
 	_ context.Context,
 	payload []byte,
 	headers map[string]string,
-) (*momobase.ProviderWebhookEvent, error) {
+) (*providers.ProviderWebhookEvent, error) {
 	if p.webhookSecret == "" {
 		return nil, errors.New("acme_pay: webhook_secret is required to verify callbacks")
 	}
@@ -239,15 +240,15 @@ func (p *acmeProvider) VerifyWebhook(
 	if err := json.Unmarshal(payload, &body); err != nil {
 		return nil, err
 	}
-	amount, err := momobase.OptionalAmount(body.Amount, body.Currency)
+	amount, err := providers.OptionalAmount(body.Amount, body.Currency)
 	if err != nil {
 		return nil, err
 	}
 	raw := map[string]any{}
 	_ = json.Unmarshal(payload, &raw)
-	return &momobase.ProviderWebhookEvent{
+	return &providers.ProviderWebhookEvent{
 		ProviderReference: body.ID,
-		Status:            momobase.PaymentStatus(body.Status),
+		Status:            providers.PaymentStatus(body.Status),
 		EventType:         body.Event,
 		ExternalReference: body.Reference,
 		Amount:            amount,

@@ -6,6 +6,6 @@
 // providers/dummy and providers/mtn are built on this package and must be
 // registered explicitly by the application that uses them.
 //
-// The momobase root package re-exports this package's contract, so a provider
-// may be written against either import path.
+// Provider authors import this package directly; the momobase root package owns
+// instance construction and runtime options.
 package providers
