@@ -46,7 +46,7 @@ type Orchestrator struct {
 	repos    *repository.UnitOfWork
 	router   *routing.Engine
 	executor *provider.Executor
-	cache    cache.Store
+	cache    *cache.RedisStore
 }
 
 // NewOrchestrator creates a payment orchestrator.
@@ -54,12 +54,8 @@ func NewOrchestrator(
 	repos *repository.UnitOfWork,
 	router *routing.Engine,
 	executor *provider.Executor,
-	stores ...cache.Store,
+	store *cache.RedisStore,
 ) *Orchestrator {
-	var store cache.Store
-	if len(stores) > 0 {
-		store = stores[0]
-	}
 	return &Orchestrator{repos: repos, router: router, executor: executor, cache: store}
 }
 

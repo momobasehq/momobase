@@ -22,19 +22,15 @@ var ErrSystemRole = errors.New("system roles cannot be changed or deleted")
 type AuthzService struct {
 	repos *repository.UnitOfWork
 	audit *audit.Service
-	cache cache.Store
+	cache *cache.RedisStore
 }
 
 // NewAuthzService creates a permission and role service.
 func NewAuthzService(
 	repos *repository.UnitOfWork,
 	audit *audit.Service,
-	stores ...cache.Store,
+	store *cache.RedisStore,
 ) *AuthzService {
-	var store cache.Store
-	if len(stores) > 0 {
-		store = stores[0]
-	}
 	return &AuthzService{repos: repos, audit: audit, cache: store}
 }
 

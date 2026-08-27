@@ -29,19 +29,15 @@ type SelectedProvider struct {
 type Engine struct {
 	repos   *repository.UnitOfWork
 	runtime *provider.RuntimeManager
-	cache   cache.Store
+	cache   *cache.RedisStore
 }
 
 // NewEngine creates a provider route-selection engine.
 func NewEngine(
 	repos *repository.UnitOfWork,
 	runtime *provider.RuntimeManager,
-	stores ...cache.Store,
+	store *cache.RedisStore,
 ) *Engine {
-	var store cache.Store
-	if len(stores) > 0 {
-		store = stores[0]
-	}
 	return &Engine{repos: repos, runtime: runtime, cache: store}
 }
 

@@ -114,9 +114,9 @@ func New(t *testing.T) *Stack {
 	runtime, recorder := provider.NewRuntimeManager(repos, registry, enc, log), audit.New(repos, log)
 	tokens := Must(platform.NewTokenManager("test-app-token-secret-must-be-long-1234567890"))
 	auth := identity.NewAppAuthService(repos, "app_test", "secret_test", 30*time.Minute, 24*time.Hour, tokens)
-	apps, routes := identity.NewAppService(repos, auth, recorder), routing.NewAdminService(repos, recorder)
-	routing := routing.NewEngine(repos, runtime)
-	authz := identity.NewAuthzService(repos, recorder)
+	apps, routes := identity.NewAppService(repos, auth, recorder, nil), routing.NewAdminService(repos, recorder, nil)
+	routing := routing.NewEngine(repos, runtime, nil)
+	authz := identity.NewAuthzService(repos, recorder, nil)
 	NoError(authz.Seed(context.Background()))
 	return &Stack{
 		db,
@@ -127,9 +127,9 @@ func New(t *testing.T) *Stack {
 		runtime,
 		routes,
 		routing,
-		payment.NewOrchestrator(repos, routing, provider.NewExecutor(runtime)),
+		payment.NewOrchestrator(repos, routing, provider.NewExecutor(runtime), nil),
 		authz,
-		identity.NewAnalyticsService(repos),
+		identity.NewAnalyticsService(repos, nil),
 		registry,
 		&domain.AdminUser{
 			BaseModel: domain.BaseModel{ID: "admin"},

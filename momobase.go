@@ -3,14 +3,17 @@ package momobase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 
 	"github.com/momobasehq/momobase/internal/bootstrap"
+	"github.com/momobasehq/momobase/providers"
 )
 
 // Configuration groups. Config carries every setting the server needs; the
@@ -47,7 +50,8 @@ type Option func(*options)
 type options struct {
 	config    *Config
 	mutators  []func(*Config)
-	bootstrap []bootstrap.Option
+	logger    *slog.Logger
+	factories map[string]providers.Factory
 }
 
 // WithConfig uses cfg instead of reading configuration from the environment.
@@ -68,7 +72,7 @@ func WithAddr(addr string) Option {
 
 // WithLogger uses log instead of a logger derived from the configured log level.
 func WithLogger(log *slog.Logger) Option {
-	return with(bootstrap.WithLogger(log))
+	return func(o *options) { o.logger = log }
 }
 
 // WithProvider registers a payment provider under code, replacing any provider
@@ -79,21 +83,42 @@ func WithLogger(log *slog.Logger) Option {
 // reference adapter in providers/dummy is registered the same way as any other:
 //
 //	momobase.New(momobase.WithProvider("acme_pay", acme.New))
-func WithProvider(code string, factory ProviderFactory) Option {
-	return with(bootstrap.WithProvider(code, factory))
+func WithProvider(code string, factory providers.Factory) Option {
+	return func(o *options) {
+		if o.factories == nil {
+			o.factories = map[string]providers.Factory{}
+		}
+		o.factories[code] = factory
+	}
 }
 
 // WithProviders registers each payment provider in factories by its code.
-func WithProviders(factories map[string]ProviderFactory) Option {
-	opts := make([]bootstrap.Option, 0, len(factories))
-	for code, factory := range factories {
-		opts = append(opts, bootstrap.WithProvider(code, factory))
+func WithProviders(factories map[string]providers.Factory) Option {
+	return func(o *options) {
+		if o.factories == nil {
+			o.factories = make(map[string]providers.Factory, len(factories))
+		}
+		for code, factory := range factories {
+			o.factories[code] = factory
+		}
 	}
-	return with(opts...)
 }
 
-func with(opts ...bootstrap.Option) Option {
-	return func(o *options) { o.bootstrap = append(o.bootstrap, opts...) }
+func providerRegistry(factories map[string]providers.Factory) (providers.Registry, error) {
+	if len(factories) == 0 {
+		return nil, errors.New("no payment providers registered: supply at least one with WithProvider")
+	}
+	registry := providers.NewRegistry()
+	for code, factory := range factories {
+		if strings.TrimSpace(code) == "" {
+			return nil, errors.New("provider code is required")
+		}
+		if factory == nil {
+			return nil, fmt.Errorf("provider factory is required: %s", code)
+		}
+		registry.Register(code, factory)
+	}
+	return registry, nil
 }
 
 // Instance is a configured Momobase server and the runtime dependencies it owns.
@@ -124,7 +149,11 @@ func New(opts ...Option) (*Instance, error) {
 	for _, mutate := range o.mutators {
 		mutate(&cfg)
 	}
-	app, err := bootstrap.NewApp(cfg, o.bootstrap...)
+	registry, err := providerRegistry(o.factories)
+	if err != nil {
+		return nil, err
+	}
+	app, err := bootstrap.NewApp(cfg, o.logger, registry)
 	if err != nil {
 		return nil, err
 	}

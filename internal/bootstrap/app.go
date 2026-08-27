@@ -29,13 +29,14 @@ import (
 	"github.com/momobasehq/momobase/internal/service/routing"
 	"github.com/momobasehq/momobase/internal/service/webhook"
 	"github.com/momobasehq/momobase/internal/workers"
+	providerapi "github.com/momobasehq/momobase/providers"
 )
 
 // App owns the service's runtime dependencies and their lifecycle.
 type App struct {
 	Logger     *slog.Logger
 	DB         *gorm.DB
-	Cache      cache.Store
+	Cache      *cache.RedisStore
 	Runtime    *provider.RuntimeManager
 	Workers    *workers.Manager
 	Fiber      *fiber.App
@@ -51,19 +52,11 @@ type App struct {
 	redisClient *redis.Client
 }
 
-// NewApp validates cfg and constructs the application and all owned runtime
-// dependencies. Options customize the logger and the set of payment providers
-// available to the application.
-func NewApp(cfg Config, opts ...Option) (*App, error) {
+// NewApp validates cfg and constructs the application and all owned runtime dependencies.
+func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	o := newOptions(opts)
-	registry, err := o.buildRegistry()
-	if err != nil {
-		return nil, err
-	}
-	log := o.logger
 	if log == nil {
 		log = newLogger(cfg.Log.Level)
 	}

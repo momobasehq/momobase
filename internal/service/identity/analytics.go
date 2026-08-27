@@ -90,15 +90,11 @@ type TransactionAnalytics struct {
 // AnalyticsService answers aggregate questions about transactions.
 type AnalyticsService struct {
 	repos *repository.UnitOfWork
-	cache cache.Store
+	cache *cache.RedisStore
 }
 
 // NewAnalyticsService creates a transaction analytics service.
-func NewAnalyticsService(repos *repository.UnitOfWork, stores ...cache.Store) *AnalyticsService {
-	var store cache.Store
-	if len(stores) > 0 {
-		store = stores[0]
-	}
+func NewAnalyticsService(repos *repository.UnitOfWork, store *cache.RedisStore) *AnalyticsService {
 	return &AnalyticsService{repos: repos, cache: store}
 }
 
