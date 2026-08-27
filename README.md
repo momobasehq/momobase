@@ -1,104 +1,121 @@
-<img width=75 height=75 src='./web/dashboard/public/logo.svg' />
+<img alt="Momobase" src="web/dashboard/public/logo.svg" width="72" />
 
 # Momobase
 
-Momobase is a compact, single-instance payment orchestration service.
-It exposes a unified API for applications, routes payments to providers you supply, and includes an Admin API, TypeScript SDK, and an embedded administration dashboard.
+Momobase is a self-hosted payment orchestration service. It gives applications one
+API for collections and disbursements, then routes each payment through the provider
+adapters you register.
 
-It runs as a standalone service (`cmd/momobase`) and as a Go package that applications embed and extend with their own payment providers.
+[Documentation](docs/README.md) · [OpenAPI specification](docs/swagger.json) · [Custom provider example](examples/customprovider)
 
-## Use as a package
+## What it includes
 
-The engine registers no providers of its own — you choose which ones the build carries, whether they ship with Momobase or you wrote them:
+- Collection and disbursement APIs with idempotency
+- Configurable routes, provider accounts, priorities, and country eligibility
+- Provider webhooks, reconciliation, health checks, and circuit breakers
+- Admin API, embedded dashboard, and TypeScript SDK
+- SQLite, PostgreSQL, and MySQL support
+- Redis-backed caching with database fallback
+
+## Quick start
+
+You need the Go toolchain declared in [`go.mod`](go.mod) and a running Redis instance.
+SQLite is the default database, so nothing else is required for local development.
+
+```sh
+cp .env.example .env
+go run ./cmd/momobase migrate
+go run ./cmd/momobase seed-admin \
+  --email admin@example.com \
+  --password 'replace-with-a-strong-password' \
+  --name 'Super Admin'
+go run ./cmd/momobase serve
+```
+
+The API listens on `http://localhost:9090`. Check it with:
+
+```sh
+curl http://localhost:9090/healthz
+```
+
+To include the administration dashboard, install Node.js 22 and pnpm, then run:
+
+```sh
+make build-dashboard
+DASHBOARD_ENABLED=true ./bin/momobase serve
+```
+
+Open `http://localhost:9090/dashboard/` and sign in with the administrator created above.
+
+## Docker Compose
+
+The included Compose stack runs Momobase with PostgreSQL and Redis:
+
+```sh
+cp .env.docker.example .env
+# Replace every placeholder password, key, secret, and public URL in .env.
+docker compose up --build
+```
+
+See the [deployment guide](docs/README.md#docker-compose) for secret generation,
+administrator setup, migrations, and production settings.
+
+## Embed in Go
+
+The root package can also be embedded in another Go application. It registers no
+payment providers automatically, so the host chooses exactly which adapters are
+included:
 
 ```go
+package main
+
 import (
+	"log"
+
 	"github.com/momobasehq/momobase"
+	"github.com/momobasehq/momobase/providers/dummy"
 )
 
-instance, err := momobase.New(
-	momobase.WithProvider("acme_pay", acme.New),
-	momobase.WithProvider("acme_bank", acmebank.New),
-)
-if err != nil {
-	log.Fatal(err)
-}
-defer instance.Close()
+func main() {
+	instance, err := momobase.New(
+		momobase.WithProvider("dummy", dummy.New),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() { _ = instance.Close() }()
 
-log.Fatal(instance.Run())
-```
-
-Registering none is rejected at startup rather than booting a server that cannot execute a payment.
-
-`New` reads configuration from the environment unless `WithConfig` supplies it, opens the database, creates one shared Redis cache, and prepares the HTTP server, providers, and background workers. `Run` serves until the process is interrupted; use `Serve(ctx)` to control shutdown yourself, or `App()` to reach the underlying [Fiber](https://gofiber.io) application and mount Momobase inside one of your own. Redis defaults to `localhost:6379` and can be configured with `REDIS_ADDR`, `REDIS_USERNAME`, `REDIS_PASSWORD`, `REDIS_DB`, and `REDIS_TLS_ENABLED`; `CACHE_TTL_SECONDS` sets the TTL for every cached value.
-
-Momobase serves on Fiber v3, which runs on fasthttp rather than `net/http`, so `App()` returns a `*fiber.App` and not an `http.Handler`. An application built around `net/http` adapts at its own boundary.
-
-### Custom providers
-
-A provider is any type implementing `providers.PaymentProvider`:
-
-```go
-type PaymentProvider interface {
-	Capabilities() []Capability
-	Init(context.Context, ProviderConfig) error
-	HealthCheck(context.Context) error
-	Collect(context.Context, PaymentRequest) (*ProviderPaymentResponse, error)
-	Disburse(context.Context, PaymentRequest) (*ProviderPaymentResponse, error)
-	QueryTransaction(context.Context, string, string) (*ProviderTransactionStatus, error)
-	QueryBalance(context.Context, string) (*ProviderBalance, error)
-	VerifyWebhook(context.Context, []byte, map[string]string) (*ProviderWebhookEvent, error)
+	if err := instance.Run(); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-Register a factory for it under a provider code, then create, configure, and activate accounts for that code through the Admin API. The configuration stored for an account is encrypted at rest and handed to `Init` as a `ProviderConfig` whenever the account is loaded or changed. Momobase adds the account's authoritative `environment` value to that configuration before initialization.
+Use [`Serve(ctx)`](momobase.go) for controlled shutdown or [`App()`](momobase.go) to
+access the underlying Fiber application.
 
-`GET /api/admin/providers/registry` reports the codes the running build accepts, so clients discover custom providers instead of hardcoding a list:
+## Providers
 
-```json
-{ "success": true, "data": { "providers": ["acme_bank", "acme_pay", "dummy"] } }
-```
+A provider implements [`providers.PaymentProvider`](providers/provider.go) and is
+registered under a code with `momobase.WithProvider`. Provider account credentials are
+configured through the Admin API and encrypted at rest.
 
-The TypeScript SDK exposes it as `client.providers.registry()`, and the dashboard builds its provider dropdown from it, so an out-of-tree adapter appears without a client release.
+- [`providers/dummy`](providers/dummy) simulates payments without moving money.
+- [`providers/mtn`](providers/mtn) integrates MTN Mobile Money.
+- [`examples/customprovider`](examples/customprovider) demonstrates a complete third-party adapter.
 
-The `github.com/momobasehq/momobase/providers` package also exports the helpers bundled adapters use, so a third-party provider does not have to reimplement them: `DoJSON`, `Redact`, `ConfigString`/`ConfigBool`/`ConfigInt`/`ConfigPath`, `First`, `ParseAmountToMinor`, `FormatAmountMinor`, `PaymentStatus`, and the `Service*` and `Tx*` constants.
-
-See [`examples/customprovider`](examples/customprovider) for a complete custom provider, [`providers/dummy`](providers/dummy) for the in-tree simulator, and [`examples/mtn`](examples/mtn) for opting into the MTN Mobile Money adapter.
-
-### Options
-
-| Option | Purpose |
-| --- | --- |
-| `WithProvider(code, factory)` | Register a provider, replacing any registered under the same code |
-| `WithProviders(map[string]providers.Factory)` | Register several providers at once |
-| `WithConfig(cfg)` | Supply configuration instead of reading the environment |
-| `WithConfigFunc(fn)` | Adjust the resolved configuration before the instance is built |
-| `WithAddr(addr)` | Override the HTTP listen address |
-| `WithLogger(log)` | Use an existing `*slog.Logger` |
-
-## Run as a service
+## Development
 
 ```sh
-make run                 # go run ./cmd/momobase serve
-make build               # binary in bin/
-make quality             # fmt-check, vet, test, lint
+make quality          # format, vet, tests, and lint
+make web-typecheck    # SDK and dashboard types
+make build-dashboard  # web bundle and tagged Go binary
 ```
 
-## Releases
+The long-form [documentation](docs/README.md) covers API workflows, authentication,
+configuration, migrations, operations, and deployment. The TypeScript client lives in
+[`web/sdk`](web/sdk).
 
-Pushing a `v*.*.*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which uses GoReleaser to attach `linux/amd64` and `linux/arm64` archives plus `checksums.txt` to the GitHub release and to publish a multi-platform image to `ghcr.io/momobasehq/momobase`. Image and archive names drop the tag's leading `v`, and a prerelease tag such as `v1.2.3-rc1` is published without moving `latest`:
+## License
 
-```sh
-git tag -a v1.2.3 -m "v1.2.3" && git push origin v1.2.3
-docker pull ghcr.io/momobasehq/momobase:1.2.3   # also :1.2 and :latest
-```
-
-Momobase links SQLite through cgo, so released binaries are built with `CGO_ENABLED=1` and linked statically — one artifact runs on any Linux host regardless of its libc, and the `momobase version` command reports the tag, commit, and build date. Building `linux/arm64` therefore needs a cross compiler:
-
-```sh
-sudo apt-get install -y gcc-aarch64-linux-gnu
-make release-check       # validate .goreleaser.yaml
-make snapshot            # build the artifacts locally, publish nothing
-```
-
-Run the workflow manually from the Actions tab to produce a snapshot without tagging or publishing.
+[MIT](LICENSE.txt)
