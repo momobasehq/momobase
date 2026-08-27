@@ -5,9 +5,14 @@
   "description": "Workspace root for everything Momobase ships to a browser.",
   "scripts": {
     "build": "pnpm -r run build",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
     "typecheck": "pnpm -r run typecheck"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.10"
   }
 }

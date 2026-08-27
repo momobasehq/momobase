@@ -1,4 +1,4 @@
-import { Logo } from "@/components/logo"
+import { Logo } from "@/components/logo";
 
 /**
  * NoAccess is the fallback for a path the signed-in administrator cannot reach, and the
@@ -10,15 +10,16 @@ import { Logo } from "@/components/logo"
  * and the tooltip on a disabled control is where "ask someone" belongs.
  */
 export function NoAccess() {
-  return (
-    <div className="flex min-h-[60svh] flex-col items-center justify-center gap-6 p-6 text-center">
-      <Logo className="text-muted-foreground/25 size-40" />
-      <div className="flex flex-col gap-1">
-        <p className="font-medium">Nothing to show here</p>
-        <p className="text-muted-foreground max-w-sm">
-          Your role does not include permission for this screen. Ask an administrator to grant it.
-        </p>
-      </div>
-    </div>
-  )
+	return (
+		<div className="flex min-h-[60svh] flex-col items-center justify-center gap-6 p-6 text-center">
+			<Logo className="text-muted-foreground/25 size-40" />
+			<div className="flex flex-col gap-1">
+				<p className="font-medium">Nothing to show here</p>
+				<p className="text-muted-foreground max-w-sm">
+					Your role does not include permission for this screen. Ask
+					an administrator to grant it.
+				</p>
+			</div>
+		</div>
+	);
 }
