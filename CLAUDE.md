@@ -33,7 +33,7 @@ CI gates (`.github/workflows/tests.yml`): `gofmt -l`, `go mod tidy -diff`, `go m
 
 ## Architecture
 
-Momobase is both a Go **library** and a **service**. `cmd/momobase` is a thin cobra CLI that calls `momobase.New(...)`; anything an embedding application can do, the binary does the same way.
+Momobase is both a Go **library** and a **service**. `cmd/momobase` is a thin standard-library CLI that calls `momobase.New(...)`; anything an embedding application can do, the binary does the same way.
 
 The root package (`momobase.go`, `doc.go`) is the embedding facade: it re-exports `internal/bootstrap` config types and owns instance construction and options. The provider contract and adapter helpers live only in the public `providers` package.
 

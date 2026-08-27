@@ -3,14 +3,16 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"log"
+	"os"
 	"os/signal"
 	"runtime"
 	"syscall"
 
 	_ "github.com/joho/godotenv/autoload"
-	"github.com/spf13/cobra"
 
 	"github.com/momobasehq/momobase"
 	"github.com/momobasehq/momobase/providers"
@@ -36,48 +38,74 @@ var (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	if err := newRootCommand().ExecuteContext(ctx); err != nil {
+	if err := run(ctx, os.Args[1:], os.Stdout); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func newRootCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:           "momobase",
-		Short:         "Run and manage the Momobase payment service",
-		Version:       version,
-		Args:          cobra.NoArgs,
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE:          runServe,
+func run(ctx context.Context, args []string, out io.Writer) error {
+	if len(args) == 0 {
+		return runServe(ctx)
 	}
-	cmd.AddCommand(newServeCommand(), newMigrateCommand(), newSeedAdminCommand(), newVersionCommand())
-	return cmd
-}
-
-func newVersionCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "version",
-		Short: "Print version, commit, and build information",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			_, err := fmt.Fprintf(
-				cmd.OutOrStdout(),
-				"momobase %s\ncommit: %s\nbuilt:  %s\ngo:     %s %s/%s\n",
-				version, commit, date, runtime.Version(), runtime.GOOS, runtime.GOARCH,
-			)
+	command, args := args[0], args[1:]
+	if command != "seed-admin" && len(args) == 1 && isHelp(args[0]) {
+		return printUsage(out)
+	}
+	switch command {
+	case "help", "-h", "--help":
+		return printUsage(out)
+	case "version", "--version":
+		if err := noArgs(command, args); err != nil {
 			return err
-		},
+		}
+		return printVersion(out)
+	case "serve":
+		if err := noArgs(command, args); err != nil {
+			return err
+		}
+		return runServe(ctx)
+	case "migrate":
+		if err := noArgs(command, args); err != nil {
+			return err
+		}
+		return runMigrate(ctx, out)
+	case "seed-admin":
+		return runSeedAdmin(ctx, args, out)
+	default:
+		return fmt.Errorf("unknown command %q", command)
 	}
 }
 
-func newServeCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "serve",
-		Short: "Start the HTTP server and background workers",
-		Args:  cobra.NoArgs,
-		RunE:  runServe,
+func isHelp(arg string) bool {
+	return arg == "-h" || arg == "--help"
+}
+
+func noArgs(command string, args []string) error {
+	if len(args) != 0 {
+		return fmt.Errorf("%s accepts no arguments", command)
 	}
+	return nil
+}
+
+func printUsage(out io.Writer) error {
+	_, err := fmt.Fprint(out, `Run and manage the Momobase payment service.
+
+Usage:
+  momobase [serve]
+  momobase migrate
+  momobase seed-admin --password PASSWORD [--email EMAIL] [--name NAME]
+  momobase version
+`)
+	return err
+}
+
+func printVersion(out io.Writer) error {
+	_, err := fmt.Fprintf(
+		out,
+		"momobase %s\ncommit: %s\nbuilt:  %s\ngo:     %s %s/%s\n",
+		version, commit, date, runtime.Version(), runtime.GOOS, runtime.GOARCH,
+	)
+	return err
 }
 
 // providerFactories returns the payment providers this binary ships with.
@@ -106,57 +134,69 @@ func closeInstance(instance *momobase.Instance, err *error) {
 	}
 }
 
-func runServe(cmd *cobra.Command, _ []string) (err error) {
+func withInstance(run func(*momobase.Instance) error) (err error) {
 	instance, err := loadInstance()
 	if err != nil {
 		return err
 	}
 	defer closeInstance(instance, &err)
-	return instance.Serve(cmd.Context())
+	return run(instance)
 }
 
-func newMigrateCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "migrate",
-		Short: "Apply database schema migrations",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) (err error) {
-			instance, err := loadInstance()
-			if err != nil {
-				return err
-			}
-			defer closeInstance(instance, &err)
-			if err = instance.Migrate(cmd.Context()); err == nil {
-				fmt.Println("migrations applied")
-			}
-			return err
-		},
-	}
+func runServe(ctx context.Context) error {
+	return withInstance(func(instance *momobase.Instance) error {
+		return instance.Serve(ctx)
+	})
 }
 
-func newSeedAdminCommand() *cobra.Command {
-	var email, password, name string
-	cmd := &cobra.Command{
-		Use:   "seed-admin",
-		Short: "Create a super administrator",
-		Args:  cobra.NoArgs,
-		RunE: func(command *cobra.Command, _ []string) (err error) {
-			instance, err := loadInstance()
-			if err != nil {
-				return err
-			}
-			defer closeInstance(instance, &err)
-			if err = instance.SeedAdmin(command.Context(), email, password, name); err == nil {
-				fmt.Printf("admin created: %s\n", email)
-			}
+func runMigrate(ctx context.Context, out io.Writer) error {
+	return withInstance(func(instance *momobase.Instance) error {
+		if err := instance.Migrate(ctx); err != nil {
 			return err
-		},
+		}
+		_, err := fmt.Fprintln(out, "migrations applied")
+		return err
+	})
+}
+
+type seedAdminOptions struct {
+	email    string
+	password string
+	name     string
+}
+
+func parseSeedAdmin(args []string, out io.Writer) (seedAdminOptions, error) {
+	options := seedAdminOptions{}
+	flags := flag.NewFlagSet("seed-admin", flag.ContinueOnError)
+	flags.SetOutput(out)
+	flags.StringVar(&options.email, "email", "admin@momobase.local", "admin email")
+	flags.StringVar(&options.password, "password", "", "admin password")
+	flags.StringVar(&options.name, "name", "Super Admin", "admin name")
+	if err := flags.Parse(args); err != nil {
+		return options, err
 	}
-	cmd.Flags().StringVar(&email, "email", "admin@momobase.local", "admin email")
-	cmd.Flags().StringVar(&password, "password", "", "admin password")
-	cmd.Flags().StringVar(&name, "name", "Super Admin", "admin name")
-	if err := cmd.MarkFlagRequired("password"); err != nil {
-		panic(fmt.Errorf("mark password flag as required: %w", err))
+	if flags.NArg() != 0 {
+		return options, errors.New("seed-admin accepts no positional arguments")
 	}
-	return cmd
+	if options.password == "" {
+		return options, errors.New("seed-admin: --password is required")
+	}
+	return options, nil
+}
+
+func runSeedAdmin(ctx context.Context, args []string, out io.Writer) error {
+	options, err := parseSeedAdmin(args, out)
+	if errors.Is(err, flag.ErrHelp) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return withInstance(func(instance *momobase.Instance) error {
+		if err := instance.SeedAdmin(ctx, options.email, options.password, options.name); err != nil {
+			return err
+		}
+		_, err := fmt.Fprintf(out, "admin created: %s\n", options.email)
+		return err
+	})
 }
