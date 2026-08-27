@@ -23,7 +23,7 @@ go test -race ./...                                            # CI runs this
 go test -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
 ```
 
-CI gates (`.github/workflows/tests.yml`): `gofmt -l`, `go mod tidy -diff`, `go mod verify`, vet, tests with **≥55% total coverage** (measured with `-coverpkg=./...`, so a test credits every package it exercises, not just its own), race detector, golangci-lint (version pinned in `.golangci-lint-version`), Staticcheck, and govulncheck.
+CI gates (`.github/workflows/tests.yml`): `gofmt -l`, `go mod tidy -diff`, `go mod verify`, tests with **≥55% total coverage** (measured with `-coverpkg=./...`, so a test credits every package it exercises, not just its own), the race detector, and golangci-lint (including vet and Staticcheck, version pinned in `.golangci-lint-version`). Govulncheck runs in `.github/workflows/security.yml`.
 
 **The toolchain is pinned.** `go.mod` carries `toolchain go1.26.6` alongside `go 1.25.0`. The `go` line stays at the compatibility floor for applications embedding momobase as a library; the `toolchain` line is what this repository builds and ships with, and it is there because govulncheck's findings are almost all standard-library ones that only a patch release closes. Every workflow resolves its Go through `go-version-file: go.mod`, so raising the pin is the one edit that moves CI, the release build, and the vulnerability scan together — with the Docker base image (`golang:1.26-bookworm`) kept in step.
 
@@ -80,15 +80,7 @@ Each runtime carries its own circuit breaker: 3 consecutive failures open it, it
 
 These are load-bearing; breaking one is a silent correctness bug.
 
-- **The package layering is enforced, not reviewed.** `.golangci.yml` carries a
-  `depguard` rule per `internal/` package naming what it must never import. The
-  direction is: `utils`/`domain` are leaves → `service/audit` → `service/provider` →
-  `service/routing` → `service/payment`; `service/webhook` and
-  `service/reconciliation` are separate entry points over `service/provider`;
-  `service/identity` depends on none of them. Test files are exempt, so an external
-  test package may reach across the boundary it verifies.
-
-- **The database is reachable only through `internal/repository`.** A second
+- **The database is reachable only through `internal/repository`.** The
   `depguard` rule denies `gorm.io/gorm` to `internal/service`, `internal/http`,
   `internal/platform`, `internal/utils`, `internal/domain` and `internal/workers`;
   `bootstrap` opens the handle and `migrations` owns the schema, so those keep it. A

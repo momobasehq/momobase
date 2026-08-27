@@ -14,9 +14,9 @@ concurrency:
 
 jobs:
   quality:
-    name: Format, dependencies, vet, test, and coverage
+    name: Format, dependencies, tests, race, and lint
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - name: Check out repository
         uses: actions/checkout@v6.0.2
@@ -42,9 +42,6 @@ jobs:
 
       - name: Verify downloaded modules
         run: go mod verify
-
-      - name: Run go vet
-        run: go vet ./...
 
       - name: Run tests with coverage
         run: go test -shuffle=on -covermode=atomic -coverprofile=coverage.out -coverpkg=./... ./...
@@ -72,61 +69,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  race:
-    name: Race detector
-    needs: quality
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6.0.2
-
-      - name: Set up Go
-        uses: actions/setup-go@v6.4.0
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
-
       - name: Run race detector
         run: go test -race ./...
-
-  golangci-lint:
-    name: GolangCI-Lint
-    needs: race
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6.0.2
-
-      - name: Set up Go
-        uses: actions/setup-go@v6.4.0
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
 
       - name: Run GolangCI-Lint
         uses: golangci/golangci-lint-action@v9.0.0
         with:
           version-file: .golangci-lint-version
-
-  staticcheck:
-    name: Staticcheck
-    needs: golangci-lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
-        
-      - name: Run Staticcheck
-        uses: dominikh/staticcheck-action@v1
-        with:
-          version: "latest"
-          install-go: false
