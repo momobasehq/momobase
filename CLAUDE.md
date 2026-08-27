@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make run                 # go run ./cmd/momobase serve
 make build               # binary in bin/
 make quality             # fmt-check + vet + test + lint (run before pushing)
-make docs                # regenerate docs/swagger.{json,yaml} from swag annotations
+make docs                # regenerate docs/swagger.json from swag annotations
 make sdk-build           # pnpm -C web build of @momobase/sdk (pnpm, not npm)
 make seed-admin          # requires ADMIN_PASSWORD in the environment
 make smoke-api           # scripts/smoke_api.sh against a running server
@@ -23,7 +23,7 @@ go test -race ./...                                            # CI runs this
 go test -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
 ```
 
-CI gates (`.github/workflows/tests.yml`): `gofmt -l`, `go mod tidy -diff`, `go mod verify`, vet, tests with **≥55% total coverage** (measured with `-coverpkg=./...`, so a test credits every package it exercises, not just its own), race detector, golangci-lint (version pinned in `.golangci-lint-version`), Staticcheck, and govulncheck.
+CI gates (`.github/workflows/tests.yml`): `gofmt -l`, `go mod tidy -diff`, `go mod verify`, tests with **≥55% total coverage** (measured with `-coverpkg=./...`, so a test credits every package it exercises, not just its own), the race detector, and golangci-lint (including vet and Staticcheck, version pinned in `.golangci-lint-version`). Govulncheck runs in `.github/workflows/security.yml`.
 
 **The toolchain is pinned.** `go.mod` carries `toolchain go1.26.6` alongside `go 1.25.0`. The `go` line stays at the compatibility floor for applications embedding momobase as a library; the `toolchain` line is what this repository builds and ships with, and it is there because govulncheck's findings are almost all standard-library ones that only a patch release closes. Every workflow resolves its Go through `go-version-file: go.mod`, so raising the pin is the one edit that moves CI, the release build, and the vulnerability scan together — with the Docker base image (`golang:1.26-bookworm`) kept in step.
 
@@ -33,11 +33,11 @@ CI gates (`.github/workflows/tests.yml`): `gofmt -l`, `go mod tidy -diff`, `go m
 
 ## Architecture
 
-Momobase is both a Go **library** and a **service**. `cmd/momobase` is a thin cobra CLI that calls `momobase.New(...)`; anything an embedding application can do, the binary does the same way.
+Momobase is both a Go **library** and a **service**. `cmd/momobase` is a thin standard-library CLI that calls `momobase.New(...)`; anything an embedding application can do, the binary does the same way.
 
-The root package (`momobase.go`, `provider.go`, `doc.go`) is a facade: it re-exports `internal/bootstrap` config types and the `providers` contract as **type aliases**, so a type implementing `momobase.PaymentProvider` satisfies the engine directly. Keep it a facade — behavior belongs in `internal/`.
+The root package (`momobase.go`, `doc.go`) is the embedding facade: it re-exports `internal/bootstrap` config types and owns instance construction and options. The provider contract and adapter helpers live only in the public `providers` package.
 
-**No providers are registered by default.** `bootstrap.buildRegistry` rejects a build with an empty registry rather than starting a server that cannot execute a payment. `cmd/momobase/main.go` registers `dummy` for the shipped binary. Real adapters such as `providers/mtn` remain opt-in packages that embedding applications register explicitly.
+**No providers are registered by default.** `momobase.New` rejects a build with an empty registry rather than starting a server that cannot execute a payment. `cmd/momobase/main.go` registers `dummy` for the shipped binary. Real adapters such as `providers/mtn` remain opt-in packages that embedding applications register explicitly.
 
 Layers, outermost first:
 
@@ -51,7 +51,7 @@ Layers, outermost first:
 - `internal/service/routing` — `routing.Engine` selects a provider account for a request; `routing.AdminService` maintains the routes.
 - `internal/service/provider` — the adapter lifecycle: `RuntimeManager` (loaded adapters), `Executor` (timeout + circuit breaker), `AdminService` (accounts and encrypted config), `HealthService`. Distinct from the top-level `providers` package, which is the contract an adapter implements.
 - `internal/service/audit` — `audit.Service`, the best-effort audit-log recorder. A leaf, so any service package may take one.
-- `providers` — the public adapter contract plus the provider-specific helpers (`DoJSON`, `Redact`, amount/status normalization, references). The configuration accessors and the generic string and error helpers live in `internal/utils`; out-of-tree adapters reach them through the root package's re-exports. `providers/dummy` is the in-tree simulator and `providers/mtn` is the optional MTN Mobile Money adapter; applications register either package explicitly.
+- `providers` — the public adapter contract plus adapter helpers (`DoJSON`, `Redact`, configuration accessors, amount/status normalization, references). `providers/dummy` is the in-tree simulator and `providers/mtn` is the optional MTN Mobile Money adapter; applications register either package explicitly.
 - `internal/domain` — GORM models, the shared service/status/circuit constants, and behaviour belonging to a model (`Transaction.Transition`, `AdminUser.ActorID`).
 - `internal/utils` — dependency-free helpers shared across the module: identifier/account shape checks, ISO-3166 country normalization, raw-payload redaction, and the map, string, and error helpers an adapter reads its decrypted config with. Nothing here touches the database.
 - `internal/platform` — AES-256-GCM encryptor, HS256 JWT token manager, bcrypt, IDs, strict JSON request decoding, the `{success,data,error}` response envelope, pagination.
@@ -80,15 +80,7 @@ Each runtime carries its own circuit breaker: 3 consecutive failures open it, it
 
 These are load-bearing; breaking one is a silent correctness bug.
 
-- **The package layering is enforced, not reviewed.** `.golangci.yml` carries a
-  `depguard` rule per `internal/` package naming what it must never import. The
-  direction is: `utils`/`domain` are leaves → `service/audit` → `service/provider` →
-  `service/routing` → `service/payment`; `service/webhook` and
-  `service/reconciliation` are separate entry points over `service/provider`;
-  `service/identity` depends on none of them. Test files are exempt, so an external
-  test package may reach across the boundary it verifies.
-
-- **The database is reachable only through `internal/repository`.** A second
+- **The database is reachable only through `internal/repository`.** The
   `depguard` rule denies `gorm.io/gorm` to `internal/service`, `internal/http`,
   `internal/platform`, `internal/utils`, `internal/domain` and `internal/workers`;
   `bootstrap` opens the handle and `migrations` owns the schema, so those keep it. A
@@ -116,9 +108,9 @@ These are load-bearing; breaking one is a silent correctness bug.
 
 ## Making changes
 
-**Adding a provider.** Implement the eight-method `providers.PaymentProvider` interface and a `func(*slog.Logger) providers.PaymentProvider` factory; register with `WithProvider(code, factory)`. Implement `providers.RequestValidator` too when the rail constrains what an account may be. Bundled adapters may import `internal/domain` for constants; out-of-tree providers use the root package's re-exports (`momobase.ServiceCollection`, `momobase.PaymentStatus`, …). `examples/customprovider/main.go` is a complete reference implementation. Config always arrives as `ProviderConfig`, includes the provider account's authoritative `environment` value, and must include `webhook_secret`.
+**Adding a provider.** Implement the eight-method `providers.PaymentProvider` interface and a `func(*slog.Logger) providers.PaymentProvider` factory; register with `WithProvider(code, factory)`. Implement `providers.RequestValidator` too when the rail constrains what an account may be. Use the constants and helpers in `providers` (`providers.ServiceCollection`, `providers.PaymentStatus`, …). `examples/customprovider/main.go` is a complete reference implementation. Config always arrives as `providers.ProviderConfig`, includes the provider account's authoritative `environment` value, and must include `webhook_secret`.
 
-**Exposing a new helper to third-party providers.** Put it in `providers/` when it is about the adapter contract and in `internal/utils` when it is a pure helper over plain values, then re-export it from the root `provider.go` either way — the root package is the documented surface, and `momobase_test.go` compiles a stub provider from exported types only, so it fails if that surface regresses.
+**Exposing a new helper to third-party providers.** Put it in `providers/`; it may delegate pure value handling to `internal/utils`. `momobase_test.go` compiles a stub provider from the public contract so regressions fail at compile time.
 
 **Adding an HTTP endpoint.** Request payload in `internal/dto` with its `validate:` tags and `Normalize` → handler in the matching `internal/http/*` package with swag annotations, decoding through `bind[dto.X]` so the payload validates itself → register in `internal/http/router.go` with its guards (`RequirePermission`/`RequireAppScope`, `JSONOnly`, `NoCache`) → any new query goes on a repository, never in the handler → `make docs` → mirror in `web/sdk/src/client.ts` (+`types.ts`), which the dashboard consumes through the pnpm workspace. There is no second client to keep in step.
 

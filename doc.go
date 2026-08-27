@@ -13,11 +13,10 @@
 //	defer instance.Close()
 //	log.Fatal(instance.Run())
 //
-// A provider is any type implementing [PaymentProvider], registered under a
-// provider code with [WithProvider]. Accounts for that code are then created,
-// configured, and activated through the Admin API, and the configuration
-// recorded for an account is passed to the provider's Init method as a
-// [ProviderConfig].
+// Provider contracts and helpers live in the providers package. Register a
+// providers.PaymentProvider factory under a provider code with [WithProvider].
+// Accounts for that code are then created, configured, and activated through
+// the Admin API.
 //
 // Momobase registers no providers on its own: a build carries exactly the
 // providers it asks for, and New reports an error when none are registered.

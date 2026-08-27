@@ -3,6 +3,9 @@ package providers
 import (
 	"context"
 	"errors"
+
+	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/internal/utils"
 )
 
 // Capability identifies a payment service supported by a provider.
@@ -20,6 +23,54 @@ type Capability struct {
 // Momobase adds the provider account's authoritative "environment" value before
 // calling Init, overriding any value stored in the encrypted provider config.
 type ProviderConfig map[string]any
+
+// ConfigString returns a trimmed textual representation of a configuration value.
+func ConfigString(c ProviderConfig, key string) string {
+	return utils.String(c, key)
+}
+
+// ConfigBool reports whether a configuration value is "true", case-insensitively, or "1".
+func ConfigBool(c ProviderConfig, key string) bool {
+	return utils.Bool(c, key)
+}
+
+// ConfigInt converts a configuration value to an integer, returning zero when invalid.
+func ConfigInt(c ProviderConfig, key string) int {
+	return utils.Int(c, key)
+}
+
+// ConfigPath returns the textual value at a dot-separated path through nested maps.
+func ConfigPath(values map[string]any, path string) string {
+	return utils.Path(values, path)
+}
+
+// First returns the first nonblank value after trimming surrounding whitespace.
+func First(values ...string) string {
+	return utils.First(values...)
+}
+
+// Service types and transaction statuses reported by providers.
+const (
+	// ServiceCollection identifies an incoming payment collection.
+	ServiceCollection = domain.ServiceCollection
+	// ServiceDisbursement identifies an outgoing payment disbursement.
+	ServiceDisbursement = domain.ServiceDisbursement
+
+	// TxPending indicates that a transaction is waiting to be processed.
+	TxPending = domain.TxPending
+	// TxProcessing indicates that transaction processing has started.
+	TxProcessing = domain.TxProcessing
+	// TxSucceeded indicates that a transaction completed successfully.
+	TxSucceeded = domain.TxSucceeded
+	// TxFailed indicates that a transaction failed permanently.
+	TxFailed = domain.TxFailed
+	// TxUnknown indicates that the provider outcome is not yet known.
+	TxUnknown = domain.TxUnknown
+	// TxCancelled indicates that a transaction was cancelled.
+	TxCancelled = domain.TxCancelled
+	// TxExpired indicates that a transaction expired before completion.
+	TxExpired = domain.TxExpired
+)
 
 // PaymentRequest contains the normalized details of a provider payment operation.
 type PaymentRequest struct {

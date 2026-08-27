@@ -76,7 +76,7 @@ build-dashboard: dashboard
 	go build -tags dashboard -o bin/$(APP) ./cmd/$(APP)
 
 docs:
-	swag init -g ./cmd/momobase/main.go --parseInternal --output docs --outputTypes json,yaml
+	swag init -g ./cmd/momobase/main.go --parseInternal --output docs --outputTypes json
 	# rm -f docs/docs.go
 	# install swag if not already installed
 	# $ go install github.com/swaggo/swag/cmd/swag@latest

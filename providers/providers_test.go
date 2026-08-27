@@ -71,6 +71,21 @@ func TestPaymentStatusMappings(t *testing.T) {
 	}
 }
 
+func TestConfigHelpers(t *testing.T) {
+	config := ProviderConfig{
+		"name":    "  Acme  ",
+		"enabled": "TRUE",
+		"retries": "3",
+		"nested":  map[string]any{"inner": map[string]any{"leaf": "value"}},
+	}
+	if ConfigString(config, "name") != "Acme" || !ConfigBool(config, "enabled") || ConfigInt(config, "retries") != 3 {
+		t.Fatal("configuration accessors returned unexpected values")
+	}
+	if ConfigPath(config, "nested.inner.leaf") != "value" || First("", "  ", "chosen") != "chosen" {
+		t.Fatal("nested or fallback configuration lookup failed")
+	}
+}
+
 // TestPaymentStatusIsIdempotent guards the property the provider contract relies
 // on: adapters report normalized statuses, and the reconciliation and webhook
 // paths normalize again. A status that did not map to itself would be silently

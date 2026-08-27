@@ -26,7 +26,7 @@ type AppService struct {
 	repos *repository.UnitOfWork
 	auth  *AppAuthService
 	audit *audit.Service
-	cache cache.Store
+	cache *cache.RedisStore
 }
 
 // CreateAppInput contains the attributes persisted for a new application.
@@ -53,12 +53,8 @@ func NewAppService(
 	repos *repository.UnitOfWork,
 	auth *AppAuthService,
 	audit *audit.Service,
-	stores ...cache.Store,
+	store *cache.RedisStore,
 ) *AppService {
-	var store cache.Store
-	if len(stores) > 0 {
-		store = stores[0]
-	}
 	return &AppService{repos: repos, auth: auth, audit: audit, cache: store}
 }
 func (s *AppService) auditChange(ctx context.Context, actor *domain.AdminUser, action, resource, id string, meta map[string]any) {

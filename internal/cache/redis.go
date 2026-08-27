@@ -51,5 +51,3 @@ func (r *RedisStore) reportError(ctx context.Context, operation, key string, err
 		slog.String("error", err.Error()),
 	)
 }
-
-var _ Store = (*RedisStore)(nil)

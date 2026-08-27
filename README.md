@@ -36,7 +36,7 @@ Momobase serves on Fiber v3, which runs on fasthttp rather than `net/http`, so `
 
 ### Custom providers
 
-A provider is any type implementing `momobase.PaymentProvider`:
+A provider is any type implementing `providers.PaymentProvider`:
 
 ```go
 type PaymentProvider interface {
@@ -61,7 +61,7 @@ Register a factory for it under a provider code, then create, configure, and act
 
 The TypeScript SDK exposes it as `client.providers.registry()`, and the dashboard builds its provider dropdown from it, so an out-of-tree adapter appears without a client release.
 
-The root package also exports the helpers the bundled adapters use, so a third-party provider does not have to reimplement them: `DoJSON`, `Redact`, `ConfigString`/`ConfigBool`/`ConfigInt`/`ConfigPath`, `First`, `ParseAmountToMinor`, `FormatAmountMinor`, `PaymentStatus`, and the `Service*` and `Tx*` constants. The root package is the surface an out-of-tree adapter uses: `github.com/momobasehq/momobase/providers` carries the contract and the provider-specific helpers, while the configuration accessors and `First` live in `internal/utils` and reach adapters only through the root re-exports.
+The `github.com/momobasehq/momobase/providers` package also exports the helpers bundled adapters use, so a third-party provider does not have to reimplement them: `DoJSON`, `Redact`, `ConfigString`/`ConfigBool`/`ConfigInt`/`ConfigPath`, `First`, `ParseAmountToMinor`, `FormatAmountMinor`, `PaymentStatus`, and the `Service*` and `Tx*` constants.
 
 See [`examples/customprovider`](examples/customprovider) for a complete custom provider, [`providers/dummy`](providers/dummy) for the in-tree simulator, and [`examples/mtn`](examples/mtn) for opting into the MTN Mobile Money adapter.
 
@@ -70,7 +70,7 @@ See [`examples/customprovider`](examples/customprovider) for a complete custom p
 | Option | Purpose |
 | --- | --- |
 | `WithProvider(code, factory)` | Register a provider, replacing any registered under the same code |
-| `WithProviders(map[string]ProviderFactory)` | Register several providers at once |
+| `WithProviders(map[string]providers.Factory)` | Register several providers at once |
 | `WithConfig(cfg)` | Supply configuration instead of reading the environment |
 | `WithConfigFunc(fn)` | Adjust the resolved configuration before the instance is built |
 | `WithAddr(addr)` | Override the HTTP listen address |

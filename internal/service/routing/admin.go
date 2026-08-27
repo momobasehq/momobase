@@ -14,19 +14,15 @@ import (
 type AdminService struct {
 	repos *repository.UnitOfWork
 	audit *audit.Service
-	cache cache.Store
+	cache *cache.RedisStore
 }
 
 // NewAdminService creates a payment route administration service.
 func NewAdminService(
 	repos *repository.UnitOfWork,
 	audit *audit.Service,
-	stores ...cache.Store,
+	store *cache.RedisStore,
 ) *AdminService {
-	var store cache.Store
-	if len(stores) > 0 {
-		store = stores[0]
-	}
 	return &AdminService{repos: repos, audit: audit, cache: store}
 }
 

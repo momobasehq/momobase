@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -48,12 +50,9 @@ func TestLoadInstanceBuildsAServableInstance(t *testing.T) {
 }
 
 func TestVersionCommandReportsBuildInformation(t *testing.T) {
-	cmd := newVersionCommand()
 	var out strings.Builder
-	cmd.SetOut(&out)
-
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
+	if err := run(context.Background(), []string{"version"}, &out); err != nil {
+		t.Fatalf("run(version) error = %v", err)
 	}
 	for _, want := range []string{"momobase " + version, "commit: " + commit, "built:  " + date} {
 		if !strings.Contains(out.String(), want) {
@@ -62,43 +61,36 @@ func TestVersionCommandReportsBuildInformation(t *testing.T) {
 	}
 }
 
-func TestRootCommandCarriesVersion(t *testing.T) {
-	if got := newRootCommand().Version; got != version {
-		t.Fatalf("root command Version = %q, want %q", got, version)
+func TestVersionFlagReportsBuildInformation(t *testing.T) {
+	var out strings.Builder
+	if err := run(context.Background(), []string{"--version"}, &out); err != nil {
+		t.Fatalf("run(--version) error = %v", err)
+	}
+	if !strings.Contains(out.String(), "momobase "+version) {
+		t.Fatalf("version output = %q", out.String())
 	}
 }
 
-func TestSeedAdminCommandPasswordFlagHasNoDefault(t *testing.T) {
-	flag := newSeedAdminCommand().Flags().Lookup("password")
-	if flag == nil {
-		t.Fatal("seed-admin must accept a password flag")
-	}
-	if flag.DefValue != "" {
-		t.Fatalf("password flag default = %q, want empty", flag.DefValue)
+func TestSeedAdminFlagsRequirePassword(t *testing.T) {
+	_, err := parseSeedAdmin(nil, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "--password is required") {
+		t.Fatalf("parseSeedAdmin() error = %v, want missing-password error", err)
 	}
 }
 
-func TestSeedAdminCommandRequiresPasswordFlag(t *testing.T) {
-	cmd := newSeedAdminCommand()
-	cmd.SilenceUsage = true
-
-	err := cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), `required flag(s) "password" not set`) {
-		t.Fatalf("Execute() error = %v, want missing-password error", err)
-	}
-}
-
-func TestSeedAdminCommandAcceptsPasswordFlag(t *testing.T) {
-	cmd := newSeedAdminCommand()
-
-	if err := cmd.ParseFlags([]string{"--password", "strong-password"}); err != nil {
-		t.Fatalf("ParseFlags() error = %v", err)
-	}
-	password, err := cmd.Flags().GetString("password")
+func TestSeedAdminFlagsAcceptPassword(t *testing.T) {
+	options, err := parseSeedAdmin([]string{"--password", "strong-password"}, io.Discard)
 	if err != nil {
-		t.Fatalf("GetString(password) error = %v", err)
+		t.Fatalf("parseSeedAdmin() error = %v", err)
 	}
-	if password != "strong-password" {
-		t.Fatalf("password flag = %q, want parsed value", password)
+	if options.password != "strong-password" || options.email != "admin@momobase.local" || options.name != "Super Admin" {
+		t.Fatalf("parseSeedAdmin() = %+v, want password and defaults", options)
+	}
+}
+
+func TestRunRejectsUnknownCommand(t *testing.T) {
+	err := run(context.Background(), []string{"unknown"}, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("run(unknown) error = %v", err)
 	}
 }
