@@ -89,7 +89,7 @@ archives:
       - README.md
       - LICENSE.txt
       - .env.example
-      - src: docs/swagger.*
+      - src: docs/swagger.json
         dst: docs
 
 checksum:

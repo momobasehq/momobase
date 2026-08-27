@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make run                 # go run ./cmd/momobase serve
 make build               # binary in bin/
 make quality             # fmt-check + vet + test + lint (run before pushing)
-make docs                # regenerate docs/swagger.{json,yaml} from swag annotations
+make docs                # regenerate docs/swagger.json from swag annotations
 make sdk-build           # pnpm -C web build of @momobase/sdk (pnpm, not npm)
 make seed-admin          # requires ADMIN_PASSWORD in the environment
 make smoke-api           # scripts/smoke_api.sh against a running server
