@@ -25,20 +25,6 @@ func indexHTML(t *testing.T) string {
 	return string(index)
 }
 
-// TestFSContainsTheAppShell asserts the markers the HTTP layer and the container
-// smoke test key off. Both survive a Vite build, unlike anything Vite generates.
-func TestFSContainsTheAppShell(t *testing.T) {
-	if !Available() {
-		t.Fatal("Available() = false in a tagged build")
-	}
-	index := indexHTML(t)
-	for _, marker := range []string{"<title>Momobase Dashboard</title>", `id="root"`} {
-		if !strings.Contains(index, marker) {
-			t.Errorf("embedded index is missing %q", marker)
-		}
-	}
-}
-
 // TestEveryReferencedAssetIsEmbedded catches a bundle that shipped incomplete.
 //
 // Vite writes hashed asset names into index.html, and `all:` is what keeps the

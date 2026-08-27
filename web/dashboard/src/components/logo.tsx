@@ -28,14 +28,3 @@ export function Logo({ className, ...props }: ComponentProps<"svg">) {
     </svg>
   )
 }
-
-/** Wordmark pairs the mark with the product name for headers and the sign-in card. */
-export function Wordmark({ className, ...props }: ComponentProps<"div">) {
-  return (
-    <div className={cn("flex items-center gap-2", className)} {...props}>
-      <Logo className="size-5 shrink-0" />
-      {/* Tight tracking keeps the lockup reading as one object beside the mark. */}
-      <span className="text-sm font-semibold tracking-tight">Momobase</span>
-    </div>
-  )
-}
