@@ -1,126 +1,39 @@
 ---
 import SiteLayout from "../layouts/SiteLayout.astro"
-import screenshot from "../assets/screenshot.png"
 
 const repository = "https://github.com/momobasehq/momobase"
-const docs = `${repository}/blob/main/docs/README.md`
-const releases = `${repository}/releases/latest`
-
-const capabilities = [
-  ["Unified payments", "Expose one API for collections and disbursements across provider adapters."],
-  ["Provider routing", "Route by service, payment method, country, health, and priority."],
-  ["Reliable state", "Record idempotent requests, provider attempts, webhooks, and reconciliation."],
-  ["Operations", "Manage applications, credentials, roles, providers, routes, and audit history."],
-]
 ---
 
 <SiteLayout
-  title="Momobase — Self-hosted payment orchestration"
-  description="A compact, self-hosted payment orchestration service with one API for the providers you choose."
+  title="Momobase — Payment infrastructure you control"
+  description="A self-hosted payment orchestration service with one API for the providers you choose."
 >
-  <main id="main">
-    <section class="mx-auto w-full max-w-[1128px] px-6 py-[clamp(5rem,10vw,8rem)] max-sm:px-4">
-      <div class="mx-auto max-w-[760px] text-center">
-        <p class="mb-5 font-mono text-[10px] font-medium tracking-[0.12em] text-muted uppercase dark:text-muted-dark">Open-source · Self-hosted</p>
-        <h1 class="text-[clamp(3rem,7vw,6.5rem)] leading-[0.98] font-medium tracking-[-0.065em]">Payment orchestration,<br />without the platform.</h1>
-        <p class="mx-auto mt-7 max-w-[650px] text-[clamp(1rem,1.5vw,1.125rem)] leading-7 text-muted dark:text-muted-dark">
-          Momobase gives applications one API for payment providers while keeping credentials, routing, and transaction data on infrastructure you control.
-        </p>
-        <div class="mt-8 flex items-center justify-center gap-5">
-          <a class="inline-flex min-h-11 items-center justify-center bg-text px-5 text-[13px] font-medium text-page transition-colors hover:bg-brand hover:text-brand-contrast dark:bg-text-dark dark:text-page-dark dark:hover:bg-brand-dark" href={releases}>Download</a>
-          <a class="inline-flex min-h-11 items-center gap-2 text-[13px] font-medium text-muted hover:text-text dark:text-muted-dark dark:hover:text-text-dark" href={repository}>View source <span aria-hidden="true">↗</span></a>
-        </div>
+  <main id="main" class="mx-auto flex min-h-[calc(100svh-10rem)] w-full max-w-[1128px] items-center px-6 py-20 max-sm:px-4">
+    <section class="max-w-[820px]">
+      <p class="font-mono text-[10px] font-medium tracking-[0.12em] text-muted uppercase dark:text-muted-dark">
+        Open source · Self-hosted
+      </p>
+
+      <h1 class="mt-6 text-[clamp(3.5rem,8vw,7rem)] leading-[0.92] font-medium tracking-[-0.07em]">
+        One API.<br />Your payments.
+      </h1>
+
+      <p class="mt-8 max-w-[620px] text-[clamp(1rem,1.5vw,1.125rem)] leading-7 text-muted dark:text-muted-dark">
+        Connect payment providers without giving up control of your credentials, routing, or transaction data.
+      </p>
+
+      <div class="mt-9 flex items-center gap-6 text-sm font-medium">
+        <a class="inline-flex min-h-11 items-center bg-text px-5 text-page transition-colors hover:bg-brand dark:bg-text-dark dark:text-page-dark dark:hover:bg-brand-dark" href={`${repository}/blob/main/docs/README.md`}>
+          Get started
+        </a>
+        <a class="hover:text-brand dark:hover:text-brand-dark" href={`${repository}/releases/latest`}>Download ↓</a>
       </div>
 
-      <figure class="mt-[clamp(4rem,9vw,7rem)] overflow-hidden rounded-lg border border-panel-border-strong bg-panel shadow-dashboard dark:shadow-dashboard-dark">
-        <img
-          class="block h-auto w-full"
-          src={screenshot.src}
-          alt="Momobase dashboard showing system health, provider status, transaction charts, and deployment information"
-          width={screenshot.width}
-          height={screenshot.height}
-          loading="eager"
-          decoding="async"
-          fetchpriority="high"
-        />
-      </figure>
-
-      <dl class="grid grid-cols-3 border-x border-b border-border text-sm max-md:grid-cols-1 dark:border-border-dark">
-        <div class="border-r border-border p-5 max-md:border-r-0 max-md:border-b dark:border-border-dark"><dt class="font-medium">One service</dt><dd class="mt-1 text-xs text-muted dark:text-muted-dark">Go binary with API, workers, migrations, and dashboard.</dd></div>
-        <div class="border-r border-border p-5 max-md:border-r-0 max-md:border-b dark:border-border-dark"><dt class="font-medium">Your providers</dt><dd class="mt-1 text-xs text-muted dark:text-muted-dark">Register adapters through a small provider contract.</dd></div>
-        <div class="p-5"><dt class="font-medium">MIT licensed</dt><dd class="mt-1 text-xs text-muted dark:text-muted-dark">Use, modify, and operate it on your terms.</dd></div>
-      </dl>
-    </section>
-
-    <section class="border-y border-border bg-surface/45 dark:border-border-dark dark:bg-surface-dark/35">
-      <div class="mx-auto grid w-full max-w-[1128px] grid-cols-[0.7fr_1.3fr] gap-20 px-6 py-[clamp(5rem,10vw,8rem)] max-md:grid-cols-1 max-md:gap-12 max-sm:px-4">
-        <div>
-          <p class="mb-4 font-mono text-[10px] tracking-[0.12em] text-muted uppercase dark:text-muted-dark">Product</p>
-          <h2 class="text-[clamp(2.3rem,4vw,3.8rem)] leading-none font-medium tracking-[-0.05em]">What it does.</h2>
-        </div>
-        <div class="grid grid-cols-2 border-t border-l border-border max-sm:grid-cols-1 dark:border-border-dark">
-          {capabilities.map(([title, body]) => (
-            <article class="min-h-44 border-r border-b border-border p-6 dark:border-border-dark">
-              <h3 class="text-sm font-medium">{title}</h3>
-              <p class="mt-4 text-sm leading-6 text-muted dark:text-muted-dark">{body}</p>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-
-    <section class="mx-auto w-full max-w-[1128px] px-6 py-[clamp(5rem,10vw,8rem)] max-sm:px-4">
-      <div class="grid grid-cols-[0.7fr_1.3fr] gap-20 max-md:grid-cols-1 max-md:gap-12">
-        <div>
-          <p class="mb-4 font-mono text-[10px] tracking-[0.12em] text-muted uppercase dark:text-muted-dark">Request path</p>
-          <h2 class="text-[clamp(2.3rem,4vw,3.8rem)] leading-none font-medium tracking-[-0.05em]">One API in front of your providers.</h2>
-          <p class="mt-6 text-sm leading-6 text-muted dark:text-muted-dark">Applications stay independent of provider-specific authentication, request formats, and status names.</p>
-        </div>
-        <div class="grid content-start gap-3 font-mono text-xs">
-          <div class="flex items-center justify-between border border-border bg-surface/60 p-4 dark:border-border-dark dark:bg-surface-dark/60"><span>Your application</span><span class="text-faint">client credentials</span></div>
-          <span class="pl-5 text-faint" aria-hidden="true">↓ &nbsp; POST /api/v1/collections</span>
-          <div class="flex items-center justify-between border border-text bg-text p-4 text-page dark:border-text-dark dark:bg-text-dark dark:text-page-dark"><span>Momobase</span><span class="opacity-60">validate · route · record</span></div>
-          <span class="pl-5 text-faint" aria-hidden="true">↓ &nbsp; provider contract</span>
-          <div class="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
-            <span class="border border-border p-4 dark:border-border-dark">Adapter A</span>
-            <span class="border border-border p-4 dark:border-border-dark">Adapter B</span>
-            <span class="border border-dashed border-border-strong p-4 text-muted dark:border-border-strong-dark dark:text-muted-dark">Your adapter</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="border-y border-border bg-surface/45 dark:border-border-dark dark:bg-surface-dark/35">
-      <div class="mx-auto grid w-full max-w-[1128px] grid-cols-[0.7fr_1.3fr] gap-20 px-6 py-[clamp(5rem,10vw,8rem)] max-md:grid-cols-1 max-md:gap-12 max-sm:px-4">
-        <div>
-          <p class="mb-4 font-mono text-[10px] tracking-[0.12em] text-muted uppercase dark:text-muted-dark">API</p>
-          <h2 class="text-[clamp(2.3rem,4vw,3.8rem)] leading-none font-medium tracking-[-0.05em]">Small by design.</h2>
-          <p class="mt-6 text-sm leading-6 text-muted dark:text-muted-dark">Create a payment and follow one normalized transaction model regardless of the selected provider.</p>
-          <a class="mt-6 inline-flex text-sm font-medium hover:text-brand dark:hover:text-brand-dark" href={docs}>Read the API docs →</a>
-        </div>
-        <div class="overflow-hidden border border-border-strong bg-surface font-mono text-xs shadow-code dark:border-border-strong-dark dark:bg-surface-dark dark:shadow-code-dark">
-          <div class="flex items-center justify-between border-b border-border px-4 py-3 dark:border-border-dark"><span><b class="mr-2 font-medium text-brand dark:text-brand-dark">POST</b>/api/v1/collections</span><span class="text-[9px] text-faint">JSON</span></div>
-          <pre class="overflow-x-auto p-6 leading-7 text-muted dark:text-muted-dark"><code><span class="text-text dark:text-text-dark">&#123;</span>
-  <i class="text-brand not-italic dark:text-brand-dark">"reference"</i>: <b class="font-normal text-text/75 dark:text-text-dark/75">"order_1082"</b>,
-  <i class="text-brand not-italic dark:text-brand-dark">"amount"</i>: <em class="text-text not-italic dark:text-text-dark">25000</em>,
-  <i class="text-brand not-italic dark:text-brand-dark">"currency"</i>: <b class="font-normal text-text/75 dark:text-text-dark/75">"UGX"</b>,
-  <i class="text-brand not-italic dark:text-brand-dark">"payment_method"</i>: <b class="font-normal text-text/75 dark:text-text-dark/75">"mobile_money"</b>,
-  <i class="text-brand not-italic dark:text-brand-dark">"account"</i>: <b class="font-normal text-text/75 dark:text-text-dark/75">"+2567••••••••"</b>
-<span class="text-text dark:text-text-dark">&#125;</span></code></pre>
-        </div>
-      </div>
-    </section>
-
-    <section class="mx-auto grid w-full max-w-[1128px] grid-cols-[0.7fr_1.3fr] gap-20 px-6 py-[clamp(5rem,10vw,8rem)] max-md:grid-cols-1 max-md:gap-10 max-sm:px-4">
-      <div>
-        <p class="mb-4 font-mono text-[10px] tracking-[0.12em] text-muted uppercase dark:text-muted-dark">Install</p>
-        <h2 class="text-[clamp(2.3rem,4vw,3.8rem)] leading-none font-medium tracking-[-0.05em]">Run it yourself.</h2>
-      </div>
-      <div>
-        <div class="border border-border bg-surface/60 p-5 font-mono text-sm dark:border-border-dark dark:bg-surface-dark/60"><span class="mr-3 text-faint">$</span>docker pull ghcr.io/momobasehq/momobase:latest</div>
-        <p class="mt-5 max-w-xl text-sm leading-6 text-muted dark:text-muted-dark">Use the container image, download a Linux binary, or embed Momobase as a Go package with your own provider adapters.</p>
-        <div class="mt-6 flex gap-5 text-sm font-medium"><a class="hover:text-brand dark:hover:text-brand-dark" href={releases}>Downloads →</a><a class="hover:text-brand dark:hover:text-brand-dark" href={repository}>Source →</a></div>
-      </div>
+      <ul class="mt-16 flex flex-wrap gap-x-8 gap-y-3 border-t border-border pt-5 text-xs text-muted dark:border-border-dark dark:text-muted-dark" aria-label="Project details">
+        <li>Provider agnostic</li>
+        <li>Single Go binary</li>
+        <li>MIT licensed</li>
+      </ul>
     </section>
   </main>
 </SiteLayout>
