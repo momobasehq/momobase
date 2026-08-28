@@ -35,7 +35,7 @@ CI gates (`.github/workflows/tests.yml`): `gofmt -l`, `go mod tidy -diff`, `go m
 
 Momobase is both a Go **library** and a **service**. `cmd/momobase` is a thin standard-library CLI that calls `momobase.New(...)`; anything an embedding application can do, the binary does the same way.
 
-The root package (`momobase.go`, `doc.go`) is the embedding facade: it re-exports `internal/bootstrap` config types and owns instance construction and options. The provider contract and adapter helpers live only in the public `providers` package.
+The root package (`momobase.go`, `doc.go`) is the embedding facade: it re-exports `internal/bootstrap` config types, owns instance construction and options, and exposes the typed extension hooks. The hook primitive and event snapshots live in the public `hooks` package. The provider contract and adapter helpers live only in the public `providers` package.
 
 **No providers are registered by default.** `momobase.New` rejects a build with an empty registry rather than starting a server that cannot execute a payment. `cmd/momobase/main.go` registers `dummy` for the shipped binary. Real adapters such as `providers/mtn` remain opt-in packages that embedding applications register explicitly.
 
@@ -52,6 +52,7 @@ Layers, outermost first:
 - `internal/service/provider` — the adapter lifecycle: `RuntimeManager` (loaded adapters), `Executor` (timeout + circuit breaker), `AdminService` (accounts and encrypted config), `HealthService`. Distinct from the top-level `providers` package, which is the contract an adapter implements.
 - `internal/service/audit` — `audit.Service`, the best-effort audit-log recorder. A leaf, so any service package may take one.
 - `providers` — the public adapter contract plus adapter helpers (`DoJSON`, `Redact`, configuration accessors, amount/status normalization, references). `providers/dummy` is the in-tree simulator and `providers/mtn` is the optional MTN Mobile Money adapter; applications register either package explicitly.
+- `hooks` — the public typed extension registry. Payment request hooks are blocking and fail closed before routing; transaction change hooks run after commit and cannot change the persisted result.
 - `internal/domain` — GORM models, the shared service/status/circuit constants, and behaviour belonging to a model (`Transaction.Transition`, `AdminUser.ActorID`).
 - `internal/utils` — dependency-free helpers shared across the module: identifier/account shape checks, ISO-3166 country normalization, raw-payload redaction, and the map, string, and error helpers an adapter reads its decrypted config with. Nothing here touches the database.
 - `internal/platform` — AES-256-GCM encryptor, HS256 JWT token manager, bcrypt, IDs, strict JSON request decoding, the `{success,data,error}` response envelope, pagination.
@@ -60,7 +61,7 @@ Layers, outermost first:
 
 ### Payment path
 
-`POST /api/v1/collections` → app-bearer + scope middleware → `payment.Orchestrator.Create` → `dto.Check` (`Normalize`, then the `validate:` rules) → `paymentRequestHash` → idempotency lookup by `(app_id, idempotency_key)` → `routing.Engine.SelectProvider` → `provider.Executor.ValidateRequest` (the provider's optional `providers.RequestValidator`) → persist `Transaction` + `TransactionAttempt` → `provider.Executor.Collect` (timeout + circuit breaker + structured logging) → `persist` applies the state machine.
+`POST /api/v1/collections` → app-bearer + scope middleware → `payment.Orchestrator.Create` → `dto.Check` (`Normalize`, then the `validate:` rules) → `paymentRequestHash` → idempotency lookup by `(app_id, idempotency_key)` → blocking payment request hooks → `routing.Engine.SelectProvider` → `provider.Executor.ValidateRequest` (the provider's optional `providers.RequestValidator`) → persist `Transaction` + `TransactionAttempt` → `provider.Executor.Collect` (timeout + circuit breaker + structured logging) → `persist` applies the state machine → post-commit transaction change hooks.
 
 **That order is load-bearing.** The hash is taken over the *normalized* request, so two spellings of one payment are one request; and it is taken *before* the provider's `RequestValidator` may rewrite `Account`/`Scheme`, so a provider's rewrite cannot change the identity of a request already made. Getting it wrong changes what counts as a replay without failing anything, which is why `TestIdempotencyIsDecidedAfterNormalizationAndBeforeTheProvider` pins both halves.
 
@@ -96,6 +97,7 @@ These are load-bearing; breaking one is a silent correctness bug.
   Use `repository.IsNotFound` rather than reaching for the driver's own error.
 - Anything derived from a provider — errors, raw payloads — passes through `providers.Redact` / `utils.RedactRawMap` before it is logged or persisted.
 - Request handlers launch no detached goroutines. Background work belongs to `workers.Manager` and stops on context cancellation.
+- Extension handlers run synchronously in registration order. They receive value snapshots, never internal domain pointers. Payment hook errors fail closed before routing or persistence; transaction change hook errors are logged after commit and never returned to the payment caller.
 - Idempotency is `(app_id, idempotency_key)` unique index **plus** `RequestHash` comparison; a reused key with a different body is an error, not a replay. The hash is taken over the DTO *after* `Normalize` and *before* the provider's `RequestValidator`, so two spellings of one request are one request and a provider's rewrite cannot change an identity already fixed.
 
 - **A request body validates itself.** Rules live on the `internal/dto` type as

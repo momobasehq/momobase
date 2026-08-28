@@ -93,6 +93,36 @@ func main() {
 Use [`Serve(ctx)`](momobase.go) for controlled shutdown or [`App()`](momobase.go) to
 access the underlying Fiber application.
 
+## Extensions
+
+Compiled Go extensions can validate new payment requests and observe committed
+transaction status changes without importing Momobase's internal packages:
+
+```go
+instance, err := momobase.New(
+	momobase.WithProvider("dummy", dummy.New),
+)
+if err != nil {
+	log.Fatal(err)
+}
+
+instance.OnPaymentRequest().Bind(func(ctx context.Context, event hooks.PaymentRequestEvent) error {
+	if event.AppID == shopAppID && event.Amount > 1_000_000 {
+		return errors.New("payment exceeds the application limit")
+	}
+	return nil
+})
+```
+
+Payment request hooks run only for normalized new requests, after idempotency replay
+detection and before routing or persistence. A hook error rejects the payment with a
+generic API response. Transaction change hooks run after persistence from the request,
+provider-webhook, and reconciliation paths; their errors are logged and never alter the
+committed payment result. Handlers run synchronously in registration order.
+
+See [`examples/extension`](examples/extension) for an app-scoped example. Custom HTTP
+routes can still be mounted directly on `instance.App()`.
+
 ## Providers
 
 A provider implements [`providers.PaymentProvider`](providers/provider.go) and is

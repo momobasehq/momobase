@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/momobasehq/momobase/hooks"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/repository"
@@ -48,7 +49,7 @@ func (*webhookProvider) VerifyWebhook(context.Context, []byte, map[string]string
 	}, nil
 }
 
-func webhookHandler(t *testing.T) (*Handler, *gorm.DB) {
+func webhookHandler(t *testing.T) (*Handler, *gorm.DB, *hooks.Registry) {
 	t.Helper()
 	db, err := gorm.Open(
 		sqlite.Open("file:"+strings.ReplaceAll(t.Name(), "/", "-")+"?mode=memory&cache=shared"),
@@ -89,11 +90,45 @@ func webhookHandler(t *testing.T) (*Handler, *gorm.DB) {
 	if err := runtime.LoadActive(context.Background()); err != nil {
 		t.Fatalf("LoadActive() error = %v", err)
 	}
-	return NewHandler(webhook.New(repos, runtime)), db
+	tx := domain.Transaction{
+		BaseModel:                 domain.BaseModel{ID: "txn-1"},
+		AppID:                     "app-1",
+		ServiceType:               domain.ServiceCollection,
+		PaymentMethod:             "momo",
+		Amount:                    1500,
+		Currency:                  "UGX",
+		Country:                   "UG",
+		Reference:                 "order-1",
+		IdempotencyKey:            "idem-1",
+		Status:                    domain.TxUnknown,
+		SelectedProviderAccountID: account.ID,
+		ProviderReference:         "provider-ref",
+	}
+	attempt := domain.TransactionAttempt{
+		BaseModel:         domain.BaseModel{ID: "attempt-1"},
+		TransactionID:     tx.ID,
+		ProviderAccountID: account.ID,
+		ProviderCode:      account.ProviderCode,
+		ProviderReference: tx.ProviderReference,
+		Status:            tx.Status,
+	}
+	if err := db.Create(&tx).Error; err != nil {
+		t.Fatalf("create transaction: %v", err)
+	}
+	if err := db.Create(&attempt).Error; err != nil {
+		t.Fatalf("create transaction attempt: %v", err)
+	}
+	extensionHooks := hooks.NewRegistry(nil)
+	return NewHandler(webhook.New(repos, runtime, extensionHooks)), db, extensionHooks
 }
 
 func TestProviderWebhookAcceptsVerifiedEvent(t *testing.T) {
-	h, db := webhookHandler(t)
+	h, db, extensionHooks := webhookHandler(t)
+	var change hooks.TransactionChangedEvent
+	extensionHooks.OnTransactionChanged().Bind(func(_ context.Context, event hooks.TransactionChangedEvent) error {
+		change = event
+		return nil
+	})
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/provider-1", strings.NewReader(`{"status":"pending"}`))
 	req.Header.Set("X-Webhook-Secret", "hook-secret")
 	res := call(t, h, req)
@@ -104,10 +139,17 @@ func TestProviderWebhookAcceptsVerifiedEvent(t *testing.T) {
 	if err := db.Model(&domain.WebhookEvent{}).Count(&count).Error; err != nil || count != 1 {
 		t.Fatalf("webhook event count = %d, %v", count, err)
 	}
+	isCommittedOutcome := change.Source == hooks.TransactionSourceWebhook &&
+		change.TransactionID == "txn-1" &&
+		change.PreviousStatus == domain.TxUnknown &&
+		change.Status == domain.TxProcessing
+	if !isCommittedOutcome {
+		t.Errorf("transaction change event = %+v, want the committed webhook outcome", change)
+	}
 }
 
 func TestProviderWebhookRejectsInvalidSecret(t *testing.T) {
-	h, _ := webhookHandler(t)
+	h, _, _ := webhookHandler(t)
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/provider-1", strings.NewReader(`{}`))
 	req.Header.Set("X-Webhook-Secret", "wrong")
 	res := call(t, h, req)
@@ -121,7 +163,7 @@ func TestProviderWebhookRejectsInvalidSecret(t *testing.T) {
 // no longer a failure the handler can observe; an account the runtime has never loaded
 // is, and it reaches the same branch.
 func TestProviderWebhookRejectsAnUnknownAccount(t *testing.T) {
-	h, _ := webhookHandler(t)
+	h, _, _ := webhookHandler(t)
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/absent", strings.NewReader(`{}`))
 	req.Header.Set("X-Webhook-Secret", "hook-secret")
 	res := call(t, h, req)

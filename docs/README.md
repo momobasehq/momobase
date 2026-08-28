@@ -13,6 +13,33 @@ The backend is a modular monolith, layered so that each concern has one home:
 - `internal/workers`: bounded health, reconciliation, and session-cleanup loops.
 - `internal/bootstrap`: configuration, database initialization, dependency wiring, migration, and process lifecycle.
 - `internal/migrations`: ordered schema changes that `AutoMigrate` cannot express, and the ledger recording which have been applied.
+- `hooks`: the public, typed extension events shared by payment, webhook, and reconciliation paths.
+
+## Go extensions
+
+An embedding application registers extensions after `momobase.New` and before
+`Run` or `Serve`. Hook handlers receive value snapshots and run synchronously in
+registration order. Registration and removal are safe while requests and workers
+are active, although a removed handler may finish an invocation that already took
+its snapshot.
+
+`OnPaymentRequest` runs for normalized new payments after idempotency replay
+detection and application currency validation, but before provider routing and any
+transaction write. Returning an error fails closed as `PAYMENT_REJECTED`; Momobase
+logs the original extension error and does not expose it to the API client.
+
+`OnTransactionChanged` runs after a status change has committed. Its event source is
+`request`, `webhook`, or `reconciliation`. Handler errors are logged and cannot alter
+the committed transaction or its API response; the remaining observers still run.
+These in-process hooks are not a durable delivery mechanism; remote application
+callbacks require a transactional outbox and retrying sender.
+
+Events never contain provider credentials, raw provider responses, or webhook bodies.
+Transaction change events also omit customer account details. Payment request events
+carry the normalized customer-supplied fields needed for validation; extensions must
+treat them as sensitive and keep them out of errors and logs. An extension serving
+only one application should filter on `event.AppID`. See `examples/extension` for a
+complete registration function.
 
 ## Schema migrations
 

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/momobasehq/momobase/hooks"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/dto"
 	"github.com/momobasehq/momobase/internal/service/reconciliation"
@@ -59,6 +60,11 @@ func TestCoreFlows(t *testing.T) {
 		account := s.Provider(t, testsupport.DummyConfig(map[string]any{"settle_after": 2}), "UG")
 		s.Route(t, account.ID, 1)
 		app, _, _ := s.App(t)
+		changes := []hooks.TransactionChangedEvent{}
+		s.Hooks.OnTransactionChanged().Bind(func(_ context.Context, event hooks.TransactionChangedEvent) error {
+			changes = append(changes, event)
+			return nil
+		})
 		created := testsupport.Must(
 			s.Payments.Create(context.Background(), app.ID, domain.ServiceCollection, "idem-recon", &dto.CreatePayment{
 				PaymentMethod: testsupport.Method,
@@ -75,7 +81,13 @@ func TestCoreFlows(t *testing.T) {
 		}
 
 		log := slog.New(slog.NewTextHandler(io.Discard, nil))
-		recon := reconciliation.New(s.Repos, s.Runtime, webhook.New(s.Repos, s.Runtime), log)
+		recon := reconciliation.New(reconciliation.Deps{
+			Repos:   s.Repos,
+			Runtime: s.Runtime,
+			Webhook: webhook.New(s.Repos, s.Runtime, s.Hooks),
+			Logger:  log,
+			Hooks:   s.Hooks,
+		})
 		// The orchestrator schedules the next attempt a minute out, so each pass
 		// clears the backoff to make the run deterministic.
 		for pass := range 2 {
@@ -96,6 +108,13 @@ func TestCoreFlows(t *testing.T) {
 		testsupport.NoError(s.DB.First(&attempt, "transaction_id = ?", created.TransactionID).Error)
 		if attempt.Status != domain.TxSucceeded || attempt.CompletedAt == nil {
 			t.Fatalf("attempt = %q completed=%v, want a completed successful attempt", attempt.Status, attempt.CompletedAt)
+		}
+		isExpectedSequence := len(changes) == 2 &&
+			changes[0].Source == hooks.TransactionSourceRequest &&
+			changes[1].Source == hooks.TransactionSourceReconciliation &&
+			changes[1].Status == domain.TxSucceeded
+		if !isExpectedSequence {
+			t.Errorf("transaction change events = %+v, want request then successful reconciliation", changes)
 		}
 	})
 	t.Run("country routing and health fallback", func(t *testing.T) {

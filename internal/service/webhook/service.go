@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/momobasehq/momobase/hooks"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/repository"
@@ -33,11 +34,17 @@ type Service struct {
 	repos    *repository.UnitOfWork
 	runtime  *provider.RuntimeManager
 	executor *provider.Executor
+	hooks    *hooks.Registry
 }
 
 // New creates a provider webhook processing service.
-func New(repos *repository.UnitOfWork, runtime *provider.RuntimeManager) *Service {
-	return &Service{repos, runtime, provider.NewExecutor(runtime)}
+func New(repos *repository.UnitOfWork, runtime *provider.RuntimeManager, extensionHooks *hooks.Registry) *Service {
+	return &Service{
+		repos:    repos,
+		runtime:  runtime,
+		executor: provider.NewExecutor(runtime),
+		hooks:    extensionHooks,
+	}
 }
 func (s *Service) verify(
 	ctx context.Context,
@@ -90,34 +97,44 @@ func (s *Service) Handle(ctx context.Context, accountID string, payload []byte, 
 		PayloadHash:       event.PayloadHash,
 		PayloadJSON:       string(stored),
 	}
-	return s.repos.Within(ctx, func(r *repository.Set) error {
+	var change *hooks.TransactionChangedEvent
+	err = s.repos.Within(ctx, func(r *repository.Set) error {
 		// A provider that delivers the same event twice inserts nothing the second
 		// time, and applying it again is exactly what must not happen.
 		inserted, err := r.WebhookEvents.Insert(ctx, row)
 		if err != nil || !inserted {
 			return err
 		}
-		return s.apply(ctx, r, row, event)
+		change, err = s.apply(ctx, r, row, event)
+		return err
 	})
+	if err != nil {
+		return err
+	}
+	if change != nil {
+		s.hooks.NotifyTransactionChanged(ctx, *change)
+	}
+	return nil
 }
 func (s *Service) apply(
 	ctx context.Context,
 	r *repository.Set,
 	row *domain.WebhookEvent,
 	event *verifiedWebhook,
-) error {
+) (*hooks.TransactionChangedEvent, error) {
 	tx, attempt, err := findWebhookTarget(ctx, r, event.ProviderAccountID, event.ProviderReference)
 	if repository.IsNotFound(err) {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := validateWebhook(event, tx); err != nil {
-		return err
+		return nil, err
 	}
+	previous := tx.Status
 	if err := tx.Transition(event.Status); err != nil {
-		return err
+		return nil, err
 	}
 	now := time.Now().UTC()
 	txUpdates := map[string]any{"status": tx.Status, "provider_reference": event.ProviderReference, "next_reconcile_at": nil}
@@ -126,7 +143,7 @@ func (s *Service) apply(
 		txUpdates["next_reconcile_at"] = &next
 	}
 	if err := r.Transactions.Update(ctx, tx.ID, txUpdates); err != nil {
-		return err
+		return nil, err
 	}
 	raw, _ := json.Marshal(event.Raw)
 	attemptUpdates := map[string]any{"status": tx.Status, "provider_reference": event.ProviderReference, "raw_response": string(raw)}
@@ -134,9 +151,29 @@ func (s *Service) apply(
 		attemptUpdates["completed_at"] = &now
 	}
 	if err := r.TransactionAttempts.Update(ctx, attempt.ID, attemptUpdates); err != nil {
-		return err
+		return nil, err
 	}
-	return r.WebhookEvents.MarkProcessed(ctx, row.ID, tx.ID)
+	if err := r.WebhookEvents.MarkProcessed(ctx, row.ID, tx.ID); err != nil {
+		return nil, err
+	}
+	if previous == tx.Status {
+		return nil, nil
+	}
+	return &hooks.TransactionChangedEvent{
+		Source:            hooks.TransactionSourceWebhook,
+		AppID:             tx.AppID,
+		TransactionID:     tx.ID,
+		Reference:         tx.Reference,
+		ServiceType:       tx.ServiceType,
+		PaymentMethod:     tx.PaymentMethod,
+		Amount:            tx.Amount,
+		Currency:          tx.Currency,
+		Country:           tx.Country,
+		PreviousStatus:    previous,
+		Status:            tx.Status,
+		ProviderAccountID: event.ProviderAccountID,
+		ProviderReference: event.ProviderReference,
+	}, nil
 }
 
 // ReprocessPending retries applying up to limit stored webhook events that have not been processed.
@@ -153,10 +190,17 @@ func (s *Service) ReprocessPending(ctx context.Context, limit int) error {
 		if json.Unmarshal([]byte(rows[i].PayloadJSON), &event) != nil {
 			continue
 		}
-		if err := s.repos.Within(ctx, func(r *repository.Set) error {
-			return s.apply(ctx, r, &rows[i], &event)
-		}); err != nil && !repository.IsNotFound(err) {
+		var change *hooks.TransactionChangedEvent
+		err := s.repos.Within(ctx, func(r *repository.Set) error {
+			var applyErr error
+			change, applyErr = s.apply(ctx, r, &rows[i], &event)
+			return applyErr
+		})
+		if err != nil && !repository.IsNotFound(err) {
 			return err
+		}
+		if change != nil {
+			s.hooks.NotifyTransactionChanged(ctx, *change)
 		}
 	}
 	return nil

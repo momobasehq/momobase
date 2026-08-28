@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
+	"github.com/momobasehq/momobase/hooks"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/dto"
 	"github.com/momobasehq/momobase/internal/platform"
@@ -59,6 +60,7 @@ type Stack struct {
 	Payments      *payment.Orchestrator
 	Authz         *identity.AuthzService
 	Analytics     *identity.AnalyticsService
+	Hooks         *hooks.Registry
 	Registry      providers.Registry
 	Actor         *domain.AdminUser
 }
@@ -117,21 +119,28 @@ func New(t *testing.T) *Stack {
 	apps, routes := identity.NewAppService(repos, auth, recorder), routing.NewAdminService(repos, recorder)
 	routing := routing.NewEngine(repos, runtime)
 	authz := identity.NewAuthzService(repos, recorder)
+	extensionHooks := hooks.NewRegistry(log)
 	NoError(authz.Seed(context.Background()))
 	return &Stack{
-		db,
-		repos,
-		auth,
-		apps,
-		provider.NewAdminService(repos, recorder, enc, registry, runtime),
-		runtime,
-		routes,
-		routing,
-		payment.NewOrchestrator(repos, routing, provider.NewExecutor(runtime)),
-		authz,
-		identity.NewAnalyticsService(repos),
-		registry,
-		&domain.AdminUser{
+		DB:            db,
+		Repos:         repos,
+		Auth:          auth,
+		Apps:          apps,
+		ProviderAdmin: provider.NewAdminService(repos, recorder, enc, registry, runtime),
+		Runtime:       runtime,
+		Routes:        routes,
+		Routing:       routing,
+		Payments: payment.NewOrchestrator(
+			repos,
+			routing,
+			provider.NewExecutor(runtime),
+			extensionHooks,
+		),
+		Authz:     authz,
+		Analytics: identity.NewAnalyticsService(repos),
+		Hooks:     extensionHooks,
+		Registry:  registry,
+		Actor: &domain.AdminUser{
 			BaseModel: domain.BaseModel{ID: "admin"},
 			Role:      "super_admin",
 			Status:    "active",

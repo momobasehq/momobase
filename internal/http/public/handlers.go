@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/momobasehq/momobase/hooks"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/dto"
 	httpcommon "github.com/momobasehq/momobase/internal/http/common"
@@ -179,6 +180,9 @@ func (h *Handler) create(c fiber.Ctx, service string) error {
 	out, err := h.payments.Create(c.Context(), id.App.ID, service, c.Get("Idempotency-Key"), req)
 	if errors.Is(err, routing.ErrNoRouteAvailable) {
 		return platform.Error(c, 503, "ROUTE_UNAVAILABLE", "no active provider route is available")
+	}
+	if errors.Is(err, hooks.ErrPaymentRejected) {
+		return platform.Error(c, 400, "PAYMENT_REJECTED", "payment request was rejected")
 	}
 	if err != nil {
 		return platform.Error(c, 400, "PAYMENT_ERROR", err.Error())
