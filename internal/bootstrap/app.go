@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 
+	"github.com/momobasehq/momobase/hooks"
 	"github.com/momobasehq/momobase/internal/domain"
 	httpx "github.com/momobasehq/momobase/internal/http"
 	adminh "github.com/momobasehq/momobase/internal/http/admin"
@@ -37,6 +38,7 @@ type App struct {
 	Runtime    *provider.RuntimeManager
 	Workers    *workers.Manager
 	Fiber      *fiber.App
+	Hooks      *hooks.Registry
 	Addr       string
 	AdminUsers *identity.AdminUserService
 
@@ -56,6 +58,7 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 	if log == nil {
 		log = newLogger(cfg.Log.Level)
 	}
+	extensionHooks := hooks.NewRegistry(log)
 	db, err := openDatabase(cfg)
 	if err != nil {
 		return nil, err
@@ -122,10 +125,21 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 	providerAdmin := provider.NewAdminService(repos, audit, enc, registry, runtime)
 	routeAdmin := routing.NewAdminService(repos, audit)
 	routeEngine := routing.NewEngine(repos, runtime)
-	payments := payment.NewOrchestrator(repos, routeEngine, provider.NewExecutor(runtime))
-	webhooks := webhook.New(repos, runtime)
+	payments := payment.NewOrchestrator(
+		repos,
+		routeEngine,
+		provider.NewExecutor(runtime),
+		extensionHooks,
+	)
+	webhooks := webhook.New(repos, runtime, extensionHooks)
 	health := provider.NewHealthService(repos, runtime)
-	recon := reconciliation.New(repos, runtime, webhooks, log)
+	recon := reconciliation.New(reconciliation.Deps{
+		Repos:   repos,
+		Runtime: runtime,
+		Webhook: webhooks,
+		Logger:  log,
+		Hooks:   extensionHooks,
+	})
 	manager := workers.NewManager(log, workerTasks(cfg, repos, health, recon)...)
 
 	info := adminh.SystemInfo{
@@ -171,6 +185,7 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 		Runtime:    runtime,
 		Workers:    manager,
 		Fiber:      router,
+		Hooks:      extensionHooks,
 		Addr:       cfg.App.Addr,
 		AdminUsers: adminUsers,
 	}

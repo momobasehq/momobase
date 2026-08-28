@@ -2,6 +2,7 @@ package public
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/momobasehq/momobase/hooks"
 	"github.com/momobasehq/momobase/internal/domain"
 	authmw "github.com/momobasehq/momobase/internal/http/middleware"
 	"github.com/momobasehq/momobase/internal/platform"
@@ -23,7 +25,7 @@ import (
 	"github.com/momobasehq/momobase/internal/service/payment"
 )
 
-func authenticatedHandler(t *testing.T) (*Handler, *identity.AppAuthService, string) {
+func authenticatedHandler(t *testing.T) (*Handler, *identity.AppAuthService, string, *hooks.Registry) {
 	t.Helper()
 	db, err := gorm.Open(
 		sqlite.Open("file:"+strings.ReplaceAll(t.Name(), "/", "-")+"?mode=memory&cache=shared"),
@@ -65,8 +67,9 @@ func authenticatedHandler(t *testing.T) (*Handler, *identity.AppAuthService, str
 		t.Fatalf("IssueClientToken() error = %v", err)
 	}
 	repos := repository.New(db)
-	payments := payment.NewOrchestrator(repos, nil, nil)
-	return NewHandler(payments, nil, repos), auth, tokens.AccessToken
+	extensionHooks := hooks.NewRegistry(nil)
+	payments := payment.NewOrchestrator(repos, nil, nil, extensionHooks)
+	return NewHandler(payments, nil, repos), auth, tokens.AccessToken, extensionHooks
 }
 
 // response is one recorded reply. A fiber.Ctx cannot be built directly, so a handler is
@@ -112,7 +115,7 @@ func serveAuthenticated(
 }
 
 func TestGetTransactionByIDAndReference(t *testing.T) {
-	h, auth, token := authenticatedHandler(t)
+	h, auth, token, _ := authenticatedHandler(t)
 	tx := domain.Transaction{
 		BaseModel:      domain.BaseModel{ID: "txn-1"},
 		AppID:          "app-1",
@@ -155,7 +158,7 @@ func TestGetTransactionByIDAndReference(t *testing.T) {
 }
 
 func TestCreateCollectionRequiresIdentityAndValidJSON(t *testing.T) {
-	h, auth, token := authenticatedHandler(t)
+	h, auth, token, _ := authenticatedHandler(t)
 	anonymous := httptest.NewRequest(http.MethodPost, "/collections", strings.NewReader(`{}`))
 	if res := serve(t, "/collections", h.CreateCollection, anonymous); res.Code != http.StatusUnauthorized {
 		t.Fatalf("CreateCollection(no identity) status = %d", res.Code)
@@ -165,5 +168,33 @@ func TestCreateCollectionRequiresIdentityAndValidJSON(t *testing.T) {
 	res := serveAuthenticated(t, auth, token, "/collections", h.CreateCollection, req)
 	if res.Code != http.StatusBadRequest || !strings.Contains(res.Body, "VALIDATION_ERROR") {
 		t.Fatalf("CreateCollection(invalid JSON) = %d %s", res.Code, res.Body)
+	}
+}
+
+func TestCreateCollectionHidesExtensionFailures(t *testing.T) {
+	h, auth, token, extensionHooks := authenticatedHandler(t)
+	extensionHooks.OnPaymentRequest().Bind(func(context.Context, hooks.PaymentRequestEvent) error {
+		return errors.New("private extension configuration was unavailable")
+	})
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/collections",
+		strings.NewReader(`{
+			"payment_method":"momo",
+			"amount":1500,
+			"currency":"UGX",
+			"country":"UG",
+			"reference":"ORDER-HIDDEN",
+			"account":"256770000000"
+		}`),
+	)
+	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	req.Header.Set("Idempotency-Key", "idem-hidden")
+	res := serveAuthenticated(t, auth, token, "/collections", h.CreateCollection, req)
+	if res.Code != http.StatusBadRequest || !strings.Contains(res.Body, "PAYMENT_REJECTED") {
+		t.Fatalf("CreateCollection(rejected) = %d %s", res.Code, res.Body)
+	}
+	if strings.Contains(res.Body, "private extension") {
+		t.Fatalf("CreateCollection(rejected) exposed the extension error: %s", res.Body)
 	}
 }

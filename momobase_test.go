@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/momobasehq/momobase"
+	"github.com/momobasehq/momobase/hooks"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -103,6 +104,14 @@ func TestNewBuildsInstanceWithCustomProvider(t *testing.T) {
 	if instance.Logger() == nil {
 		t.Error("Logger() = nil, want the instance logger")
 	}
+	removePaymentHook := instance.OnPaymentRequest().Bind(func(context.Context, hooks.PaymentRequestEvent) error {
+		return nil
+	})
+	removeTransactionHook := instance.OnTransactionChanged().Bind(func(context.Context, hooks.TransactionChangedEvent) error {
+		return nil
+	})
+	removePaymentHook()
+	removeTransactionHook()
 	if got := instance.Addr(); got != "127.0.0.1:0" {
 		t.Errorf("Addr() = %q, want the configured address", got)
 	}

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/momobasehq/momobase/hooks"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/dto"
 	"github.com/momobasehq/momobase/internal/platform"
@@ -45,6 +46,7 @@ type Orchestrator struct {
 	repos    *repository.UnitOfWork
 	router   *routing.Engine
 	executor *provider.Executor
+	hooks    *hooks.Registry
 }
 
 // NewOrchestrator creates a payment orchestrator.
@@ -52,8 +54,14 @@ func NewOrchestrator(
 	repos *repository.UnitOfWork,
 	router *routing.Engine,
 	executor *provider.Executor,
+	extensionHooks *hooks.Registry,
 ) *Orchestrator {
-	return &Orchestrator{repos: repos, router: router, executor: executor}
+	return &Orchestrator{
+		repos:    repos,
+		router:   router,
+		executor: executor,
+		hooks:    extensionHooks,
+	}
 }
 
 // Get returns one transaction belonging to appID.
@@ -95,6 +103,26 @@ func (o *Orchestrator) Create(
 	if req.Currency != app.Currency {
 		return nil, fmt.Errorf("currency must match app currency %s", app.Currency)
 	}
+	var name, email string
+	if party := req.Party(service); party != nil {
+		name, email = party.Name, party.Email
+	}
+	if err := o.hooks.RunPaymentRequest(ctx, hooks.PaymentRequestEvent{
+		AppID:         appID,
+		ServiceType:   service,
+		PaymentMethod: req.PaymentMethod,
+		Amount:        req.Amount,
+		Currency:      req.Currency,
+		Country:       req.Country,
+		Reference:     req.Reference,
+		Account:       req.Account,
+		Scheme:        req.Scheme,
+		Description:   req.Description,
+		PartyName:     name,
+		PartyEmail:    email,
+	}); err != nil {
+		return nil, err
+	}
 	selected, err := o.router.SelectProvider(
 		ctx,
 		service,
@@ -104,10 +132,6 @@ func (o *Orchestrator) Create(
 	)
 	if err != nil {
 		return nil, err
-	}
-	var name, email string
-	if party := req.Party(service); party != nil {
-		name, email = party.Name, party.Email
 	}
 	// The provider request is assembled before the transaction row so that the
 	// selected provider can validate and normalize the account first: a rejection
@@ -238,6 +262,21 @@ func (o *Orchestrator) persist(
 	}); err != nil {
 		return nil, fmt.Errorf("provider result persistence failed: %w", err)
 	}
+	o.hooks.NotifyTransactionChanged(ctx, hooks.TransactionChangedEvent{
+		Source:            hooks.TransactionSourceRequest,
+		AppID:             tx.AppID,
+		TransactionID:     tx.ID,
+		Reference:         tx.Reference,
+		ServiceType:       tx.ServiceType,
+		PaymentMethod:     tx.PaymentMethod,
+		Amount:            tx.Amount,
+		Currency:          tx.Currency,
+		Country:           tx.Country,
+		PreviousStatus:    domain.TxPending,
+		Status:            tx.Status,
+		ProviderAccountID: tx.SelectedProviderAccountID,
+		ProviderReference: tx.ProviderReference,
+	})
 	return &CreatePaymentResponse{
 		TransactionID:     tx.ID,
 		Reference:         tx.Reference,

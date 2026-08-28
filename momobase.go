@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 
+	"github.com/momobasehq/momobase/hooks"
 	"github.com/momobasehq/momobase/internal/bootstrap"
 	"github.com/momobasehq/momobase/providers"
 )
@@ -219,4 +220,16 @@ func (i *Instance) DB() *gorm.DB {
 // Logger returns the instance's structured logger.
 func (i *Instance) Logger() *slog.Logger {
 	return i.app.Logger
+}
+
+// OnPaymentRequest returns the blocking hook invoked for each normalized new
+// payment request before routing and persistence. Idempotent replays skip it.
+func (i *Instance) OnPaymentRequest() *hooks.Hook[hooks.PaymentRequestEvent] {
+	return i.app.Hooks.OnPaymentRequest()
+}
+
+// OnTransactionChanged returns the post-commit hook invoked when a transaction
+// status is persisted from the request, webhook, or reconciliation path.
+func (i *Instance) OnTransactionChanged() *hooks.Hook[hooks.TransactionChangedEvent] {
+	return i.app.Hooks.OnTransactionChanged()
 }

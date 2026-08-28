@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/momobasehq/momobase/hooks"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/dto"
 	"github.com/momobasehq/momobase/internal/service/identity"
@@ -308,6 +309,90 @@ func TestIdempotencyIsDecidedAfterNormalizationAndBeforeTheProvider(t *testing.T
 		)
 		if err == nil || !strings.Contains(err.Error(), "different request") {
 			t.Fatalf("Create(different body, same key) error = %v, want a reuse refusal", err)
+		}
+	})
+}
+
+func TestPaymentExtensionHooks(t *testing.T) {
+	t.Run("a request hook sees normalized data and rejects before routing", func(t *testing.T) {
+		s := testsupport.New(t)
+		app, _, _ := s.App(t)
+		var event hooks.PaymentRequestEvent
+		s.Hooks.OnPaymentRequest().Bind(func(_ context.Context, received hooks.PaymentRequestEvent) error {
+			event = received
+			return errors.New("private extension failure")
+		})
+
+		req := testsupport.PaymentRequest("ORDER-HOOK-REJECT", " ug ", " 256770000000 ")
+		req.Currency, req.PaymentMethod = " ugx ", " MOMO "
+		_, err := s.Payments.Create(
+			context.Background(),
+			app.ID,
+			domain.ServiceCollection,
+			"idem-hook-reject",
+			req,
+		)
+		if !errors.Is(err, hooks.ErrPaymentRejected) {
+			t.Fatalf("Create() error = %v, want ErrPaymentRejected", err)
+		}
+		normalized := event.AppID == app.ID &&
+			event.Country == "UG" &&
+			event.Currency == "UGX" &&
+			event.PaymentMethod == "momo"
+		if !normalized {
+			t.Errorf("payment hook event = %+v, want normalized app payment data", event)
+		}
+		var count int64
+		testsupport.NoError(s.DB.Model(&domain.Transaction{}).Count(&count).Error)
+		if count != 0 {
+			t.Errorf("transactions = %d, want none for a hook rejection", count)
+		}
+	})
+
+	t.Run("a committed change is observed once and replay skips request hooks", func(t *testing.T) {
+		s := testsupport.New(t)
+		account := s.Provider(t, testsupport.DummyConfig(nil), "UG")
+		s.Route(t, account.ID, 1)
+		app, _, _ := s.App(t)
+		requestCalls := 0
+		changes := []hooks.TransactionChangedEvent{}
+		s.Hooks.OnPaymentRequest().Bind(func(context.Context, hooks.PaymentRequestEvent) error {
+			requestCalls++
+			return nil
+		})
+		s.Hooks.OnTransactionChanged().Bind(func(_ context.Context, event hooks.TransactionChangedEvent) error {
+			changes = append(changes, event)
+			return errors.New("observer is unavailable")
+		})
+
+		first := testsupport.Must(s.Payments.Create(
+			context.Background(),
+			app.ID,
+			domain.ServiceCollection,
+			"idem-hook-success",
+			testsupport.PaymentRequest("ORDER-HOOK-SUCCESS", "UG", "256770000000"),
+		))
+		second := testsupport.Must(s.Payments.Create(
+			context.Background(),
+			app.ID,
+			domain.ServiceCollection,
+			"idem-hook-success",
+			testsupport.PaymentRequest("ORDER-HOOK-SUCCESS", "UG", "256770000000"),
+		))
+		isSingleReplay := first.TransactionID == second.TransactionID && requestCalls == 1
+		if !isSingleReplay {
+			t.Fatalf("replay transaction/calls = %q/%d, want %q/1", second.TransactionID, requestCalls, first.TransactionID)
+		}
+		if len(changes) != 1 {
+			t.Fatalf("transaction change events = %d, want 1", len(changes))
+		}
+		change := changes[0]
+		isCommittedOutcome := change.Source == hooks.TransactionSourceRequest &&
+			change.PreviousStatus == domain.TxPending &&
+			change.Status == domain.TxSucceeded &&
+			change.TransactionID == first.TransactionID
+		if !isCommittedOutcome {
+			t.Errorf("transaction change event = %+v, want the committed request outcome", change)
 		}
 	})
 }
