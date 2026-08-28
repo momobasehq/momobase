@@ -2,14 +2,11 @@ package identity
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/momobasehq/momobase/internal/cache"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/repository"
 )
@@ -90,12 +87,11 @@ type TransactionAnalytics struct {
 // AnalyticsService answers aggregate questions about transactions.
 type AnalyticsService struct {
 	repos *repository.UnitOfWork
-	cache *cache.RedisStore
 }
 
 // NewAnalyticsService creates a transaction analytics service.
-func NewAnalyticsService(repos *repository.UnitOfWork, store *cache.RedisStore) *AnalyticsService {
-	return &AnalyticsService{repos: repos, cache: store}
+func NewAnalyticsService(repos *repository.UnitOfWork) *AnalyticsService {
+	return &AnalyticsService{repos: repos}
 }
 
 // Transactions returns a bucketed transaction series for the filtered range.
@@ -108,10 +104,6 @@ func (s *AnalyticsService) Transactions(ctx context.Context, filter AnalyticsFil
 	filter, err := filter.normalize()
 	if err != nil {
 		return nil, err
-	}
-	key := analyticsCacheKey(filter)
-	if value := cache.Get[TransactionAnalytics](ctx, s.cache, key); value != nil {
-		return value, nil
 	}
 	expression, err := bucketExpression(s.repos.Dialect(), filter.Interval)
 	if err != nil {
@@ -173,20 +165,7 @@ func (s *AnalyticsService) Transactions(ctx context.Context, filter AnalyticsFil
 	for _, currency := range sortedKeys(volume) {
 		out.Volume = append(out.Volume, *volume[currency])
 	}
-	cache.Set(ctx, s.cache, key, out)
 	return out, nil
-}
-
-func analyticsCacheKey(filter AnalyticsFilter) string {
-	identity := strings.Join([]string{
-		filter.From.Format(time.RFC3339Nano),
-		filter.To.Format(time.RFC3339Nano),
-		filter.Interval,
-		filter.AppID,
-		filter.ProviderAccountID,
-	}, "\x00")
-	digest := sha256.Sum256([]byte(identity))
-	return "analytics:v1:" + hex.EncodeToString(digest[:])
 }
 
 // normalize applies defaults and rejects a range a chart could not render.

@@ -22,12 +22,6 @@ func TestLoadConfigDefaultsAndOverrides(t *testing.T) {
 		"DB_PASSWORD",
 		"DB_NAME",
 		"DB_SSLMODE",
-		"REDIS_ADDR",
-		"REDIS_USERNAME",
-		"REDIS_PASSWORD",
-		"REDIS_DB",
-		"REDIS_TLS_ENABLED",
-		"CACHE_TTL_SECONDS",
 		"ENCRYPTION_MASTER_KEY_BASE64",
 		"ADMIN_OAUTH_SECRET",
 		"APP_OAUTH_SECRET",
@@ -42,10 +36,6 @@ func TestLoadConfigDefaultsAndOverrides(t *testing.T) {
 	t.Setenv("ADMIN_ACCESS_TTL_MINUTES", "7")
 	t.Setenv("HEALTH_CHECK_INTERVAL_SECONDS", "9")
 	t.Setenv("DASHBOARD_ENABLED", "true")
-	t.Setenv("REDIS_ADDR", "cache.internal:6380")
-	t.Setenv("REDIS_DB", "2")
-	t.Setenv("REDIS_TLS_ENABLED", "true")
-	t.Setenv("CACHE_TTL_SECONDS", "90")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -62,9 +52,6 @@ func TestLoadConfigDefaultsAndOverrides(t *testing.T) {
 	}
 	if cfg.Workers.HealthInterval != 9*time.Second || !cfg.Features.DashboardEnabled {
 		t.Fatalf("unexpected worker/features config: %+v %+v", cfg.Workers, cfg.Features)
-	}
-	if cfg.Cache.Addr != "cache.internal:6380" || cfg.Cache.DB != 2 || !cfg.Cache.TLS || cfg.Cache.TTL != 90*time.Second {
-		t.Fatalf("unexpected cache config: %+v", cfg.Cache)
 	}
 }
 
@@ -155,19 +142,6 @@ func TestDurationRejectsInvalidValue(t *testing.T) {
 	}
 }
 
-func TestNonNegativeIntegerRejectsInvalidValue(t *testing.T) {
-	for _, value := range []string{"not-a-number", "-1"} {
-		t.Run(value, func(t *testing.T) {
-			t.Setenv("TEST_INTEGER", value)
-
-			_, err := nonNegativeInteger("TEST_INTEGER", 0)
-			if err == nil || !strings.Contains(err.Error(), "TEST_INTEGER") {
-				t.Fatalf("nonNegativeInteger() error = %v, want error naming TEST_INTEGER", err)
-			}
-		})
-	}
-}
-
 func TestLoadConfigReturnsParsingError(t *testing.T) {
 	setValidParsingEnvironment(t)
 	t.Setenv("WORKERS_ENABLED", "sometimes")
@@ -194,9 +168,6 @@ func setValidParsingEnvironment(t *testing.T) {
 		"CLEANUP_INTERVAL_SECONDS":        "300",
 		"DASHBOARD_ENABLED":               "false",
 		"AUTO_MIGRATE":                    "true",
-		"REDIS_DB":                        "0",
-		"REDIS_TLS_ENABLED":               "false",
-		"CACHE_TTL_SECONDS":               "300",
 	}
 	for key, value := range values {
 		t.Setenv(key, value)
