@@ -65,7 +65,7 @@ func authenticatedHandler(t *testing.T) (*Handler, *identity.AppAuthService, str
 		t.Fatalf("IssueClientToken() error = %v", err)
 	}
 	repos := repository.New(db)
-	payments := payment.NewOrchestrator(repos, nil, nil, nil)
+	payments := payment.NewOrchestrator(repos, nil, nil)
 	return NewHandler(payments, nil, repos), auth, tokens.AccessToken
 }
 

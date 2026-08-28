@@ -15,12 +15,11 @@ adapters you register.
 - Provider webhooks, reconciliation, health checks, and circuit breakers
 - Admin API, embedded dashboard, and TypeScript SDK
 - SQLite, PostgreSQL, and MySQL support
-- Redis-backed caching with database fallback
 
 ## Quick start
 
-You need the Go toolchain declared in [`go.mod`](go.mod) and a running Redis instance.
-SQLite is the default database, so nothing else is required for local development.
+You need the Go toolchain declared in [`go.mod`](go.mod). SQLite is the default
+database, so nothing else is required for local development.
 
 ```sh
 cp .env.example .env
@@ -49,7 +48,7 @@ Open `http://localhost:9090/dashboard/` and sign in with the administrator creat
 
 ## Docker Compose
 
-The included Compose stack runs Momobase with PostgreSQL and Redis:
+The included Compose stack runs Momobase with PostgreSQL:
 
 ```sh
 cp .env.docker.example .env

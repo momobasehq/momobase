@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/momobasehq/momobase/internal/cache"
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/dto"
 	"github.com/momobasehq/momobase/internal/platform"
@@ -46,7 +45,6 @@ type Orchestrator struct {
 	repos    *repository.UnitOfWork
 	router   *routing.Engine
 	executor *provider.Executor
-	cache    *cache.RedisStore
 }
 
 // NewOrchestrator creates a payment orchestrator.
@@ -54,36 +52,18 @@ func NewOrchestrator(
 	repos *repository.UnitOfWork,
 	router *routing.Engine,
 	executor *provider.Executor,
-	store *cache.RedisStore,
 ) *Orchestrator {
-	return &Orchestrator{repos: repos, router: router, executor: executor, cache: store}
+	return &Orchestrator{repos: repos, router: router, executor: executor}
 }
 
-// Get returns one transaction belonging to appID. Only terminal transactions are
-// cached because all other states may change while clients are polling them.
+// Get returns one transaction belonging to appID.
 func (o *Orchestrator) Get(
 	ctx context.Context,
 	appID string,
 	field string,
 	value string,
 ) (*domain.Transaction, error) {
-	key := transactionCacheKey(appID, field, value)
-	if tx := cache.Get[domain.Transaction](ctx, o.cache, key); tx != nil {
-		return tx, nil
-	}
-	tx, err := o.repos.Transactions.ForApp(ctx, appID, field, value)
-	if err != nil {
-		return nil, err
-	}
-	if domain.Terminal(tx.Status) {
-		cache.Set(ctx, o.cache, transactionCacheKey(appID, "id", tx.ID), tx)
-		cache.Set(ctx, o.cache, transactionCacheKey(appID, "reference", tx.Reference), tx)
-	}
-	return tx, nil
-}
-
-func transactionCacheKey(appID, field, value string) string {
-	return "transaction:v1:app:" + appID + ":" + field + ":" + value
+	return o.repos.Transactions.ForApp(ctx, appID, field, value)
 }
 
 // Create idempotently creates, routes, executes, and records a collection or disbursement.

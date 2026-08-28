@@ -67,15 +67,15 @@ func testHandlerWithProviders(t *testing.T, registry providers.Registry) *Handle
 	repos := repository.New(db)
 	runtime := provider.NewRuntimeManager(repos, registry, encryptor, log)
 	audit := audit.New(repos, log)
-	apps := identity.NewAppService(repos, nil, nil, nil)
+	apps := identity.NewAppService(repos, nil, nil)
 	return NewHandler(Deps{
 		Repos:     repos,
 		Providers: provider.NewAdminService(repos, audit, encryptor, registry, runtime),
 		Apps:      apps,
 		Runtime:   runtime,
 		Audit:     audit,
-		Authz:     identity.NewAuthzService(repos, audit, nil),
-		Analytics: identity.NewAnalyticsService(repos, nil),
+		Authz:     identity.NewAuthzService(repos, audit),
+		Analytics: identity.NewAnalyticsService(repos),
 		System: SystemInfo{
 			AppName:        "momobase-test",
 			AppEnv:         "test",

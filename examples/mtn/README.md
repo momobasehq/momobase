@@ -14,8 +14,8 @@ openssl rand -hex 32     # ADMIN_OAUTH_SECRET
 openssl rand -hex 32     # APP_OAUTH_SECRET
 ```
 
-Set `DASHBOARD_ENABLED=true` in `.env`. Ensure Redis is available at the
-configured `REDIS_ADDR`, then export the environment for the MTN example:
+Set `DASHBOARD_ENABLED=true` in `.env`, then export the environment for the MTN
+example:
 
 ```bash
 mkdir -p data
