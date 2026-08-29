@@ -263,7 +263,7 @@ func TestRuntimeProviderResponseIncludesAccountName(t *testing.T) {
 			Environment:  "sandbox",
 			Country:      "UG",
 			Currency:     "UGX",
-			Config:       map[string]any{"webhook_secret": "a-long-random-test-webhook-secret"},
+			Config:       providers.ProviderConfig{"webhook_secret": "a-long-random-test-webhook-secret"},
 		},
 	)
 	if err != nil {

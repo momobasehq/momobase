@@ -40,7 +40,7 @@ func NewEngine(repos *repository.UnitOfWork, runtime *provider.RuntimeManager) *
 func (e *Engine) SelectProvider(
 	ctx context.Context,
 	service string,
-	method string,
+	method domain.PaymentMethod,
 	country string,
 	currency string,
 ) (*SelectedProvider, error) {
@@ -69,7 +69,7 @@ type AvailablePaymentMethod struct {
 	// ServiceType is the service the method is available for.
 	ServiceType string `json:"service_type"`
 	// PaymentMethod is the value to send as a payment's payment_method.
-	PaymentMethod string `json:"payment_method"`
+	PaymentMethod domain.PaymentMethod `json:"payment_method"`
 }
 
 // AvailablePaymentMethods lists the methods that would route right now, ordered by
@@ -133,7 +133,7 @@ func (e *Engine) candidate(
 		return nil, false
 	}
 	rp, ok := e.runtime.Get(account.ID)
-	if !ok || !providers.Supports(rp.Capabilities, service) || e.runtime.CircuitState(account.ID) == domain.CircuitOpen {
+	if !ok || !providers.Supports(rp.Capabilities, service, route.PaymentMethod) || e.runtime.CircuitState(account.ID) == domain.CircuitOpen {
 		return nil, false
 	}
 	health, err := e.repos.ProviderHealth.ByAccount(ctx, account.ID)

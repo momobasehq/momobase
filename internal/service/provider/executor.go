@@ -31,7 +31,7 @@ func NewExecutor(runtime *RuntimeManager) *Executor {
 // bypasses the circuit breaker: a stream of malformed accounts must not take a
 // healthy provider out of rotation.
 func (e *Executor) ValidateRequest(ctx context.Context, id string, req *providers.PaymentRequest) error {
-	p, err := e.ready(id, "", req.Country)
+	p, err := e.ready(id, "", "", req.Country)
 	if err != nil {
 		return err
 	}
@@ -72,12 +72,12 @@ func (e *Executor) Collect(
 	id string,
 	req providers.PaymentRequest,
 ) (*providers.ProviderPaymentResponse, error) {
-	p, err := e.ready(id, domain.ServiceCollection, req.Country)
+	p, err := e.ready(id, domain.ServiceCollection, req.PaymentMethod, req.Country)
 	if err != nil {
 		return nil, err
 	}
 	return execute(ctx, e, p, "collect", func(c context.Context) (*providers.ProviderPaymentResponse, error) {
-		return p.Adapter.Collect(c, req)
+		return p.Adapter.(providers.Collector).Collect(c, req)
 	})
 }
 
@@ -87,12 +87,12 @@ func (e *Executor) Disburse(
 	id string,
 	req providers.PaymentRequest,
 ) (*providers.ProviderPaymentResponse, error) {
-	p, err := e.ready(id, domain.ServiceDisbursement, req.Country)
+	p, err := e.ready(id, domain.ServiceDisbursement, req.PaymentMethod, req.Country)
 	if err != nil {
 		return nil, err
 	}
 	return execute(ctx, e, p, "disburse", func(c context.Context) (*providers.ProviderPaymentResponse, error) {
-		return p.Adapter.Disburse(c, req)
+		return p.Adapter.(providers.Disburser).Disburse(c, req)
 	})
 }
 
@@ -103,37 +103,49 @@ func (e *Executor) QueryTransaction(
 	ref string,
 	country string,
 ) (*providers.ProviderTransactionStatus, error) {
-	p, err := e.ready(id, "", country)
+	p, err := e.ready(id, "", "", country)
 	if err != nil {
 		return nil, err
 	}
+	querier, ok := p.Adapter.(providers.TransactionQuerier)
+	if !ok {
+		return nil, providers.ErrOperationUnsupported
+	}
 	return execute(ctx, e, p, "status", func(c context.Context) (*providers.ProviderTransactionStatus, error) {
-		return p.Adapter.QueryTransaction(c, ref, country)
+		return querier.QueryTransaction(c, ref, country)
 	})
 }
 
 // QueryBalance retrieves a provider balance for its configured country.
 func (e *Executor) QueryBalance(ctx context.Context, id, country string) (*providers.ProviderBalance, error) {
-	p, err := e.ready(id, "", country)
+	p, err := e.ready(id, "", "", country)
 	if err != nil {
 		return nil, err
+	}
+	querier, ok := p.Adapter.(providers.BalanceQuerier)
+	if !ok {
+		return nil, providers.ErrOperationUnsupported
 	}
 	if country == "" {
 		country = p.Country
 	}
 	return execute(ctx, e, p, "balance", func(c context.Context) (*providers.ProviderBalance, error) {
-		return p.Adapter.QueryBalance(c, country)
+		return querier.QueryBalance(c, country)
 	})
 }
 
 // Health runs the health check for a loaded provider.
 func (e *Executor) Health(ctx context.Context, id string) error {
-	p, err := e.ready(id, "", "")
+	p, err := e.ready(id, "", "", "")
 	if err != nil {
 		return err
 	}
+	checker, ok := p.Adapter.(providers.HealthChecker)
+	if !ok {
+		return nil
+	}
 	_, err = execute(ctx, e, p, "health", func(c context.Context) (struct{}, error) {
-		return struct{}{}, p.Adapter.HealthCheck(c)
+		return struct{}{}, checker.HealthCheck(c)
 	})
 	return err
 }
@@ -145,23 +157,32 @@ func (e *Executor) VerifyWebhook(
 	payload []byte,
 	headers map[string]string,
 ) (*providers.ProviderWebhookEvent, error) {
-	p, err := e.ready(id, "", "")
+	p, err := e.ready(id, "", "", "")
 	if err != nil {
 		return nil, err
 	}
+	verifier, ok := p.Adapter.(providers.WebhookVerifier)
+	if !ok {
+		return nil, providers.ErrOperationUnsupported
+	}
 	c, cancel := context.WithTimeout(ctx, e.timeout)
 	defer cancel()
-	return p.Adapter.VerifyWebhook(c, payload, headers)
+	return verifier.VerifyWebhook(c, payload, headers)
 }
 
 // ready returns a loaded runtime that can serve the requested operation and country.
-func (e *Executor) ready(id, service, country string) (*Runtime, error) {
+func (e *Executor) ready(
+	id string,
+	service string,
+	method providers.PaymentMethod,
+	country string,
+) (*Runtime, error) {
 	p, ok := e.runtime.Get(id)
 	if !ok || p.Adapter == nil {
 		return nil, errors.New("provider not initialized")
 	}
-	if service != "" && !providers.Supports(p.Capabilities, service) {
-		return nil, fmt.Errorf("provider does not support %s", service)
+	if service != "" && !providers.Supports(p.Capabilities, service, method) {
+		return nil, fmt.Errorf("provider does not support %s/%s", service, method)
 	}
 	if country != "" && p.Country != country {
 		return nil, fmt.Errorf("provider does not support country %s", country)

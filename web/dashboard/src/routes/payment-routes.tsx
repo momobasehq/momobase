@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { toast } from "sonner";
 import {
 	AdminPermissions,
+	type PaymentMethod,
 	type PaymentRoute,
 	type ServiceType,
 } from "@momobase/sdk";
@@ -46,17 +47,15 @@ import { titleCase } from "@/lib/format";
 function CreateRouteDialog({
 	open,
 	onOpenChange,
-	methods,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	methods: string[];
 }) {
 	const { client } = useAuth();
 	const queryClient = useQueryClient();
 	const [form, setForm] = useState({
 		service_type: "collection" as ServiceType,
-		payment_method: "",
+		payment_method: "" as PaymentMethod | "",
 		provider_account_id: "",
 		priority: 1,
 		active: true,
@@ -66,9 +65,27 @@ function CreateRouteDialog({
 		queryKey: keys.providers.list({ page: 1, perPage: 100 }),
 		queryFn: () => client.providers.list({ page: 1, perPage: 100 }),
 	});
+	const runtimes = useQuery({
+		queryKey: keys.system.runtime({ page: 1, perPage: 100 }),
+		queryFn: () =>
+			client.system.runtimeProviders({ page: 1, perPage: 100 }),
+	});
+	const runtime = runtimes.data?.items.find(
+		(item) => item.provider_account_id === form.provider_account_id,
+	);
+	const methods =
+		runtime?.capabilities
+			.filter(
+				(capability) => capability.service_type === form.service_type,
+			)
+			.map((capability) => capability.payment_method) ?? [];
 
 	const create = useMutation({
-		mutationFn: () => client.routes.create(form),
+		mutationFn: () =>
+			client.routes.create({
+				...form,
+				payment_method: form.payment_method as PaymentMethod,
+			}),
 		onSuccess: async () => {
 			toast.success("Route created");
 			onOpenChange(false);
@@ -97,6 +114,7 @@ function CreateRouteDialog({
 									...form,
 									service_type:
 										(value as ServiceType) ?? "collection",
+									payment_method: "",
 								})
 							}
 						>
@@ -114,29 +132,6 @@ function CreateRouteDialog({
 						</Select>
 					</div>
 					<div className="flex flex-col gap-2">
-						<Label htmlFor="route-method">Payment method</Label>
-						{/* Free text, not a dropdown: payment methods are arbitrary strings that
-                only ever get compared against a route. The datalist suggests the ones
-                already in use without preventing a new rail from being named. */}
-						<Input
-							id="route-method"
-							list="known-payment-methods"
-							value={form.payment_method}
-							onChange={(event) =>
-								setForm({
-									...form,
-									payment_method: event.target.value,
-								})
-							}
-							placeholder="momo, bank_transfer, card…"
-						/>
-						<datalist id="known-payment-methods">
-							{methods.map((method) => (
-								<option key={method} value={method} />
-							))}
-						</datalist>
-					</div>
-					<div className="flex flex-col gap-2">
 						<Label htmlFor="route-account">Provider account</Label>
 						<Select
 							value={form.provider_account_id}
@@ -144,6 +139,7 @@ function CreateRouteDialog({
 								setForm({
 									...form,
 									provider_account_id: id ?? "",
+									payment_method: "",
 								})
 							}
 						>
@@ -157,12 +153,40 @@ function CreateRouteDialog({
 								/>
 							</SelectTrigger>
 							<SelectContent>
-								{(accounts.data?.items ?? []).map((account) => (
-									<SelectItem
-										key={account.id}
-										value={account.id}
-									>
-										{account.name} ({account.provider_code})
+								{(accounts.data?.items ?? [])
+									.filter((account) => account.active)
+									.map((account) => (
+										<SelectItem
+											key={account.id}
+											value={account.id}
+										>
+											{account.name} (
+											{account.provider_code})
+										</SelectItem>
+									))}
+							</SelectContent>
+						</Select>
+					</div>
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="route-method">Payment method</Label>
+						<Select
+							value={form.payment_method}
+							onValueChange={(paymentMethod) =>
+								setForm({
+									...form,
+									payment_method:
+										paymentMethod as PaymentMethod,
+								})
+							}
+							disabled={!form.provider_account_id}
+						>
+							<SelectTrigger id="route-method">
+								<SelectValue placeholder="Select a supported method" />
+							</SelectTrigger>
+							<SelectContent>
+								{methods.map((method) => (
+									<SelectItem key={method} value={method}>
+										{titleCase(method)}
 									</SelectItem>
 								))}
 							</SelectContent>
@@ -215,14 +239,6 @@ export function PaymentRoutes() {
 		client.routes.list(page),
 	);
 	const [creating, setCreating] = useState(false);
-
-	const methods = useMemo(
-		() =>
-			[
-				...new Set(paged.items.map((route) => route.payment_method)),
-			].sort(),
-		[paged.items],
-	);
 
 	const update = useMutation({
 		mutationFn: ({
@@ -338,11 +354,7 @@ export function PaymentRoutes() {
 					busy={paged.fetching}
 				/>
 			</CardContent>
-			<CreateRouteDialog
-				open={creating}
-				onOpenChange={setCreating}
-				methods={methods}
-			/>
+			<CreateRouteDialog open={creating} onOpenChange={setCreating} />
 		</Card>
 	);
 }

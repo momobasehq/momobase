@@ -32,7 +32,7 @@ type CreateAccountInput struct {
 	Country      string
 	Currency     string
 	Charges      *domain.ChargeSchedule
-	Config       map[string]any
+	Config       providers.ProviderConfig
 }
 
 // AccountSettings contains the routing location and future transaction charges.
@@ -206,7 +206,12 @@ func settingsUpdates(country, currency string, charges domain.ChargeSchedule) ma
 }
 
 // UpdateConfig validates and encrypts replacement provider configuration and reloads an active runtime.
-func (s *AdminService) UpdateConfig(ctx context.Context, actor *domain.AdminUser, id string, config map[string]any) error {
+func (s *AdminService) UpdateConfig(
+	ctx context.Context,
+	actor *domain.AdminUser,
+	id string,
+	config providers.ProviderConfig,
+) error {
 	account, err := s.repos.ProviderAccounts.ByID(ctx, id)
 	if err != nil {
 		return err
@@ -268,7 +273,7 @@ func (s *AdminService) Deactivate(ctx context.Context, actor *domain.AdminUser, 
 	return nil
 }
 
-func (s *AdminService) encode(config map[string]any) (string, string, error) {
+func (s *AdminService) encode(config providers.ProviderConfig) (string, string, error) {
 	plain, err := json.Marshal(config)
 	if err != nil {
 		return "", "", err
@@ -277,16 +282,16 @@ func (s *AdminService) encode(config map[string]any) (string, string, error) {
 	return cipher, platform.SHA256Hex(string(plain)), err
 }
 
-func cleanProviderConfig(config map[string]any) {
+func cleanProviderConfig(config providers.ProviderConfig) {
 	delete(config, "country")
 	delete(config, "supports_global")
 }
 
-func validateProviderConfig(config map[string]any) error {
+func validateProviderConfig(config providers.ProviderConfig) error {
 	if len(config) == 0 {
 		return errors.New("provider config is required")
 	}
-	if utils.String(config, "webhook_secret") == "" {
+	if providers.ConfigString(config, "webhook_secret") == "" {
 		return errors.New("webhook_secret is required")
 	}
 	return nil

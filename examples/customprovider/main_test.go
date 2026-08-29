@@ -53,13 +53,16 @@ func acmeServer(t *testing.T) (*httptest.Server, *map[string]any) {
 	return server, &received
 }
 
-func newTestProvider(t *testing.T, baseURL string) providers.PaymentProvider {
+func newTestProvider(t *testing.T, baseURL string) *acmeProvider {
 	t.Helper()
-	provider := newAcmeProvider(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	provider, ok := newAcmeProvider(slog.New(slog.NewTextHandler(io.Discard, nil))).(*acmeProvider)
+	if !ok {
+		t.Fatal("newAcmeProvider() did not return *acmeProvider")
+	}
 	config := providers.ProviderConfig{
 		"api_key":        "test-api-key",
-		"base_url":       baseURL,
 		"webhook_secret": webhookSecret,
+		"base_url":       baseURL,
 	}
 	if err := provider.Init(context.Background(), config); err != nil {
 		t.Fatalf("Init() error = %v", err)
@@ -101,7 +104,10 @@ func TestHealthCheckAuthenticates(t *testing.T) {
 		t.Fatalf("HealthCheck() error = %v", err)
 	}
 
-	unauthorized := newAcmeProvider(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	unauthorized, ok := newAcmeProvider(slog.New(slog.NewTextHandler(io.Discard, nil))).(*acmeProvider)
+	if !ok {
+		t.Fatal("newAcmeProvider() did not return *acmeProvider")
+	}
 	config := providers.ProviderConfig{"api_key": "wrong", "base_url": server.URL}
 	if err := unauthorized.Init(context.Background(), config); err != nil {
 		t.Fatalf("Init() error = %v", err)
@@ -214,7 +220,10 @@ func TestVerifyWebhook(t *testing.T) {
 		t.Error("VerifyWebhook() with invalid JSON = nil, want an error")
 	}
 
-	unsigned := newAcmeProvider(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	unsigned, ok := newAcmeProvider(slog.New(slog.NewTextHandler(io.Discard, nil))).(*acmeProvider)
+	if !ok {
+		t.Fatal("newAcmeProvider() did not return *acmeProvider")
+	}
 	if err = unsigned.Init(context.Background(), providers.ProviderConfig{"api_key": "k"}); err != nil {
 		t.Fatalf("Init() error = %v", err)
 	}
@@ -226,10 +235,7 @@ func TestVerifyWebhook(t *testing.T) {
 func TestValidateRequestNormalizesTheAccount(t *testing.T) {
 	server, _ := acmeServer(t)
 	provider := newTestProvider(t, server.URL)
-	validator, ok := provider.(providers.RequestValidator)
-	if !ok {
-		t.Fatal("the provider does not implement providers.RequestValidator")
-	}
+	var validator providers.RequestValidator = provider
 	for _, account := range []string{"0770000000", "+256770000000", "256770000000", " 077 000 0000 ", "770000000"} {
 		req := providers.PaymentRequest{Country: "UG", Account: account}
 		if err := validator.ValidateRequest(context.Background(), &req); err != nil {

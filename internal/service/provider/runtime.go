@@ -13,7 +13,6 @@ import (
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/repository"
-	"github.com/momobasehq/momobase/internal/utils"
 	"github.com/momobasehq/momobase/providers"
 )
 
@@ -180,7 +179,7 @@ func (m *RuntimeManager) Reload(ctx context.Context, id string) error {
 		ConfigVersion: account.ConfigVersion,
 		Adapter:       adapter,
 		Capabilities:  caps,
-		WebhookSecret: utils.String(plain, "webhook_secret"),
+		WebhookSecret: providers.ConfigString(plain, "webhook_secret"),
 		breaker:       &circuit{},
 	}
 	m.mu.Lock()
@@ -215,13 +214,51 @@ func (m *RuntimeManager) build(
 	if err = adapter.Init(ctx, providerInitConfig(plain, environment)); err != nil {
 		return nil, err
 	}
-	check, cancel := context.WithTimeout(ctx, 45*time.Second)
-	err = adapter.HealthCheck(check)
-	cancel()
-	if err != nil {
+	if err = validateCapabilities(adapter); err != nil {
 		return nil, err
 	}
+	if checker, ok := adapter.(providers.HealthChecker); ok {
+		check, cancel := context.WithTimeout(ctx, 45*time.Second)
+		err = checker.HealthCheck(check)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+	}
 	return adapter, nil
+}
+
+func validateCapabilities(adapter providers.PaymentProvider) error {
+	caps := adapter.Capabilities()
+	if len(caps) == 0 {
+		return nil
+	}
+	if _, ok := adapter.(providers.TransactionQuerier); !ok {
+		return errors.New("provider must implement TransactionQuerier")
+	}
+	seen := map[providers.Capability]bool{}
+	for _, capability := range caps {
+		if !providers.ValidPaymentMethod(capability.PaymentMethod) {
+			return fmt.Errorf("provider declares unsupported payment method %q", capability.PaymentMethod)
+		}
+		switch capability.ServiceType {
+		case domain.ServiceCollection:
+			if _, ok := adapter.(providers.Collector); !ok {
+				return errors.New("provider declares collection without implementing Collector")
+			}
+		case domain.ServiceDisbursement:
+			if _, ok := adapter.(providers.Disburser); !ok {
+				return errors.New("provider declares disbursement without implementing Disburser")
+			}
+		default:
+			return fmt.Errorf("provider declares unsupported service %q", capability.ServiceType)
+		}
+		if seen[capability] {
+			return fmt.Errorf("provider declares duplicate capability %s/%s", capability.ServiceType, capability.PaymentMethod)
+		}
+		seen[capability] = true
+	}
+	return nil
 }
 
 func providerInitConfig(plain providers.ProviderConfig, environment string) providers.ProviderConfig {

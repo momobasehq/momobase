@@ -3,12 +3,40 @@ package routing_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/service/routing"
 	"github.com/momobasehq/momobase/internal/testsupport"
+	"github.com/momobasehq/momobase/providers"
 )
+
+func TestRouteCreationRequiresProviderCapability(t *testing.T) {
+	s := testsupport.New(t)
+	account := s.Provider(t, testsupport.DummyConfig(nil))
+	runtime, ok := s.Runtime.Get(account.ID)
+	if !ok {
+		t.Fatal("active provider runtime is missing")
+	}
+	runtime.Capabilities = []providers.Capability{{
+		ServiceType:   domain.ServiceCollection,
+		PaymentMethod: providers.PaymentMethodMomo,
+	}}
+
+	_, err := s.Routes.Create(
+		context.Background(),
+		s.Actor,
+		domain.ServiceCollection,
+		providers.PaymentMethodCard,
+		account.ID,
+		1,
+		true,
+	)
+	if err == nil || !strings.Contains(err.Error(), "does not support collection/card") {
+		t.Fatalf("Create() error = %v, want unsupported capability", err)
+	}
+}
 
 func TestProviderLocationRouting(t *testing.T) {
 	s := testsupport.New(t)

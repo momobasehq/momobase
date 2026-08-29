@@ -28,9 +28,8 @@ func (p *Party) Normalize() {
 
 // CreatePayment contains the common fields used to initiate a collection or disbursement.
 type CreatePayment struct {
-	// PaymentMethod identifies the requested payment rail. It is free-form and must
-	// match an active payment route.
-	PaymentMethod string `json:"payment_method" validate:"required,identifier"`
+	// PaymentMethod identifies the requested payment rail.
+	PaymentMethod domain.PaymentMethod `json:"payment_method" enums:"momo,card,bank_transfer,wallet" validate:"required,oneof=momo card bank_transfer wallet"`
 	// Amount is the payment amount in the currency's minor unit.
 	Amount int64 `json:"amount" validate:"gt=0"`
 	// Currency is the three-letter currency code.
@@ -77,7 +76,7 @@ func (r *CreatePayment) Normalize() {
 		r.Country = country
 	}
 	r.Currency = strings.ToUpper(strings.TrimSpace(r.Currency))
-	r.PaymentMethod = strings.ToLower(strings.TrimSpace(r.PaymentMethod))
+	r.PaymentMethod = domain.PaymentMethod(strings.ToLower(strings.TrimSpace(string(r.PaymentMethod))))
 	r.Account = strings.TrimSpace(r.Account)
 	r.Scheme = strings.ToLower(strings.TrimSpace(r.Scheme))
 	r.Reference = strings.TrimSpace(r.Reference)

@@ -19,19 +19,22 @@ const credential = "signing-credential-0123456789"
 
 func testLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
-// newProvider builds an initialized provider, merging overrides over the minimum
-// viable configuration.
-func newProvider(t *testing.T, overrides providers.ProviderConfig) *Provider {
-	t.Helper()
+func testConfig(options map[string]string) providers.ProviderConfig {
 	config := providers.ProviderConfig{"webhook_secret": credential}
-	for key, value := range overrides {
+	for key, value := range options {
 		config[key] = value
 	}
+	return config
+}
+
+// newProvider builds an initialized provider from the supplied options.
+func newProvider(t *testing.T, options map[string]string) *Provider {
+	t.Helper()
 	provider, ok := New(testLogger()).(*Provider)
 	if !ok {
 		t.Fatal("New() did not return *Provider")
 	}
-	if err := provider.Init(context.Background(), config); err != nil {
+	if err := provider.Init(context.Background(), testConfig(options)); err != nil {
 		t.Fatalf("Init() error = %v", err)
 	}
 	return provider
@@ -63,7 +66,7 @@ func TestParseConfigDefaultsAndOverrides(t *testing.T) {
 		t.Errorf("Services = %v, want both services", provider.cfg.Services)
 	}
 
-	provider = newProvider(t, providers.ProviderConfig{
+	provider = newProvider(t, map[string]string{
 		"outcome":      " FAIL ",
 		"currency":     "kes",
 		"balance":      "250",
@@ -90,10 +93,10 @@ func TestParseConfigDefaultsAndOverrides(t *testing.T) {
 func TestParseConfigRejectsInvalidValues(t *testing.T) {
 	tests := map[string]providers.ProviderConfig{
 		"missing credential": {},
-		"unknown outcome":    {"webhook_secret": credential, "outcome": "explode"},
-		"unknown service":    {"webhook_secret": credential, "services": "collection,cards"},
-		"negative settle":    {"webhook_secret": credential, "settle_after": "-1"},
-		"negative latency":   {"webhook_secret": credential, "latency_ms": "-5"},
+		"unknown outcome":    testConfig(map[string]string{"outcome": "explode"}),
+		"unknown service":    testConfig(map[string]string{"services": "collection,cards"}),
+		"negative settle":    testConfig(map[string]string{"settle_after": "-1"}),
+		"negative latency":   testConfig(map[string]string{"latency_ms": "-5"}),
 	}
 	for name, config := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -117,17 +120,17 @@ func TestInitFailureAndCapabilities(t *testing.T) {
 	}
 
 	provider = &Provider{log: testLogger(), records: map[string]*record{}}
-	err := provider.Init(context.Background(), providers.ProviderConfig{"webhook_secret": credential, "fail_init": "true"})
+	err := provider.Init(context.Background(), testConfig(map[string]string{"fail_init": "true"}))
 	if err == nil {
 		t.Fatal("Init(fail_init) error = nil, want an error")
 	}
 
-	provider = newProvider(t, providers.ProviderConfig{"services": "disbursement"})
+	provider = newProvider(t, map[string]string{"services": "disbursement"})
 	caps := provider.Capabilities()
-	if len(caps) != 1 || caps[0].ServiceType != domain.ServiceDisbursement {
-		t.Fatalf("Capabilities() = %v, want one disbursement capability", caps)
+	if len(caps) != len(providers.PaymentMethods()) || caps[0].ServiceType != domain.ServiceDisbursement {
+		t.Fatalf("Capabilities() = %v, want disbursement capabilities", caps)
 	}
-	if !providers.Supports(caps, domain.ServiceDisbursement) || providers.Supports(caps, domain.ServiceCollection) {
+	if !providers.SupportsService(caps, domain.ServiceDisbursement) || providers.SupportsService(caps, domain.ServiceCollection) {
 		t.Error("Supports() did not report a disbursement-only account")
 	}
 	if _, err = provider.Collect(context.Background(), request("txn_1", 100)); err == nil {
@@ -139,7 +142,7 @@ func TestHealthCheckReportsConfiguredFailure(t *testing.T) {
 	if err := newProvider(t, nil).HealthCheck(context.Background()); err != nil {
 		t.Fatalf("HealthCheck() error = %v", err)
 	}
-	err := newProvider(t, providers.ProviderConfig{"fail_health": "true"}).HealthCheck(context.Background())
+	err := newProvider(t, map[string]string{"fail_health": "true"}).HealthCheck(context.Background())
 	if err == nil {
 		t.Fatal("HealthCheck(fail_health) error = nil, want an error")
 	}
@@ -157,7 +160,7 @@ func TestPaymentOutcomes(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.outcome, func(t *testing.T) {
-			provider := newProvider(t, providers.ProviderConfig{"outcome": test.outcome})
+			provider := newProvider(t, map[string]string{"outcome": test.outcome})
 			for _, service := range []string{domain.ServiceCollection, domain.ServiceDisbursement} {
 				result, err := provider.pay(context.Background(), service, request("txn_"+service, 500))
 				if err != nil {
@@ -176,7 +179,7 @@ func TestPaymentOutcomes(t *testing.T) {
 		})
 	}
 
-	provider := newProvider(t, providers.ProviderConfig{"outcome": OutcomeError})
+	provider := newProvider(t, map[string]string{"outcome": OutcomeError})
 	if _, err := provider.Collect(context.Background(), request("txn_err", 100)); err == nil {
 		t.Fatal("Collect(outcome=error) error = nil, want an error")
 	}
@@ -187,7 +190,7 @@ func TestPaymentOutcomes(t *testing.T) {
 
 func TestQueryTransactionSettlesAfterConfiguredQueries(t *testing.T) {
 	ctx := context.Background()
-	provider := newProvider(t, providers.ProviderConfig{"settle_after": "2"})
+	provider := newProvider(t, map[string]string{"settle_after": "2"})
 
 	result, err := provider.Collect(ctx, request("txn_settle", 700))
 	if err != nil {
@@ -215,7 +218,7 @@ func TestQueryTransactionSettlesAfterConfiguredQueries(t *testing.T) {
 
 func TestBalanceTracksSettledPayments(t *testing.T) {
 	ctx := context.Background()
-	provider := newProvider(t, providers.ProviderConfig{"balance": "1000"})
+	provider := newProvider(t, map[string]string{"balance": "1000"})
 
 	balance, err := provider.QueryBalance(ctx, "UG")
 	if err != nil {
@@ -239,7 +242,7 @@ func TestBalanceTracksSettledPayments(t *testing.T) {
 	}
 
 	// A disbursement larger than the balance clamps at zero rather than going negative.
-	provider = newProvider(t, providers.ProviderConfig{"balance": "50"})
+	provider = newProvider(t, map[string]string{"balance": "50"})
 	if _, err = provider.Disburse(ctx, request("txn_big", 500)); err != nil {
 		t.Fatalf("Disburse() error = %v", err)
 	}
@@ -263,7 +266,7 @@ func signedWebhook(t *testing.T, body map[string]any) ([]byte, map[string]string
 
 func TestVerifyWebhookAuthenticatesAndAppliesStatus(t *testing.T) {
 	ctx := context.Background()
-	provider := newProvider(t, providers.ProviderConfig{"settle_after": "5"})
+	provider := newProvider(t, map[string]string{"settle_after": "5"})
 	result, err := provider.Collect(ctx, request("txn_hook", 400))
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
@@ -349,7 +352,7 @@ func TestSignatureHeaderIsCaseInsensitive(t *testing.T) {
 }
 
 func TestLatencyRespectsCancellation(t *testing.T) {
-	provider := newProvider(t, providers.ProviderConfig{"latency_ms": "2000"})
+	provider := newProvider(t, map[string]string{"latency_ms": "2000"})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -364,7 +367,7 @@ func TestLatencyRespectsCancellation(t *testing.T) {
 	}
 
 	// A short latency still completes against a live context.
-	provider = newProvider(t, providers.ProviderConfig{"latency_ms": "1"})
+	provider = newProvider(t, map[string]string{"latency_ms": "1"})
 	timed, stop := context.WithTimeout(context.Background(), 5*time.Second)
 	defer stop()
 	if _, err := provider.Collect(timed, request("txn_ok", 100)); err != nil {
@@ -378,16 +381,16 @@ func TestLatencyRespectsCancellation(t *testing.T) {
 func TestErrorsSurviveRedaction(t *testing.T) {
 	ctx := context.Background()
 	uninitialized := &Provider{log: testLogger(), records: map[string]*record{}}
-	limited := newProvider(t, providers.ProviderConfig{"services": "collection"})
-	failing := newProvider(t, providers.ProviderConfig{"outcome": OutcomeError})
+	limited := newProvider(t, map[string]string{"services": "collection"})
+	failing := newProvider(t, map[string]string{"outcome": OutcomeError})
 	healthy := newProvider(t, nil)
 	payload, _ := signedWebhook(t, map[string]any{"reference": "dummy_1"})
 
 	_, missingCredential := parseConfig(providers.ProviderConfig{})
-	_, badOutcome := parseConfig(providers.ProviderConfig{"webhook_secret": credential, "outcome": "explode"})
-	_, badService := parseConfig(providers.ProviderConfig{"webhook_secret": credential, "services": "cards"})
-	_, negative := parseConfig(providers.ProviderConfig{"webhook_secret": credential, "settle_after": "-1"})
-	initFailed := uninitialized.Init(ctx, providers.ProviderConfig{"webhook_secret": credential, "fail_init": "true"})
+	_, badOutcome := parseConfig(testConfig(map[string]string{"outcome": "explode"}))
+	_, badService := parseConfig(testConfig(map[string]string{"services": "cards"}))
+	_, negative := parseConfig(testConfig(map[string]string{"settle_after": "-1"}))
+	initFailed := uninitialized.Init(ctx, testConfig(map[string]string{"fail_init": "true"}))
 	_, unsupported := limited.Disburse(ctx, request("txn_1", 100))
 	_, transport := failing.Collect(ctx, request("txn_2", 100))
 	_, unknownReference := healthy.QueryTransaction(ctx, "dummy_absent", "UG")
@@ -399,7 +402,7 @@ func TestErrorsSurviveRedaction(t *testing.T) {
 		return err
 	}()
 	_, notInitialized := uninitialized.QueryBalance(ctx, "UG")
-	unhealthy := newProvider(t, providers.ProviderConfig{"fail_health": "true"}).HealthCheck(ctx)
+	unhealthy := newProvider(t, map[string]string{"fail_health": "true"}).HealthCheck(ctx)
 
 	errs := map[string]error{
 		"missing credential": missingCredential,
@@ -430,7 +433,7 @@ func TestErrorsSurviveRedaction(t *testing.T) {
 
 func TestConcurrentUseIsRaceFree(t *testing.T) {
 	ctx := context.Background()
-	provider := newProvider(t, providers.ProviderConfig{"settle_after": "1"})
+	provider := newProvider(t, map[string]string{"settle_after": "1"})
 
 	var wait sync.WaitGroup
 	for i := range 16 {

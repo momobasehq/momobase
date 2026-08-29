@@ -28,7 +28,7 @@ type CreatePaymentResponse struct {
 	// ServiceType identifies whether the transaction is a collection or disbursement.
 	ServiceType string `json:"service_type"`
 	// PaymentMethod identifies the payment rail used for the transaction.
-	PaymentMethod string `json:"payment_method"`
+	PaymentMethod domain.PaymentMethod `json:"payment_method"`
 	// Status is the current normalized transaction status.
 	Status string `json:"status"`
 	// SelectedProvider is the provider code selected by the route engine.

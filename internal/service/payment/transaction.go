@@ -9,29 +9,29 @@ import (
 // AppTransaction is the app-facing transaction representation. ProviderFee is an
 // internal platform cost and is deliberately absent.
 type AppTransaction struct {
-	ID                        string     `json:"id"`
-	AppID                     string     `json:"app_id"`
-	ServiceType               string     `json:"service_type"`
-	PaymentMethod             string     `json:"payment_method"`
-	Amount                    int64      `json:"amount"`
-	Currency                  string     `json:"currency"`
-	Country                   string     `json:"country"`
-	Reference                 string     `json:"reference"`
-	IdempotencyKey            string     `json:"idempotency_key"`
-	Status                    string     `json:"status"`
-	SelectedRouteID           string     `json:"selected_route_id"`
-	SelectedProviderAccountID string     `json:"selected_provider_account_id"`
-	ProviderReference         string     `json:"provider_reference"`
-	CustomerAccount           string     `json:"customer_account"`
-	CustomerEmail             string     `json:"customer_email"`
-	CustomerName              string     `json:"customer_name"`
-	Description               string     `json:"description"`
-	PlatformFee               int64      `json:"platform_fee"`
-	ReconciliationAttempts    int        `json:"reconciliation_attempts"`
-	LastReconciledAt          *time.Time `json:"last_reconciled_at"`
-	NextReconcileAt           *time.Time `json:"next_reconcile_at"`
-	CreatedAt                 time.Time  `json:"created_at"`
-	UpdatedAt                 time.Time  `json:"updated_at"`
+	ID                        string               `json:"id"`
+	AppID                     string               `json:"app_id"`
+	ServiceType               string               `json:"service_type"`
+	PaymentMethod             domain.PaymentMethod `json:"payment_method"`
+	Amount                    int64                `json:"amount"`
+	Currency                  string               `json:"currency"`
+	Country                   string               `json:"country"`
+	Reference                 string               `json:"reference"`
+	IdempotencyKey            string               `json:"idempotency_key"`
+	Status                    string               `json:"status"`
+	SelectedRouteID           string               `json:"selected_route_id"`
+	SelectedProviderAccountID string               `json:"selected_provider_account_id"`
+	ProviderReference         string               `json:"provider_reference"`
+	CustomerAccount           string               `json:"customer_account"`
+	CustomerEmail             string               `json:"customer_email"`
+	CustomerName              string               `json:"customer_name"`
+	Description               string               `json:"description"`
+	PlatformFee               int64                `json:"platform_fee"`
+	ReconciliationAttempts    int                  `json:"reconciliation_attempts"`
+	LastReconciledAt          *time.Time           `json:"last_reconciled_at"`
+	NextReconcileAt           *time.Time           `json:"next_reconcile_at"`
+	CreatedAt                 time.Time            `json:"created_at"`
+	UpdatedAt                 time.Time            `json:"updated_at"`
 }
 
 // PublicTransaction removes internal provider pricing from a persisted transaction.

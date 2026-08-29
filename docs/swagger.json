@@ -3537,6 +3537,21 @@
                 }
             }
         },
+        "domain.PaymentMethod": {
+            "type": "string",
+            "enum": [
+                "momo",
+                "card",
+                "bank_transfer",
+                "wallet"
+            ],
+            "x-enum-varnames": [
+                "PaymentMethodMomo",
+                "PaymentMethodCard",
+                "PaymentMethodBankTransfer",
+                "PaymentMethodWallet"
+            ]
+        },
         "dto.ChangeAdminStatusRequest": {
             "type": "object",
             "required": [
@@ -3730,8 +3745,18 @@
                     "additionalProperties": {}
                 },
                 "payment_method": {
-                    "description": "PaymentMethod identifies the requested payment rail. It is free-form and must\nmatch an active payment route.",
-                    "type": "string"
+                    "description": "PaymentMethod identifies the requested payment rail.",
+                    "enum": [
+                        "momo",
+                        "card",
+                        "bank_transfer",
+                        "wallet"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.PaymentMethod"
+                        }
+                    ]
                 },
                 "recipient": {
                     "description": "Recipient optionally identifies the disbursement recipient.",
@@ -3766,8 +3791,12 @@
                     "$ref": "#/definitions/domain.ChargeSchedule"
                 },
                 "config": {
-                    "description": "Config is the provider's own settings and must carry a webhook_secret. It is\nencrypted before it is stored and is never returned.",
-                    "type": "object"
+                    "description": "Config is the provider-owned flat object. It must carry a webhook_secret and\nis encrypted before it is stored and is never returned.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/providers.ProviderConfig"
+                        }
+                    ]
                 },
                 "country": {
                     "type": "string",
@@ -3810,7 +3839,17 @@
                     "example": true
                 },
                 "payment_method": {
-                    "type": "string",
+                    "enum": [
+                        "momo",
+                        "card",
+                        "bank_transfer",
+                        "wallet"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.PaymentMethod"
+                        }
+                    ],
                     "example": "momo"
                 },
                 "priority": {
@@ -3912,7 +3951,7 @@
             ],
             "properties": {
                 "config": {
-                    "type": "object"
+                    "$ref": "#/definitions/providers.ProviderConfig"
                 }
             }
         },
@@ -3961,6 +4000,10 @@
                     "type": "string"
                 }
             }
+        },
+        "providers.ProviderConfig": {
+            "type": "object",
+            "additionalProperties": {}
         }
     },
     "securityDefinitions": {

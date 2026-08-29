@@ -79,9 +79,9 @@ func (s *HealthService) save(ctx context.Context, id string, latency time.Durati
 		}
 	}
 	if rp, ok := s.runtime.Get(id); ok {
-		snap.CollectionsAvailable = providers.Supports(rp.Capabilities, domain.ServiceCollection)
-		snap.DisbursementsAvailable = providers.Supports(rp.Capabilities, domain.ServiceDisbursement)
-		snap.BalanceQueryAvailable = snap.CollectionsAvailable || snap.DisbursementsAvailable
+		snap.CollectionsAvailable = providers.SupportsService(rp.Capabilities, domain.ServiceCollection)
+		snap.DisbursementsAvailable = providers.SupportsService(rp.Capabilities, domain.ServiceDisbursement)
+		_, snap.BalanceQueryAvailable = rp.Adapter.(providers.BalanceQuerier)
 	}
 	return s.repos.ProviderHealth.Save(ctx, &snap)
 }

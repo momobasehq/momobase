@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -94,6 +95,13 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 	// One unit of work over the open handle: every service reaches the database only
 	// through the repositories it hands out, and Within is the sole transaction boundary.
 	repos := repository.New(db)
+	unsupportedMethods, err := repos.PaymentRoutes.UnsupportedMethods(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if len(unsupportedMethods) > 0 {
+		return nil, fmt.Errorf("payment routes use unsupported methods: %s", strings.Join(unsupportedMethods, ", "))
+	}
 
 	runtime := provider.NewRuntimeManager(repos, registry, enc, log)
 
@@ -123,7 +131,7 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 	)
 	apps := identity.NewAppService(repos, appAuth, audit)
 	providerAdmin := provider.NewAdminService(repos, audit, enc, registry, runtime)
-	routeAdmin := routing.NewAdminService(repos, audit)
+	routeAdmin := routing.NewAdminService(repos, audit, runtime)
 	routeEngine := routing.NewEngine(repos, runtime)
 	payments := payment.NewOrchestrator(
 		repos,
@@ -266,7 +274,7 @@ func (a *App) Serve(ctx context.Context) error {
 		if serveCtx.Err() != nil {
 			return serveCtx.Err()
 		}
-		a.Logger.Error("load active providers", slog.String("error", err.Error()))
+		return fmt.Errorf("load active providers: %w", err)
 	}
 	if serveCtx.Err() != nil {
 		return serveCtx.Err()

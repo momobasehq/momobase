@@ -275,7 +275,8 @@ func TestIdempotencyIsDecidedAfterNormalizationAndBeforeTheProvider(t *testing.T
 		app, _, _ := s.App(t)
 
 		spelled := testsupport.PaymentRequest("ORDER-IDEM", " ug ", "0770000000")
-		spelled.Currency, spelled.PaymentMethod = " ugx ", strings.ToUpper(testsupport.Method)
+		spelled.Currency = " ugx "
+		spelled.PaymentMethod = domain.PaymentMethod(strings.ToUpper(string(testsupport.Method)))
 		first := testsupport.Must(s.Payments.Create(
 			context.Background(), app.ID, domain.ServiceCollection, "idem-spelling", spelled,
 		))
