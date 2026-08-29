@@ -21,17 +21,17 @@ func TestGuardValidatedRequest(t *testing.T) {
 
 func TestProviderInitConfigAddsAuthoritativeEnvironment(t *testing.T) {
 	plain := providers.ProviderConfig{
-		"environment": "sandbox",
 		"api_key":     "secret",
+		"environment": "sandbox",
 	}
 	config := providerInitConfig(plain, "production")
-	if got := config["environment"]; got != "production" {
+	if got := providers.ConfigString(config, "environment"); got != "production" {
 		t.Errorf("environment = %v, want production", got)
 	}
-	if got := config["api_key"]; got != "secret" {
-		t.Errorf("api_key = %v, want original value", got)
+	if got := providers.ConfigString(config, "api_key"); got != "secret" {
+		t.Errorf("primary = %v, want original value", got)
 	}
-	if got := plain["environment"]; got != "sandbox" {
+	if got := providers.ConfigString(plain, "environment"); got != "sandbox" {
 		t.Errorf("original environment = %v, want unchanged sandbox", got)
 	}
 }

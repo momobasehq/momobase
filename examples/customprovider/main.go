@@ -52,13 +52,12 @@ func (p *acmeProvider) Init(_ context.Context, cfg providers.ProviderConfig) err
 	return nil
 }
 
-// Capabilities reports the services this configuration can perform. Momobase only
-// routes a payment to a provider that reports a capability for its service; which
-// rails reach this account is decided by the payment routes created for it.
+// Capabilities reports the service and payment-method pairs this configuration
+// can perform. Momobase rejects routes outside this list.
 func (p *acmeProvider) Capabilities() []providers.Capability {
 	return []providers.Capability{
-		{ServiceType: providers.ServiceCollection},
-		{ServiceType: providers.ServiceDisbursement},
+		{ServiceType: providers.ServiceCollection, PaymentMethod: providers.PaymentMethodMomo},
+		{ServiceType: providers.ServiceDisbursement, PaymentMethod: providers.PaymentMethodMomo},
 	}
 }
 

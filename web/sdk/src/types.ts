@@ -1,6 +1,11 @@
-/** A payment rail, matched against the payment routes an operator created. It is
- * free-form: "momo" is a convention, not the only value a server accepts. */
-export type PaymentMethod = string;
+/** Payment rails accepted by Momobase. */
+export const PaymentMethods = [
+	"momo",
+	"card",
+	"bank_transfer",
+	"wallet",
+] as const;
+export type PaymentMethod = (typeof PaymentMethods)[number];
 export type ServiceType = "collection" | "disbursement";
 export type TransactionStatus =
 	| "pending"
@@ -232,6 +237,10 @@ export interface ProviderAccount {
 	created_at: string;
 	updated_at: string;
 }
+export interface ProviderCapability {
+	service_type: ServiceType;
+	payment_method: PaymentMethod;
+}
 /** Provider codes registered in the running server, including custom providers. */
 export interface ProviderRegistry {
 	providers: string[];
@@ -285,7 +294,7 @@ export interface RuntimeProvider {
 	config_version: number;
 	active: boolean;
 	initialized: boolean;
-	capabilities: unknown[];
+	capabilities: ProviderCapability[];
 	country: string;
 	currency: string;
 	health?: ProviderHealthSnapshot;

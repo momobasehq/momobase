@@ -239,15 +239,16 @@ function CreateAccountDialog({
 						</FieldLabel>
 						<Textarea
 							id="provider-config"
-							rows={6}
+							rows={9}
 							className="font-mono"
 							value={form.config}
-							onChange={(e) =>
-								setForm({ ...form, config: e.target.value })
+							onChange={(event) =>
+								setForm({ ...form, config: event.target.value })
 							}
 						/>
 						<FieldDescription>
-							Encrypted at rest. Must include a long random{" "}
+							One flat provider-owned object, encrypted at rest.
+							Must include a long random{" "}
 							<code>webhook_secret</code>.
 						</FieldDescription>
 					</Field>
@@ -300,7 +301,6 @@ function ConfigureDialog({
 	});
 	const [config, setConfig] = useState("");
 	const [loaded, setLoaded] = useState<string>();
-
 	// Seed the fields the first time a given account opens the dialog. The stored config
 	// is encrypted and never returned, so the box starts empty: submitting replaces it.
 	if (account && loaded !== account.id) {
@@ -443,18 +443,18 @@ function ConfigureDialog({
 								</FieldLabel>
 								<Textarea
 									id="edit-config"
-									rows={6}
+									rows={9}
 									className="font-mono"
 									value={config}
 									onChange={(event) =>
 										setConfig(event.target.value)
 									}
 									placeholder={
-										'{\n  "webhook_secret": "…"\n}'
+										'{\n  "api_user": "…",\n  "api_key": "…",\n  "webhook_secret": "…"\n}'
 									}
 								/>
 								<FieldDescription>
-									The stored configuration is encrypted and
+									The stored flat object is encrypted and
 									never returned. Saving replaces it outright
 									and reloads the adapter.
 								</FieldDescription>

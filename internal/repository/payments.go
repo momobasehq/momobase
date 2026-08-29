@@ -133,6 +133,18 @@ func (r ProviderHealthRepo) Page(
 // PaymentRouteRepo reads and writes the routing table.
 type PaymentRouteRepo struct{ base[domain.PaymentRoute] }
 
+// UnsupportedMethods returns distinct persisted route methods outside Momobase's enum.
+func (r PaymentRouteRepo) UnsupportedMethods(ctx context.Context) ([]string, error) {
+	methods := []string{}
+	err := r.session(ctx).
+		Model(&domain.PaymentRoute{}).
+		Distinct("payment_method").
+		Where("payment_method NOT IN ?", domain.PaymentMethods()).
+		Order("payment_method asc").
+		Pluck("payment_method", &methods).Error
+	return methods, err
+}
+
 // Create stores a new route.
 func (r PaymentRouteRepo) Create(ctx context.Context, route *domain.PaymentRoute) error {
 	return r.create(ctx, route)
@@ -157,7 +169,11 @@ func (r PaymentRouteRepo) Candidates(ctx context.Context, service string) ([]dom
 // For returns the active routes that serve one service and payment method, in
 // selection order: lowest priority first, then oldest, so the preferred route is the
 // first the engine tries and the rest are its fallbacks.
-func (r PaymentRouteRepo) For(ctx context.Context, service, method string) ([]domain.PaymentRoute, error) {
+func (r PaymentRouteRepo) For(
+	ctx context.Context,
+	service string,
+	method domain.PaymentMethod,
+) ([]domain.PaymentRoute, error) {
 	return r.find(ctx, "priority asc, created_at asc",
 		"active = ? AND service_type = ? AND payment_method = ?", true, service, method)
 }

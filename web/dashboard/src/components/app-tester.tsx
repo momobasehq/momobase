@@ -3,6 +3,7 @@ import { KeyRound, Loader2, Search, Send } from "lucide-react";
 import {
 	MomobaseClient,
 	type AvailablePaymentMethod,
+	type PaymentMethod,
 	type ServiceType,
 } from "@momobase/sdk";
 
@@ -16,6 +17,13 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 /** A stable-ish reference, so repeated tests do not collide on the app's unique index. */
@@ -51,7 +59,7 @@ export function AppTester({ clientId, clientSecret }: AppTesterProps) {
 	const [error, setError] = useState<string>();
 	const [lookup, setLookup] = useState({ id: "", reference: "" });
 	const [form, setForm] = useState({
-		payment_method: "",
+		payment_method: "" as PaymentMethod | "",
 		scheme: "",
 		account: "256770000000",
 		amount: 5000,
@@ -108,7 +116,7 @@ export function AppTester({ clientId, clientSecret }: AppTesterProps) {
 	async function pay(service: ServiceType) {
 		const own = reference(service === "collection" ? "COLL" : "DISB");
 		const payload = {
-			payment_method: form.payment_method,
+			payment_method: form.payment_method as PaymentMethod,
 			scheme: form.scheme || undefined,
 			account: form.account,
 			amount: Number(form.amount),
@@ -148,6 +156,12 @@ export function AppTester({ clientId, clientSecret }: AppTesterProps) {
 	}
 
 	const ready = Boolean(client);
+	const supports = (service: ServiceType) =>
+		methods.some(
+			(method) =>
+				method.service_type === service &&
+				method.payment_method === form.payment_method,
+		);
 
 	return (
 		<Card>
@@ -265,32 +279,37 @@ export function AppTester({ clientId, clientSecret }: AppTesterProps) {
 								<Label htmlFor="tester-method">
 									Payment method
 								</Label>
-								{/* Free text with suggestions from the discovery call: methods are
-                    arbitrary strings matched only against routes. */}
-								<Input
-									id="tester-method"
-									list="tester-methods"
+								<Select
 									value={form.payment_method}
-									onChange={(event) =>
+									onValueChange={(paymentMethod) =>
 										setForm({
 											...form,
-											payment_method: event.target.value,
+											payment_method:
+												paymentMethod as PaymentMethod,
 										})
 									}
-									placeholder="List payment methods first, or type one"
-								/>
-								<datalist id="tester-methods">
-									{[
-										...new Set(
-											methods.map(
-												(method) =>
-													method.payment_method,
+								>
+									<SelectTrigger id="tester-method">
+										<SelectValue placeholder="List payment methods first" />
+									</SelectTrigger>
+									<SelectContent>
+										{[
+											...new Set(
+												methods.map(
+													(method) =>
+														method.payment_method,
+												),
 											),
-										),
-									].map((method) => (
-										<option key={method} value={method} />
-									))}
-								</datalist>
+										].map((method) => (
+											<SelectItem
+												key={method}
+												value={method}
+											>
+												{method}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
 							<div className="flex flex-col gap-2">
 								<Label htmlFor="tester-scheme">Scheme</Label>
@@ -377,7 +396,7 @@ export function AppTester({ clientId, clientSecret }: AppTesterProps) {
 								disabled={
 									!ready ||
 									Boolean(busy) ||
-									!form.payment_method
+									!supports("collection")
 								}
 								onClick={() => void pay("collection")}
 							>
@@ -393,7 +412,7 @@ export function AppTester({ clientId, clientSecret }: AppTesterProps) {
 								disabled={
 									!ready ||
 									Boolean(busy) ||
-									!form.payment_method
+									!supports("disbursement")
 								}
 								onClick={() => void pay("disbursement")}
 							>

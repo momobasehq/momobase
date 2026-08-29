@@ -134,9 +134,9 @@ Reconciliation is intentionally sequential by default to keep provider pressure 
 6. Deactivation commits the inactive state and removes the runtime immediately.
 7. Routes connect provider accounts to collection or disbursement traffic by payment method and priority; each provider account’s country list determines where that route is eligible.
 
-A provider is routable only when its account and route are active, it declares a capability for the requested service, it is eligible for the transaction country, and a healthy runtime exists.
+A provider is routable only when its account and route are active, it declares a capability for the requested service and payment method, it is eligible for the transaction country, and a healthy runtime exists.
 
-Capabilities name the service only — `{"service_type": "collection"}`. Which payment rails reach an account is decided by the routes an operator creates for it, not by the adapter.
+Capabilities name both dimensions — `{"service_type": "collection", "payment_method": "momo"}` — so an operator cannot create a route the adapter cannot serve.
 
 ## Authentication workflow
 
@@ -420,7 +420,7 @@ The engine ships no account-format logic of its own — an adapter that needs mo
 
 `scheme` optionally names a provider-specific network, bank, or card brand, and is matched against nothing — the adapter interprets it. `metadata` passes provider-specific details through to the adapter and is never persisted, so it cannot become a free-form store of identifiers Momobase would then have to protect; it is part of the idempotency hash. `customer` and `recipient` stay nested because they are party context rather than payment details, and they are the one part of the payload that differs by service.
 
-`payment_method` is free-form: it must match an active route, and Momobase only ever compares it. There are no built-in payment-method constants.
+`payment_method` is one of `momo`, `card`, `bank_transfer`, or `wallet`. It must also match an active route backed by a provider capability for the same service and method.
 
 ## Location and transaction fees
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+
+	"github.com/momobasehq/momobase/providers"
 )
 
 const (
@@ -28,7 +30,7 @@ type PaymentRequestEvent struct {
 	// ServiceType identifies a collection or disbursement.
 	ServiceType string
 	// PaymentMethod identifies the requested payment rail.
-	PaymentMethod string
+	PaymentMethod providers.PaymentMethod
 	// Amount is the payment amount in currency minor units.
 	Amount int64
 	// Currency is the normalized three-letter currency code.
@@ -63,7 +65,7 @@ type TransactionChangedEvent struct {
 	// ServiceType identifies a collection or disbursement.
 	ServiceType string
 	// PaymentMethod identifies the transaction's payment rail.
-	PaymentMethod string
+	PaymentMethod providers.PaymentMethod
 	// Amount is the payment amount in currency minor units.
 	Amount int64
 	// Currency is the normalized three-letter currency code.

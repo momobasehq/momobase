@@ -25,10 +25,8 @@ import (
 	"github.com/momobasehq/momobase/providers/dummy"
 )
 
-// Method is the payment method the fixtures route on. Momobase ships no
-// payment-method constants: a method is a free-form label an operator picks when
-// creating a route, and the engine only ever compares it.
-const Method = "momo"
+// Method is the payment method the fixtures route on.
+const Method = providers.PaymentMethodMomo
 
 // ProviderCode is the registry code the fixture registers the dummy adapter under.
 const ProviderCode = "test_provider"
@@ -36,8 +34,8 @@ const ProviderCode = "test_provider"
 // DummyConfig builds a dummy provider configuration, merging overrides over the
 // minimum viable settings. Every call site states the behavior it depends on
 // rather than relying on the adapter's defaults.
-func DummyConfig(overrides map[string]any) map[string]any {
-	config := map[string]any{
+func DummyConfig(overrides map[string]any) providers.ProviderConfig {
+	config := providers.ProviderConfig{
 		"webhook_secret": "test-webhook-signing-credential",
 		"outcome":        dummy.OutcomeSucceed,
 	}
@@ -116,7 +114,7 @@ func New(t *testing.T) *Stack {
 	runtime, recorder := provider.NewRuntimeManager(repos, registry, enc, log), audit.New(repos, log)
 	tokens := Must(platform.NewTokenManager("test-app-token-secret-must-be-long-1234567890"))
 	auth := identity.NewAppAuthService(repos, "app_test", "secret_test", 30*time.Minute, 24*time.Hour, tokens)
-	apps, routes := identity.NewAppService(repos, auth, recorder), routing.NewAdminService(repos, recorder)
+	apps, routes := identity.NewAppService(repos, auth, recorder), routing.NewAdminService(repos, recorder, runtime)
 	routing := routing.NewEngine(repos, runtime)
 	authz := identity.NewAuthzService(repos, recorder)
 	extensionHooks := hooks.NewRegistry(log)
@@ -160,7 +158,11 @@ func (s *Stack) App(t *testing.T) (*domain.App, *domain.AppCredential, string) {
 }
 
 // Provider creates and activates an account for the bundled dummy adapter.
-func (s *Stack) Provider(t *testing.T, config map[string]any, requestedCountry ...string) *domain.ProviderAccount {
+func (s *Stack) Provider(
+	t *testing.T,
+	config providers.ProviderConfig,
+	requestedCountry ...string,
+) *domain.ProviderAccount {
 	t.Helper()
 	return s.ProviderFor(t, ProviderCode, config, requestedCountry...)
 }
@@ -170,7 +172,7 @@ func (s *Stack) Provider(t *testing.T, config map[string]any, requestedCountry .
 func (s *Stack) ProviderFor(
 	t *testing.T,
 	code string,
-	config map[string]any,
+	config providers.ProviderConfig,
 	requestedCountry ...string,
 ) *domain.ProviderAccount {
 	t.Helper()
@@ -206,13 +208,23 @@ func (s *Stack) Route(t *testing.T, id string, priority int) {
 // closure cannot leak into another test.
 func (s *Stack) RegisterValidator(code string, validate func(*providers.PaymentRequest) error) {
 	s.Registry.Register(code, func(log *slog.Logger) providers.PaymentProvider {
-		return &requestValidator{PaymentProvider: dummy.New(log), validate: validate}
+		adapter := dummy.New(log)
+		return &requestValidator{
+			PaymentProvider:    adapter,
+			Collector:          adapter.(providers.Collector),
+			Disburser:          adapter.(providers.Disburser),
+			TransactionQuerier: adapter.(providers.TransactionQuerier),
+			validate:           validate,
+		}
 	})
 }
 
 // requestValidator wraps the dummy adapter with the optional RequestValidator hook.
 type requestValidator struct {
 	providers.PaymentProvider
+	providers.Collector
+	providers.Disburser
+	providers.TransactionQuerier
 	validate func(*providers.PaymentRequest) error
 }
 

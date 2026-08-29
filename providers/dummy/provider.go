@@ -41,8 +41,7 @@ const (
 )
 
 // Config contains the settings recognized in a dummy provider account's
-// configuration. Every field is optional except the webhook signing credential,
-// which is read from the "webhook_secret" key.
+// configuration. Every option is optional except webhook_secret.
 type Config struct {
 	// Outcome selects the result payments reach: OutcomeSucceed, OutcomeFail,
 	// OutcomePending, OutcomeUnknown, or OutcomeError. It defaults to
@@ -70,8 +69,7 @@ type Config struct {
 	// Balance is the opening balance in minor units. Collections credit it and
 	// disbursements debit it. It defaults to 1000000 and is read from "balance".
 	Balance int64
-	// WebhookSecret authenticates and signs webhook payloads. It is required and
-	// is read from "webhook_secret".
+	// WebhookSecret authenticates and signs webhook payloads.
 	WebhookSecret string
 }
 
@@ -121,9 +119,11 @@ func Sign(credential string, payload []byte) string {
 func (p *Provider) Capabilities() []providers.Capability {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	out := make([]providers.Capability, 0, len(p.cfg.Services))
+	out := make([]providers.Capability, 0, len(p.cfg.Services)*len(providers.PaymentMethods()))
 	for _, service := range p.cfg.Services {
-		out = append(out, providers.Capability{ServiceType: service})
+		for _, method := range providers.PaymentMethods() {
+			out = append(out, providers.Capability{ServiceType: service, PaymentMethod: method})
+		}
 	}
 	return out
 }

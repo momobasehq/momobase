@@ -21,8 +21,7 @@ const (
 // Config contains the settings recognized in an MTN Mobile Money provider
 // account's configuration.
 type Config struct {
-	// Environment selects sandbox or production behavior. Momobase supplies it
-	// from the provider account's environment field.
+	// Environment selects sandbox or production behavior.
 	Environment string
 	// BaseURL is the MTN MoMo API origin. It defaults to the sandbox origin and is
 	// read from "base_url". Production accounts must provide it.
@@ -30,9 +29,9 @@ type Config struct {
 	// TargetEnvironment is sent in X-Target-Environment. It defaults to sandbox
 	// and is read from "target_environment".
 	TargetEnvironment string
-	// APIUser is the OAuth API user and is read from "api_user".
+	// APIUser is the OAuth API user read from "api_user".
 	APIUser string
-	// APIKey is the OAuth API key and is read from "api_key".
+	// APIKey is the OAuth API key read from "api_key".
 	APIKey string
 	// ProviderCallbackHost is used when provisioning a sandbox API user. It is
 	// read from "provider_callback_host", then derived from CallbackURL, and
@@ -53,15 +52,14 @@ type Config struct {
 	// TransferType enables MTN's aggregator capability when nonblank and is read
 	// from "transfer_type".
 	TransferType string
-	// WebhookSecret authenticates callbacks at Momobase's webhook boundary. It is
-	// required and is read from "webhook_secret".
+	// WebhookSecret authenticates callbacks at Momobase's webhook boundary.
 	WebhookSecret string
 }
 
 func parseConfig(raw providers.ProviderConfig) (Config, error) {
-	environment := strings.ToLower(utils.First(utils.String(raw, "environment"), "sandbox"))
-	baseURL := utils.String(raw, "base_url")
-	targetEnvironment := utils.String(raw, "target_environment")
+	environment := strings.ToLower(utils.First(providers.ConfigString(raw, "environment"), "sandbox"))
+	baseURL := providers.ConfigString(raw, "base_url")
+	targetEnvironment := providers.ConfigString(raw, "target_environment")
 	if environment == "sandbox" {
 		baseURL = utils.First(baseURL, defaultBaseURL)
 		targetEnvironment = utils.First(targetEnvironment, "sandbox")
@@ -70,15 +68,15 @@ func parseConfig(raw providers.ProviderConfig) (Config, error) {
 		Environment:                 environment,
 		BaseURL:                     strings.TrimRight(baseURL, "/"),
 		TargetEnvironment:           targetEnvironment,
-		APIUser:                     utils.String(raw, "api_user"),
-		APIKey:                      utils.String(raw, "api_key"),
-		ProviderCallbackHost:        strings.ToLower(utils.String(raw, "provider_callback_host")),
-		CollectionSubscriptionKey:   utils.String(raw, "collection_subscription_key"),
-		DisbursementSubscriptionKey: utils.String(raw, "disbursement_subscription_key"),
-		BalanceService:              strings.ToLower(utils.String(raw, "balance_service")),
-		CallbackURL:                 utils.String(raw, "callback_url"),
-		TransferType:                utils.String(raw, "transfer_type"),
-		WebhookSecret:               utils.String(raw, "webhook_secret"),
+		APIUser:                     providers.ConfigString(raw, "api_user"),
+		APIKey:                      providers.ConfigString(raw, "api_key"),
+		ProviderCallbackHost:        strings.ToLower(providers.ConfigString(raw, "provider_callback_host")),
+		CollectionSubscriptionKey:   providers.ConfigString(raw, "collection_subscription_key"),
+		DisbursementSubscriptionKey: providers.ConfigString(raw, "disbursement_subscription_key"),
+		BalanceService:              strings.ToLower(providers.ConfigString(raw, "balance_service")),
+		CallbackURL:                 providers.ConfigString(raw, "callback_url"),
+		TransferType:                providers.ConfigString(raw, "transfer_type"),
+		WebhookSecret:               providers.ConfigString(raw, "webhook_secret"),
 	}
 	if cfg.Environment != "sandbox" && cfg.Environment != "production" {
 		return Config{}, errors.New("mtn: environment must be sandbox or production")

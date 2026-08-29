@@ -2,7 +2,6 @@ package momobase_test
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -24,7 +23,7 @@ func (p *stubProvider) HealthCheck(context.Context) error                    { r
 
 func (p *stubProvider) Capabilities() []providers.Capability {
 	return []providers.Capability{
-		{ServiceType: providers.ServiceCollection},
+		{ServiceType: providers.ServiceCollection, PaymentMethod: providers.PaymentMethodMomo},
 	}
 }
 
@@ -35,13 +34,6 @@ func (p *stubProvider) Collect(
 	return &providers.ProviderPaymentResponse{Status: providers.TxProcessing}, nil
 }
 
-func (p *stubProvider) Disburse(
-	context.Context,
-	providers.PaymentRequest,
-) (*providers.ProviderPaymentResponse, error) {
-	return nil, errors.New("disbursement is not supported")
-}
-
 func (p *stubProvider) QueryTransaction(
 	_ context.Context,
 	reference string,
@@ -50,19 +42,9 @@ func (p *stubProvider) QueryTransaction(
 	return &providers.ProviderTransactionStatus{ProviderReference: reference, Status: providers.TxSucceeded}, nil
 }
 
-func (p *stubProvider) QueryBalance(context.Context, string) (*providers.ProviderBalance, error) {
-	return &providers.ProviderBalance{Currency: "UGX"}, nil
-}
-
-func (p *stubProvider) VerifyWebhook(
-	context.Context,
-	[]byte,
-	map[string]string,
-) (*providers.ProviderWebhookEvent, error) {
-	return &providers.ProviderWebhookEvent{Status: providers.TxSucceeded}, nil
-}
-
 var _ providers.PaymentProvider = (*stubProvider)(nil)
+var _ providers.Collector = (*stubProvider)(nil)
+var _ providers.TransactionQuerier = (*stubProvider)(nil)
 var _ providers.Factory = newStubProvider
 
 // testConfig builds a valid configuration backed by a temporary SQLite database.
@@ -174,6 +156,41 @@ func TestNewRejectsInvalidProviders(t *testing.T) {
 				t.Fatal("New() error = nil, want an invalid-provider error")
 			}
 		})
+	}
+}
+
+func TestNewRejectsPersistedUnknownPaymentMethods(t *testing.T) {
+	cfg := testConfig(t)
+	instance, err := momobase.New(
+		momobase.WithConfig(cfg),
+		momobase.WithProvider("stub_pay", newStubProvider),
+	)
+	if err != nil {
+		t.Fatalf("first New() error = %v", err)
+	}
+	if err := instance.DB().Exec(`
+		INSERT INTO payment_routes
+			(id, service_type, payment_method, provider_account_id, priority, active, created_at, updated_at)
+		VALUES
+			('route_legacy', 'collection', 'cash', 'pacc_legacy', 1, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`).Error; err != nil {
+		_ = instance.Close()
+		t.Fatalf("insert legacy route: %v", err)
+	}
+	if err := instance.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, err := momobase.New(
+		momobase.WithConfig(cfg),
+		momobase.WithProvider("stub_pay", newStubProvider),
+	)
+	if err == nil {
+		_ = reopened.Close()
+		t.Fatal("second New() error = nil, want unsupported payment method")
+	}
+	if !strings.Contains(err.Error(), "unsupported methods: cash") {
+		t.Fatalf("second New() error = %v, want legacy method named", err)
 	}
 }
 

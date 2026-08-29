@@ -1,6 +1,18 @@
 package domain
 
+// PaymentMethod identifies one supported payment rail.
+type PaymentMethod string
+
 const (
+	// PaymentMethodMomo identifies mobile-money payments.
+	PaymentMethodMomo PaymentMethod = "momo"
+	// PaymentMethodCard identifies card payments.
+	PaymentMethodCard PaymentMethod = "card"
+	// PaymentMethodBankTransfer identifies bank-transfer payments.
+	PaymentMethodBankTransfer PaymentMethod = "bank_transfer"
+	// PaymentMethodWallet identifies wallet payments.
+	PaymentMethodWallet PaymentMethod = "wallet"
+
 	// ServiceCollection identifies an incoming payment collection.
 	ServiceCollection = "collection"
 	// ServiceDisbursement identifies an outgoing payment disbursement.
@@ -41,3 +53,23 @@ const (
 	// CircuitHalfOpen allows a trial request after an open-circuit timeout.
 	CircuitHalfOpen = "half_open"
 )
+
+// PaymentMethods returns every supported payment method.
+func PaymentMethods() []PaymentMethod {
+	return []PaymentMethod{
+		PaymentMethodMomo,
+		PaymentMethodCard,
+		PaymentMethodBankTransfer,
+		PaymentMethodWallet,
+	}
+}
+
+// ValidPaymentMethod reports whether method is supported by Momobase.
+func ValidPaymentMethod(method PaymentMethod) bool {
+	switch method {
+	case PaymentMethodMomo, PaymentMethodCard, PaymentMethodBankTransfer, PaymentMethodWallet:
+		return true
+	default:
+		return false
+	}
+}

@@ -75,9 +75,9 @@ Apps and provider accounts can define separate `collection` and `disbursement` c
 
 ## Contract notes
 
-- `payment_method` is free-form and must match an active payment route. `momo` is a convention, not an enum.
+- `payment_method` is `momo`, `card`, `bank_transfer`, or `wallet` and must match an active route.
 - `account`, `payment_method`, and `country` are required. `scheme` and `metadata` are optional, as are `customer` and `recipient`, which carry a name and email only.
 - Provider country, currency, and charges are changed atomically with `admin.providers.updateSettings(id, settings)`.
-- Provider configs should include `webhook_secret`; location and fee settings are not stored in provider credential config.
+- Provider config is one flat provider-owned object and must include `webhook_secret`; location and fee settings live outside it.
 - Provider balances use `{ currency, available, ledger }`; active balance queries return one result per active provider account.
-- Provider capabilities report the service only — `{ service_type }`. Which rails reach an account is decided by its routes.
+- Provider capabilities report `{ service_type, payment_method }`; routes must match both.

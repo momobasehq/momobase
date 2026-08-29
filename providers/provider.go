@@ -8,41 +8,47 @@ import (
 	"github.com/momobasehq/momobase/internal/utils"
 )
 
-// Capability identifies a payment service supported by a provider.
-//
-// A capability names the service only — collection or disbursement. Which rails an
-// account serves is a routing decision, expressed by the payment routes an operator
-// creates for it, so a provider declares what it can do rather than the vocabulary
-// it does it under.
+// PaymentMethod identifies one payment rail supported by Momobase.
+type PaymentMethod = domain.PaymentMethod
+
+// Payment methods accepted by routes and payment requests.
+const (
+	PaymentMethodMomo         = domain.PaymentMethodMomo
+	PaymentMethodCard         = domain.PaymentMethodCard
+	PaymentMethodBankTransfer = domain.PaymentMethodBankTransfer
+	PaymentMethodWallet       = domain.PaymentMethodWallet
+)
+
+// PaymentMethods returns every supported payment method.
+func PaymentMethods() []PaymentMethod { return domain.PaymentMethods() }
+
+// ValidPaymentMethod reports whether method is supported by Momobase.
+func ValidPaymentMethod(method PaymentMethod) bool { return domain.ValidPaymentMethod(method) }
+
+// Capability identifies a payment service and method supported by a provider.
 type Capability struct {
 	// ServiceType identifies the payment service, such as collection or disbursement.
 	ServiceType string `json:"service_type"`
+	// PaymentMethod identifies the payment rail served by this capability.
+	PaymentMethod PaymentMethod `json:"payment_method"`
 }
 
-// ProviderConfig contains the provider-specific values used during initialization.
+// ProviderConfig contains the provider-specific flat values used during initialization.
 // Momobase adds the provider account's authoritative "environment" value before
 // calling Init, overriding any value stored in the encrypted provider config.
 type ProviderConfig map[string]any
 
 // ConfigString returns a trimmed textual representation of a configuration value.
-func ConfigString(c ProviderConfig, key string) string {
-	return utils.String(c, key)
-}
+func ConfigString(c ProviderConfig, key string) string { return utils.String(c, key) }
 
 // ConfigBool reports whether a configuration value is "true", case-insensitively, or "1".
-func ConfigBool(c ProviderConfig, key string) bool {
-	return utils.Bool(c, key)
-}
+func ConfigBool(c ProviderConfig, key string) bool { return utils.Bool(c, key) }
 
 // ConfigInt converts a configuration value to an integer, returning zero when invalid.
-func ConfigInt(c ProviderConfig, key string) int {
-	return utils.Int(c, key)
-}
+func ConfigInt(c ProviderConfig, key string) int { return utils.Int(c, key) }
 
 // ConfigPath returns the textual value at a dot-separated path through nested maps.
-func ConfigPath(values map[string]any, path string) string {
-	return utils.Path(values, path)
-}
+func ConfigPath(values map[string]any, path string) string { return utils.Path(values, path) }
 
 // First returns the first nonblank value after trimming surrounding whitespace.
 func First(values ...string) string {
@@ -77,9 +83,8 @@ type PaymentRequest struct {
 	// TransactionID identifies the Momobase transaction associated with the request.
 	TransactionID string
 	// PaymentMethod identifies the payment rail the route selected for this request.
-	// It is the free-form method recorded on the route, and a provider that serves
-	// more than one rail dispatches on it.
-	PaymentMethod string
+	// A provider that serves more than one rail dispatches on it.
+	PaymentMethod PaymentMethod
 	// Currency is the ISO currency code for the payment amount.
 	Currency string
 	// Country is the ISO 3166-1 alpha-2 country for the payment, or empty when the
@@ -163,22 +168,47 @@ type ProviderWebhookEvent struct {
 	Raw map[string]any `json:"raw,omitempty"`
 }
 
-// PaymentProvider defines the operations implemented by a payment provider.
+// PaymentProvider is the minimum contract every provider implements. Payment
+// operations are exposed through the smaller optional interfaces below.
 type PaymentProvider interface {
 	// Capabilities returns the operations enabled by the provider's current configuration.
 	Capabilities() []Capability
 	// Init validates and applies provider configuration.
 	Init(context.Context, ProviderConfig) error
+}
+
+// HealthChecker verifies that a provider can reach and authenticate with its upstream API.
+type HealthChecker interface {
 	// HealthCheck verifies that the provider can authenticate with its upstream API.
 	HealthCheck(context.Context) error
+}
+
+// Collector is implemented by providers that collect customer payments.
+type Collector interface {
 	// Collect requests a payment from a customer.
 	Collect(context.Context, PaymentRequest) (*ProviderPaymentResponse, error)
+}
+
+// Disburser is implemented by providers that send recipient payments.
+type Disburser interface {
 	// Disburse requests a payment to a recipient.
 	Disburse(context.Context, PaymentRequest) (*ProviderPaymentResponse, error)
+}
+
+// TransactionQuerier is implemented by providers that support status polling.
+type TransactionQuerier interface {
 	// QueryTransaction retrieves a transaction status by provider reference and country.
 	QueryTransaction(context.Context, string, string) (*ProviderTransactionStatus, error)
+}
+
+// BalanceQuerier is implemented by providers that expose account balances.
+type BalanceQuerier interface {
 	// QueryBalance retrieves an account balance for the given country.
 	QueryBalance(context.Context, string) (*ProviderBalance, error)
+}
+
+// WebhookVerifier is implemented by providers that receive callbacks.
+type WebhookVerifier interface {
 	// VerifyWebhook normalizes a provider webhook payload and headers.
 	VerifyWebhook(context.Context, []byte, map[string]string) (*ProviderWebhookEvent, error)
 }
@@ -206,3 +236,6 @@ type RequestValidator interface {
 
 // ErrCircuitOpen indicates that a provider request was rejected by an open circuit breaker.
 var ErrCircuitOpen = errors.New("provider circuit breaker is open")
+
+// ErrOperationUnsupported indicates that a provider does not implement an optional operation.
+var ErrOperationUnsupported = errors.New("provider operation is not supported")

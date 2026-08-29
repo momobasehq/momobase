@@ -125,9 +125,10 @@ routes can still be mounted directly on `instance.App()`.
 
 ## Providers
 
-A provider implements [`providers.PaymentProvider`](providers/provider.go) and is
-registered under a code with `momobase.WithProvider`. Provider account credentials are
-configured through the Admin API and encrypted at rest.
+A provider implements the two-method [`providers.PaymentProvider`](providers/provider.go),
+adds only the operation interfaces it supports, and is registered under a code with
+`momobase.WithProvider`. Each provider owns one flat configuration object; Momobase
+encrypts it at rest and injects the account environment during initialization.
 
 - [`providers/dummy`](providers/dummy) simulates payments without moving money.
 - [`providers/mtn`](providers/mtn) integrates MTN Mobile Money.

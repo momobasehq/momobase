@@ -63,10 +63,16 @@ func (p *Provider) Capabilities() []providers.Capability {
 	cfg := p.config()
 	capabilities := []providers.Capability{}
 	if cfg.CollectionSubscriptionKey != "" {
-		capabilities = append(capabilities, providers.Capability{ServiceType: domain.ServiceCollection})
+		capabilities = append(capabilities, providers.Capability{
+			ServiceType:   domain.ServiceCollection,
+			PaymentMethod: providers.PaymentMethodMomo,
+		})
 	}
 	if cfg.DisbursementSubscriptionKey != "" {
-		capabilities = append(capabilities, providers.Capability{ServiceType: domain.ServiceDisbursement})
+		capabilities = append(capabilities, providers.Capability{
+			ServiceType:   domain.ServiceDisbursement,
+			PaymentMethod: providers.PaymentMethodMomo,
+		})
 	}
 	return capabilities
 }

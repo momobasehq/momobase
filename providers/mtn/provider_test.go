@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,9 +20,17 @@ import (
 
 const testWebhookSecret = "long-random-webhook-secret"
 
-func testProvider(t *testing.T, overrides providers.ProviderConfig) *Provider {
+func providerConfig(values map[string]string) providers.ProviderConfig {
+	config := providers.ProviderConfig{}
+	for key, value := range values {
+		config[key] = value
+	}
+	return config
+}
+
+func testProvider(t *testing.T, overrides map[string]string) *Provider {
 	t.Helper()
-	config := providers.ProviderConfig{
+	config := providerConfig(map[string]string{
 		"environment":                 "production",
 		"base_url":                    "https://mtn.test",
 		"target_environment":          "mtnuganda",
@@ -29,10 +38,8 @@ func testProvider(t *testing.T, overrides providers.ProviderConfig) *Provider {
 		"api_key":                     "api-key",
 		"collection_subscription_key": "collection-key",
 		"webhook_secret":              testWebhookSecret,
-	}
-	for key, value := range overrides {
-		config[key] = value
-	}
+	})
+	config = mergeConfig(config, overrides)
 	provider, ok := New(slog.New(slog.NewTextHandler(io.Discard, nil))).(*Provider)
 	if !ok {
 		t.Fatal("New() did not return *Provider")
@@ -56,11 +63,11 @@ func payment(id string) providers.PaymentRequest {
 }
 
 func TestParseConfigDefaultsAndCapabilities(t *testing.T) {
-	cfg, err := parseConfig(providers.ProviderConfig{
+	cfg, err := parseConfig(providerConfig(map[string]string{
 		"environment":                 "sandbox",
 		"collection_subscription_key": "collection-key",
 		"webhook_secret":              testWebhookSecret,
-	})
+	}))
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
 	}
@@ -86,7 +93,7 @@ func TestParseConfigDefaultsAndCapabilities(t *testing.T) {
 		t.Fatalf("Capabilities() = %v, want collection", capabilities)
 	}
 
-	provider = testProvider(t, providers.ProviderConfig{
+	provider = testProvider(t, map[string]string{
 		"collection_subscription_key":   "",
 		"disbursement_subscription_key": "disbursement-key",
 	})
@@ -96,7 +103,7 @@ func TestParseConfigDefaultsAndCapabilities(t *testing.T) {
 }
 
 func TestParseConfigRejectsInvalidValues(t *testing.T) {
-	valid := providers.ProviderConfig{
+	valid := providerConfig(map[string]string{
 		"environment":                 "production",
 		"base_url":                    "https://mtn.example.com",
 		"target_environment":          "mtnuganda",
@@ -104,44 +111,44 @@ func TestParseConfigRejectsInvalidValues(t *testing.T) {
 		"api_key":                     "api-key",
 		"collection_subscription_key": "collection-key",
 		"webhook_secret":              testWebhookSecret,
-	}
+	})
 	tests := map[string]providers.ProviderConfig{
-		"production missing credentials": mergeConfig(valid, providers.ProviderConfig{
+		"production missing credentials": mergeConfig(valid, map[string]string{
 			"api_user": "",
 			"api_key":  "",
 		}),
-		"production missing base URL": mergeConfig(valid, providers.ProviderConfig{
+		"production missing base URL": mergeConfig(valid, map[string]string{
 			"base_url": "",
 		}),
-		"production missing target environment": mergeConfig(valid, providers.ProviderConfig{
+		"production missing target environment": mergeConfig(valid, map[string]string{
 			"target_environment": "",
 		}),
-		"invalid environment": mergeConfig(valid, providers.ProviderConfig{
+		"invalid environment": mergeConfig(valid, map[string]string{
 			"environment": "staging",
 		}),
-		"sandbox partial credentials": mergeConfig(valid, providers.ProviderConfig{
+		"sandbox partial credentials": mergeConfig(valid, map[string]string{
 			"environment": "sandbox",
 			"api_key":     "",
 		}),
-		"missing webhook secret": mergeConfig(valid, providers.ProviderConfig{
+		"missing webhook secret": mergeConfig(valid, map[string]string{
 			"webhook_secret": "",
 		}),
-		"missing subscription": mergeConfig(valid, providers.ProviderConfig{
+		"missing subscription": mergeConfig(valid, map[string]string{
 			"collection_subscription_key": "",
 		}),
-		"insecure remote base URL": mergeConfig(valid, providers.ProviderConfig{
+		"insecure remote base URL": mergeConfig(valid, map[string]string{
 			"base_url": "http://example.com",
 		}),
-		"invalid callback URL": mergeConfig(valid, providers.ProviderConfig{
+		"invalid callback URL": mergeConfig(valid, map[string]string{
 			"callback_url": "/webhooks/mtn",
 		}),
-		"invalid provider callback host": mergeConfig(valid, providers.ProviderConfig{
+		"invalid provider callback host": mergeConfig(valid, map[string]string{
 			"provider_callback_host": "127.0.0.1",
 		}),
-		"disabled balance service": mergeConfig(valid, providers.ProviderConfig{
+		"disabled balance service": mergeConfig(valid, map[string]string{
 			"balance_service": "disbursement",
 		}),
-		"header injection": mergeConfig(valid, providers.ProviderConfig{
+		"header injection": mergeConfig(valid, map[string]string{
 			"target_environment": "sandbox\r\nX-Injected: yes",
 		}),
 	}
@@ -204,13 +211,13 @@ func TestInitAutoProvisionsSandboxCredentials(t *testing.T) {
 		t.Fatal("New() did not return *Provider")
 	}
 	provider.client = &http.Client{Transport: handlerTransport{handler: mux}}
-	err := provider.Init(context.Background(), providers.ProviderConfig{
+	err := provider.Init(context.Background(), providerConfig(map[string]string{
 		"environment":                 "sandbox",
 		"base_url":                    "https://mtn.test",
 		"callback_url":                "https://hooks.example.com/mtn",
 		"collection_subscription_key": "collection-key",
 		"webhook_secret":              testWebhookSecret,
-	})
+	}))
 	if err != nil {
 		t.Fatalf("Init() error = %v", err)
 	}
@@ -226,7 +233,7 @@ func TestInitAutoProvisionsSandboxCredentials(t *testing.T) {
 }
 
 func TestInitReusesProvidedSandboxCredentials(t *testing.T) {
-	provider := testProvider(t, providers.ProviderConfig{
+	provider := testProvider(t, map[string]string{
 		"environment":        "sandbox",
 		"target_environment": "sandbox",
 	})
@@ -300,7 +307,7 @@ func TestProviderAPIFlowsAndTokenCaching(t *testing.T) {
 		assertAPIHeaders(t, r, "disbursement-token", "disbursement-key")
 		writeJSON(t, w, map[string]any{"availableBalance": "42.50", "currency": "EUR"})
 	})
-	provider := testProvider(t, providers.ProviderConfig{
+	provider := testProvider(t, map[string]string{
 		"base_url":                      "https://mtn.test",
 		"disbursement_subscription_key": "disbursement-key",
 		"balance_service":               "disbursement",
@@ -484,11 +491,8 @@ func writeJSON(t *testing.T, w http.ResponseWriter, value any) {
 	}
 }
 
-func mergeConfig(base, overrides providers.ProviderConfig) providers.ProviderConfig {
-	merged := providers.ProviderConfig{}
-	for key, value := range base {
-		merged[key] = value
-	}
+func mergeConfig(base providers.ProviderConfig, overrides map[string]string) providers.ProviderConfig {
+	merged := maps.Clone(base)
 	for key, value := range overrides {
 		merged[key] = value
 	}

@@ -172,39 +172,39 @@ type ProviderHealthSnapshot struct {
 // PaymentRoute assigns a payment service and method to a provider by priority.
 type PaymentRoute struct {
 	BaseModel
-	ServiceType       string `gorm:"size:64;uniqueIndex:idx_route_service_method_provider;not null" json:"service_type"`
-	PaymentMethod     string `gorm:"size:64;uniqueIndex:idx_route_service_method_provider;not null" json:"payment_method"`
-	ProviderAccountID string `gorm:"size:40;uniqueIndex:idx_route_service_method_provider;not null" json:"provider_account_id"`
-	ProviderName      string `gorm:"-" json:"provider_name"`
-	Priority          int    `gorm:"index;not null;default:100" json:"priority"`
-	Active            bool   `gorm:"index;not null;default:true" json:"active"`
+	ServiceType       string        `gorm:"size:64;uniqueIndex:idx_route_service_method_provider;not null" json:"service_type"`
+	PaymentMethod     PaymentMethod `gorm:"size:64;uniqueIndex:idx_route_service_method_provider;not null" json:"payment_method"`
+	ProviderAccountID string        `gorm:"size:40;uniqueIndex:idx_route_service_method_provider;not null" json:"provider_account_id"`
+	ProviderName      string        `gorm:"-" json:"provider_name"`
+	Priority          int           `gorm:"index;not null;default:100" json:"priority"`
+	Active            bool          `gorm:"index;not null;default:true" json:"active"`
 }
 
 // Transaction records a collection or disbursement and its current outcome.
 type Transaction struct {
 	BaseModel
-	AppID                     string     `gorm:"size:40;uniqueIndex:idx_tx_app_idempotency;uniqueIndex:idx_tx_app_reference;index;not null" json:"app_id"`
-	ServiceType               string     `gorm:"size:64;index;not null" json:"service_type"`
-	PaymentMethod             string     `gorm:"size:64;index;not null" json:"payment_method"`
-	Amount                    int64      `gorm:"not null" json:"amount"`
-	Currency                  string     `gorm:"size:3;index;not null" json:"currency"`
-	Country                   string     `gorm:"size:2;index;not null" json:"country,omitempty"`
-	Reference                 string     `gorm:"size:128;uniqueIndex:idx_tx_app_reference;not null" json:"reference"`
-	IdempotencyKey            string     `gorm:"size:255;uniqueIndex:idx_tx_app_idempotency;not null" json:"idempotency_key"`
-	Status                    string     `gorm:"size:64;index;not null" json:"status"`
-	SelectedRouteID           string     `gorm:"size:40;index" json:"selected_route_id"`
-	SelectedProviderAccountID string     `gorm:"size:40;index" json:"selected_provider_account_id"`
-	ProviderReference         string     `gorm:"size:255;index" json:"provider_reference"`
-	CustomerAccount           string     `gorm:"size:255" json:"customer_account"`
-	CustomerEmail             string     `gorm:"size:255" json:"customer_email"`
-	CustomerName              string     `gorm:"size:255" json:"customer_name"`
-	Description               string     `gorm:"type:text" json:"description"`
-	ProviderFee               int64      `gorm:"not null;default:0" json:"provider_fee"`
-	PlatformFee               int64      `gorm:"not null;default:0" json:"platform_fee"`
-	RequestHash               string     `gorm:"size:128" json:"-"`
-	ReconciliationAttempts    int        `gorm:"not null;default:0" json:"reconciliation_attempts"`
-	LastReconciledAt          *time.Time `json:"last_reconciled_at"`
-	NextReconcileAt           *time.Time `gorm:"index" json:"next_reconcile_at"`
+	AppID                     string        `gorm:"size:40;uniqueIndex:idx_tx_app_idempotency;uniqueIndex:idx_tx_app_reference;index;not null" json:"app_id"`
+	ServiceType               string        `gorm:"size:64;index;not null" json:"service_type"`
+	PaymentMethod             PaymentMethod `gorm:"size:64;index;not null" json:"payment_method"`
+	Amount                    int64         `gorm:"not null" json:"amount"`
+	Currency                  string        `gorm:"size:3;index;not null" json:"currency"`
+	Country                   string        `gorm:"size:2;index;not null" json:"country,omitempty"`
+	Reference                 string        `gorm:"size:128;uniqueIndex:idx_tx_app_reference;not null" json:"reference"`
+	IdempotencyKey            string        `gorm:"size:255;uniqueIndex:idx_tx_app_idempotency;not null" json:"idempotency_key"`
+	Status                    string        `gorm:"size:64;index;not null" json:"status"`
+	SelectedRouteID           string        `gorm:"size:40;index" json:"selected_route_id"`
+	SelectedProviderAccountID string        `gorm:"size:40;index" json:"selected_provider_account_id"`
+	ProviderReference         string        `gorm:"size:255;index" json:"provider_reference"`
+	CustomerAccount           string        `gorm:"size:255" json:"customer_account"`
+	CustomerEmail             string        `gorm:"size:255" json:"customer_email"`
+	CustomerName              string        `gorm:"size:255" json:"customer_name"`
+	Description               string        `gorm:"type:text" json:"description"`
+	ProviderFee               int64         `gorm:"not null;default:0" json:"provider_fee"`
+	PlatformFee               int64         `gorm:"not null;default:0" json:"platform_fee"`
+	RequestHash               string        `gorm:"size:128" json:"-"`
+	ReconciliationAttempts    int           `gorm:"not null;default:0" json:"reconciliation_attempts"`
+	LastReconciledAt          *time.Time    `json:"last_reconciled_at"`
+	NextReconcileAt           *time.Time    `gorm:"index" json:"next_reconcile_at"`
 }
 
 // TransactionAttempt records one provider call made for a transaction.

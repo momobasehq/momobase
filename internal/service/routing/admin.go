@@ -2,22 +2,31 @@ package routing
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/momobasehq/momobase/internal/domain"
 	"github.com/momobasehq/momobase/internal/platform"
 	"github.com/momobasehq/momobase/internal/repository"
 	"github.com/momobasehq/momobase/internal/service/audit"
+	"github.com/momobasehq/momobase/internal/service/provider"
+	"github.com/momobasehq/momobase/providers"
 )
 
 // AdminService manages payment routing rules.
 type AdminService struct {
-	repos *repository.UnitOfWork
-	audit *audit.Service
+	repos   *repository.UnitOfWork
+	audit   *audit.Service
+	runtime *provider.RuntimeManager
 }
 
 // NewAdminService creates a payment route administration service.
-func NewAdminService(repos *repository.UnitOfWork, audit *audit.Service) *AdminService {
-	return &AdminService{repos: repos, audit: audit}
+func NewAdminService(
+	repos *repository.UnitOfWork,
+	audit *audit.Service,
+	runtime *provider.RuntimeManager,
+) *AdminService {
+	return &AdminService{repos: repos, audit: audit, runtime: runtime}
 }
 
 // Create validates and persists a payment route for an existing provider account.
@@ -25,7 +34,7 @@ func (s *AdminService) Create(
 	ctx context.Context,
 	actor *domain.AdminUser,
 	service string,
-	method string,
+	method domain.PaymentMethod,
 	accountID string,
 	priority int,
 	active bool,
@@ -35,6 +44,13 @@ func (s *AdminService) Create(
 	exists, err := s.repos.ProviderAccounts.Exists(ctx, accountID)
 	if err != nil || !exists {
 		return nil, repository.ErrNotFound
+	}
+	loaded, ok := s.runtime.Get(accountID)
+	if !ok {
+		return nil, errors.New("provider account must be active before creating a route")
+	}
+	if !providers.Supports(loaded.Capabilities, service, method) {
+		return nil, fmt.Errorf("provider account does not support %s/%s", service, method)
 	}
 	if priority < 1 {
 		priority = 1

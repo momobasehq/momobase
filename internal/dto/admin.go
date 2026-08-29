@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/momobasehq/momobase/internal/domain"
+	"github.com/momobasehq/momobase/providers"
 )
 
 // The administrative request payloads.
@@ -146,9 +147,9 @@ type CreateProviderAccountRequest struct {
 	Country      string                 `json:"country" validate:"required,country" example:"UG"`
 	Currency     string                 `json:"currency" validate:"required,len=3" example:"UGX"`
 	Charges      *domain.ChargeSchedule `json:"charges,omitempty"`
-	// Config is the provider's own settings and must carry a webhook_secret. It is
-	// encrypted before it is stored and is never returned.
-	Config map[string]any `json:"config" swaggertype:"object" validate:"required"`
+	// Config is the provider-owned flat object. It must carry a webhook_secret and
+	// is encrypted before it is stored and is never returned.
+	Config providers.ProviderConfig `json:"config" validate:"required"`
 }
 
 // Normalize trims the account's text fields and lowercases the provider code.
@@ -176,7 +177,7 @@ func (r *UpdateProviderSettingsRequest) Normalize() {
 
 // UpdateProviderConfigRequest replaces provider configuration.
 type UpdateProviderConfigRequest struct {
-	Config map[string]any `json:"config" swaggertype:"object" validate:"required"`
+	Config providers.ProviderConfig `json:"config" validate:"required"`
 }
 
 // Normalize leaves the configuration alone: its keys and values belong to the provider.
@@ -184,8 +185,8 @@ func (r *UpdateProviderConfigRequest) Normalize() {}
 
 // CreateRouteRequest creates a payment route.
 type CreateRouteRequest struct {
-	ServiceType   string `json:"service_type" enums:"collection,disbursement" validate:"required,oneof=collection disbursement" example:"collection"`
-	PaymentMethod string `json:"payment_method" validate:"required,identifier" example:"momo"`
+	ServiceType   string               `json:"service_type" enums:"collection,disbursement" validate:"required,oneof=collection disbursement" example:"collection"`
+	PaymentMethod domain.PaymentMethod `json:"payment_method" enums:"momo,card,bank_transfer,wallet" validate:"required,oneof=momo card bank_transfer wallet" example:"momo"`
 	// ProviderAccountID must name an existing account, which the service checks.
 	ProviderAccountID string `json:"provider_account_id" validate:"required" example:"pacc_123"`
 	Priority          int    `json:"priority" minimum:"1" validate:"omitempty,min=1" example:"1"`
@@ -195,7 +196,7 @@ type CreateRouteRequest struct {
 // Normalize trims and lowercases the values the route is matched on.
 func (r *CreateRouteRequest) Normalize() {
 	r.ServiceType = strings.ToLower(strings.TrimSpace(r.ServiceType))
-	r.PaymentMethod = strings.ToLower(strings.TrimSpace(r.PaymentMethod))
+	r.PaymentMethod = domain.PaymentMethod(strings.ToLower(strings.TrimSpace(string(r.PaymentMethod))))
 	r.ProviderAccountID = strings.TrimSpace(r.ProviderAccountID)
 }
 

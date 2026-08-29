@@ -52,10 +52,20 @@ func (r Registry) Create(code string, log *slog.Logger) (PaymentProvider, error)
 	return provider, nil
 }
 
-// Supports reports whether caps contains the requested service.
-func Supports(caps []Capability, service string) bool {
+// SupportsService reports whether caps contains the requested service.
+func SupportsService(caps []Capability, service string) bool {
 	for _, c := range caps {
 		if c.ServiceType == service {
+			return true
+		}
+	}
+	return false
+}
+
+// Supports reports whether caps contains the requested service and payment method.
+func Supports(caps []Capability, service string, method PaymentMethod) bool {
+	for _, c := range caps {
+		if c.ServiceType == service && c.PaymentMethod == method {
 			return true
 		}
 	}
