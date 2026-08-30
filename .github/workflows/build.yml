@@ -70,6 +70,7 @@ jobs:
             --env APP_OAUTH_SECRET=ci-application-oauth-secret-0123456789abcdef \
             --env WORKERS_ENABLED=false \
             --env DASHBOARD_ENABLED=true \
+            --env DASHBOARD_PATH=/operations \
             "${TEST_IMAGE}"
 
           # wait for container to start
@@ -90,10 +91,8 @@ jobs:
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             http://127.0.0.1:9091/admin/)" = 301
 
-          # An untagged build serves no dashboard at all, so these assertions are
-          # themselves the proof that the Node stage ran and the build tag was passed.
           # The shell is the only document served: the app routes on the URL hash.
-          curl --fail --silent --show-error http://127.0.0.1:9091/dashboard/ \
+          curl --fail --silent --show-error http://127.0.0.1:9091/operations/ \
             | tee /tmp/dashboard.html \
             | grep --fixed-strings '<title>Momobase Dashboard</title>'
 
@@ -101,14 +100,14 @@ jobs:
 
           # Follow the shell's own script reference, so a bundle that embedded
           # incompletely fails here rather than as a white screen in a browser.
-          DASHBOARD_SCRIPT=$(grep --only-matching '/dashboard/assets/[^"]*\.js' /tmp/dashboard.html | head -n 1)
+          DASHBOARD_SCRIPT=$(grep --only-matching '\./assets/[^"]*\.js' /tmp/dashboard.html | head -n 1)
           test -n "${DASHBOARD_SCRIPT}"
           curl --fail --silent --show-error --output /dev/null \
-            "http://127.0.0.1:9091${DASHBOARD_SCRIPT}"
+            "http://127.0.0.1:9091/operations/${DASHBOARD_SCRIPT#./}"
 
           # A missing asset must 404 rather than be answered with the app shell.
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
-            http://127.0.0.1:9091/dashboard/assets/missing-asset.js)" = 404
+            http://127.0.0.1:9091/operations/assets/missing-asset.js)" = 404
 
           docker exec \
             --env ADMIN_PASSWORD="${SMOKE_ADMIN_PASSWORD}" \

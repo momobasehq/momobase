@@ -88,22 +88,23 @@ func (h *dashboardHandler) serve(c fiber.Ctx) error {
 	return c.Send(data)
 }
 
-// mountDashboard serves the embedded administration dashboard when it is both
-// enabled and present.
-//
-// Available is false unless this binary was built with the dashboard tag, so a
-// deployment that sets the flag against an untagged build serves nothing here rather
-// than an empty shell whose scripts 404.
-func mountDashboard(app *fiber.App, enabled bool) {
-	if !enabled || !dashboardweb.Available() {
+// mountDashboard serves the embedded administration dashboard when enabled.
+func mountDashboard(app *fiber.App, enabled bool, dashboardPath string) {
+	if !enabled {
 		return
 	}
 	handler := newDashboardHandler(dashboardweb.FS())
-	app.Get("/dashboard/*", handler.serve)
+	redirect := func(c fiber.Ctx) error {
+		return c.Redirect().Status(fiber.StatusMovedPermanently).To(dashboardPath + "/")
+	}
+	app.Get(dashboardPath+"/*", func(c fiber.Ctx) error {
+		if c.Path() == dashboardPath {
+			return redirect(c)
+		}
+		return handler.serve(c)
+	})
 	// The panel that lived here was replaced by the dashboard. Redirecting permanently
 	// keeps existing bookmarks and runbooks working instead of answering them with a
 	// bare 404.
-	app.Get("/admin/*", func(c fiber.Ctx) error {
-		return c.Redirect().Status(fiber.StatusMovedPermanently).To("/dashboard/")
-	})
+	app.Get("/admin/*", redirect)
 }

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -65,10 +67,9 @@ type WorkersConfig struct {
 
 // FeaturesConfig controls optional application behavior.
 type FeaturesConfig struct {
-	// DashboardEnabled serves the administration dashboard at /dashboard/, and
-	// redirects the retired /admin/ panel there. It only takes effect in a binary
-	// built with the dashboard tag; see web/dashboard.
+	// DashboardEnabled serves the embedded administration dashboard.
 	DashboardEnabled bool
+	DashboardPath    string
 	AutoMigrate      bool
 }
 
@@ -161,6 +162,10 @@ func LoadConfig() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	c.Features.DashboardPath, err = routePath("DASHBOARD_PATH", "/dashboard")
+	if err != nil {
+		return Config{}, err
+	}
 	c.Features.AutoMigrate, err = boolean("AUTO_MIGRATE", true)
 	if err != nil {
 		return Config{}, err
@@ -183,10 +188,8 @@ func (c Config) Validate() error {
 	case !strings.HasPrefix(c.App.PublicURL, "https://"):
 		return fmt.Errorf("APP_PUBLIC_URL must use https:// for %s", c.App.Env)
 	}
-	for _, origin := range c.App.CORSAllowedOrigins {
-		if origin == "*" {
-			return errors.New("CORS_ALLOWED_ORIGINS must not contain * in production")
-		}
+	if slices.Contains(c.App.CORSAllowedOrigins, "*") {
+		return errors.New("CORS_ALLOWED_ORIGINS must not contain * in production")
 	}
 	if c.DB.Type == "postgres" && c.DB.SSLMode == "disable" && c.DB.Host != "db" && c.DB.Host != "localhost" && c.DB.Host != "127.0.0.1" {
 		return errors.New("DB_SSLMODE must be enabled for remote postgres")
@@ -211,6 +214,17 @@ func boolean(key string, fallback bool) (bool, error) {
 		return false, fmt.Errorf("%s must be a boolean, got %q: %w", key, v, err)
 	}
 	return b, nil
+}
+
+func routePath(key, fallback string) (string, error) {
+	value := env(key, fallback)
+	isAbsolute := strings.HasPrefix(value, "/")
+	isClean := value == path.Clean(value)
+	hasRouteParameters := strings.ContainsAny(value, ":*+?")
+	if !isAbsolute || value == "/" || !isClean || hasRouteParameters {
+		return "", fmt.Errorf("%s must be a clean absolute path without route parameters, got %q", key, value)
+	}
+	return value, nil
 }
 
 func duration(key string, fallback int, unit time.Duration) (time.Duration, error) {

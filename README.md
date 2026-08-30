@@ -37,14 +37,14 @@ The API listens on `http://localhost:9090`. Check it with:
 curl http://localhost:9090/healthz
 ```
 
-To include the administration dashboard, install Node.js 22 and pnpm, then run:
+To build and enable the administration dashboard, install Node.js 22 and pnpm, then run:
 
 ```sh
-make build-dashboard
+make build
 DASHBOARD_ENABLED=true ./bin/momobase serve
 ```
 
-Open `http://localhost:9090/dashboard/` and sign in with the administrator created above.
+Open `http://localhost:9090/dashboard/` (or `DASHBOARD_PATH`) and sign in with the administrator created above.
 
 ## Docker Compose
 
@@ -139,7 +139,7 @@ encrypts it at rest and injects the account environment during initialization.
 ```sh
 make quality          # format, vet, tests, and lint
 make web-typecheck    # SDK and dashboard types
-make build-dashboard  # web bundle and tagged Go binary
+make build            # dashboard bundle and Go binary
 ```
 
 The long-form [documentation](docs/README.md) covers API workflows, authentication,
