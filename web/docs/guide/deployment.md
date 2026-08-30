@@ -43,7 +43,7 @@ The service listens on port `9090`, and the Compose configuration enables the da
 
 ## Deploy a binary
 
-Build the binary with `make build` or use a release artifact for your platform. Configure its environment, then run:
+Build the binary from source with `make build`. Configure its environment, then run:
 
 ```sh
 momobase migrate

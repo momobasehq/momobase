@@ -43,6 +43,8 @@ mb_data
 build
 node_modules
 dist
+!web/dashboard/dist/
+!web/dashboard/dist/**
 *.tsbuildinfo
 bin
 data/momobase*

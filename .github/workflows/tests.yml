@@ -2,8 +2,11 @@ name: Go Tests
 
 on:
   push:
+    branches:
+      - "**"
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -41,6 +44,14 @@ jobs:
 
       - name: Build dashboard bundle
         run: make dashboard
+
+      - name: Verify dashboard bundle is current
+        shell: bash
+        run: |
+          if [[ -n "$(git status --porcelain -- web/dashboard/dist)" ]]; then
+            git status --short -- web/dashboard/dist
+            exit 1
+          fi
 
       - name: Verify formatting
         shell: bash

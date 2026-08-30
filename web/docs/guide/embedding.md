@@ -4,10 +4,10 @@ Import the root module when Momobase should run inside a Go application with com
 
 ## Create an instance
 
-From a Momobase source checkout, build the embedded dashboard before compiling your application:
+Add Momobase to your module:
 
 ```sh
-make dashboard
+go get github.com/momobasehq/momobase@latest
 ```
 
 Then construct and run the instance:
@@ -39,10 +39,6 @@ func main() {
 ```
 
 `New()` reads environment configuration unless you provide `WithConfig()`. It opens the database and prepares the HTTP server, providers, and workers, so the caller must close the returned instance.
-
-::: warning Dashboard build artifact
-The Go package embeds `web/dashboard/dist`. A source build must generate that directory before Go compilation. Published source or vendored copies must include the generated dashboard files until the package distribution removes this build-time requirement.
-:::
 
 ## Configure the instance
 
