@@ -45,10 +45,9 @@ type RouterDeps struct {
 	Logger    *slog.Logger
 	AdminAuth *identity.AdminAuthService
 	AppAuth   *identity.AppAuthService
-	// DashboardEnabled serves the administration dashboard at /dashboard/. It only
-	// takes effect in a binary built with the dashboard tag, which is what carries
-	// the assets; see web/dashboard.
+	// DashboardEnabled serves the embedded administration dashboard.
 	DashboardEnabled   bool
+	DashboardPath      string
 	CORSAllowedOrigins []string
 	// TrustedProxyCIDRs names the proxies in front of this deployment. Fiber reads a
 	// forwarded address only from a peer in this list, so an empty list means the
@@ -102,7 +101,7 @@ func NewRouter(d RouterDeps) *fiber.App {
 	// answering even when every route behind them is failing.
 	app.Get("/ping", healthcheck.New())
 	app.Get("/healthz", publich.Health)
-	mountDashboard(app, d.DashboardEnabled)
+	mountDashboard(app, d.DashboardEnabled, d.DashboardPath)
 	mountPublic(app, d)
 	mountAdmin(app, d)
 	app.Post(

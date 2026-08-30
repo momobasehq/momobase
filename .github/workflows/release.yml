@@ -55,6 +55,7 @@ jobs:
 
       - name: Verify the tagged commit
         run: |
+          make dashboard
           go vet ./...
           go test ./...
 

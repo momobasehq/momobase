@@ -9,9 +9,8 @@ export default defineConfig({
 	resolve: {
 		alias: { "@": path.resolve(import.meta.dirname, "src") },
 	},
-	// The Go binary embeds dist/ and serves it under /dashboard/, so every asset URL
-	// has to be written with that prefix at build time.
-	base: "/dashboard/",
+	// Relative URLs let the Go binary choose the dashboard path at run time.
+	base: "./",
 	build: {
 		// Sourcemaps would add megabytes to the binary for no operator benefit, and the
 		// manifest is only useful to a server that rewrites asset URLs — Go serves the

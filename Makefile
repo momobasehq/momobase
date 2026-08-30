@@ -4,13 +4,13 @@ GOLANGCI_LINT?=golangci-lint
 GORELEASER?=goreleaser
 PNPM?=pnpm
 
-run:
+run: dashboard
 	go run ./cmd/$(APP) serve
 
-build:
+build: dashboard
 	go build -o bin/$(APP) ./cmd/$(APP)
 
-test:
+test: dashboard
 	go test ./...
 
 tidy:
@@ -22,10 +22,10 @@ fmt:
 fmt-check:
 	@test -z "$$(gofmt -l $(GOFILES))" || (gofmt -l $(GOFILES); exit 1)
 
-vet:
+vet: dashboard
 	go vet ./...
 
-lint:
+lint: dashboard
 	$(GOLANGCI_LINT) run ./...
 
 lint-fix:
@@ -44,7 +44,7 @@ release-check:
 snapshot:
 	$(GORELEASER) release --clean --snapshot --skip=publish
 
-seed-admin:
+seed-admin: dashboard
 	@test -n "$$ADMIN_PASSWORD" || (echo "Set ADMIN_PASSWORD before running seed-admin" >&2; exit 1)
 	go run ./cmd/$(APP) seed-admin --email admin@momobase.local --password "$$ADMIN_PASSWORD" --name "Super Admin"
 
@@ -65,24 +65,18 @@ web-typecheck: web-install
 sdk-build: web-install
 	$(PNPM) -C web --filter @momobase/sdk run build
 
-# Builds the dashboard bundle. Nothing under web/dashboard/dist is committed, so the
-# Go embed is behind a build tag: compile with `-tags dashboard` to include it.
+# Builds the dashboard bundle embedded by every Go binary.
 dashboard: web-install
 	$(PNPM) -C web --filter @momobase/dashboard run build
 
-# The binary with the dashboard embedded. Plain `make build` deliberately omits it,
-# so a Go-only checkout still builds.
-build-dashboard: dashboard
-	go build -tags dashboard -o bin/$(APP) ./cmd/$(APP)
-
-docs:
+docs: dashboard
 	swag init -g ./cmd/momobase/main.go --parseInternal --output docs --outputTypes json
 	# rm -f docs/docs.go
 	# install swag if not already installed
 	# $ go install github.com/swaggo/swag/cmd/swag@latest
 
-mtn:
-	go build -tags dashboard -o ./bin/momo ./examples/mtn/main.go 
+mtn: dashboard
+	go build -o ./bin/momo ./examples/mtn/main.go
 
 # tell make that these targets are not files
-.PHONY: docs run build test tidy fmt fmt-check vet lint lint-fix lint-format quality release-check snapshot seed-admin smoke smoke-api web-install web-typecheck sdk-build dashboard build-dashboard docs mtn
+.PHONY: docs run build test tidy fmt fmt-check vet lint lint-fix lint-format quality release-check snapshot seed-admin smoke smoke-api web-install web-typecheck sdk-build dashboard docs mtn

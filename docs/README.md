@@ -299,14 +299,14 @@ Enable the administration dashboard:
 
 ```env
 DASHBOARD_ENABLED=true
+DASHBOARD_PATH=/dashboard
 ```
 
-The dashboard is embedded behind a build tag, because nothing under
-`web/dashboard/dist` is committed. A plain `go build` carries no bundle and serves
-nothing at `/dashboard/` whatever the flag says; build it with:
+Every binary embeds the dashboard. Because the generated bundle is not committed,
+use the unified build target:
 
 ```sh
-make build-dashboard      # pnpm build, then go build -tags dashboard
+make build      # pnpm build, then go build
 ```
 
 Then open:
@@ -473,11 +473,11 @@ make sdk-build      # or: pnpm -C web install --frozen-lockfile && pnpm -C web -
 
 `--frozen-lockfile` is deliberate: it fails on a `package.json` edited without regenerating `web/pnpm-lock.yaml` rather than silently resolving something new.
 
-The dashboard is a Vite/React application that consumes the SDK through the workspace, so there is one client for the Admin API rather than a hand-maintained twin. It routes on the URL hash, which means a deep link is only ever a request for `/dashboard/` and needs no server-side fallback.
+The dashboard is a Vite/React application that consumes the SDK through the workspace, so there is one client for the Admin API rather than a hand-maintained twin. It routes on the URL hash, which means a deep link is only ever a request for the configured dashboard root and needs no server-side fallback.
 
 ```bash
-make dashboard          # build the bundle
-make build-dashboard    # bundle + binary with it embedded
+make dashboard    # build the bundle
+make build        # bundle + binary with it embedded
 ```
 
 **Deploying the dashboard separately** is supported: copy `web/dashboard/.env.example` to
@@ -487,7 +487,7 @@ listed in the server's `CORS_ALLOWED_ORIGINS`, or the browser blocks every reque
 
 ## Local verification
 
-Run these checks after generating dependencies:
+Run these checks after generating dependencies and `make dashboard`:
 
 ```bash
 gofmt -w $(find . -name '*.go' -not -path './vendor/*')

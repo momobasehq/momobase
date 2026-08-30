@@ -3,7 +3,7 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
-	"description": "Administration dashboard served by the Momobase binary at /dashboard/.",
+	"description": "Administration dashboard served by the Momobase binary.",
 	"scripts": {
 		"dev": "vite",
 		"build": "tsc -b && vite build",

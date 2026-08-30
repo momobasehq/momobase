@@ -91,7 +91,7 @@ createRoot(root).render(
 			<QueryClientProvider client={queryClient}>
 				{/* Hash routing: every route lives after the #, which browsers never send to
             the server. A hard refresh of a deep link is therefore just a request for
-            /dashboard/, so no SPA fallback is needed and none can be got wrong. */}
+            the dashboard root, so no SPA fallback is needed and none can be got wrong. */}
 				<HashRouter>
 					<AuthProvider>
 						<TooltipProvider>

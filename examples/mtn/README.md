@@ -37,7 +37,7 @@ go run ./cmd/momobase seed-admin \
 Run Momobase with the MTN provider registered and the dashboard embedded:
 
 ```bash
-go run -tags dashboard ./examples/mtn
+go run ./examples/mtn
 ```
 
 Open <http://localhost:9090/dashboard/> and sign in with the administrator

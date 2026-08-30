@@ -1,5 +1,3 @@
-//go:build dashboard
-
 package dashboard
 
 import (
@@ -11,7 +9,7 @@ import (
 )
 
 // assetReference matches the URLs Vite writes into the built index.html.
-var assetReference = regexp.MustCompile(`/dashboard/assets/[A-Za-z0-9._@-]+`)
+var assetReference = regexp.MustCompile(`\./assets/[A-Za-z0-9._@-]+`)
 
 func indexHTML(t *testing.T) string {
 	t.Helper()
@@ -30,15 +28,14 @@ func indexHTML(t *testing.T) string {
 // Vite writes hashed asset names into index.html, and `all:` is what keeps the
 // underscore-prefixed chunks among them from being skipped. Without this test a
 // dropped chunk produces a served page whose script tags 404 — a white screen with
-// no build error anywhere. It only runs in a tagged build, which is the only build
-// that has assets to check.
+// no build error anywhere.
 func TestEveryReferencedAssetIsEmbedded(t *testing.T) {
 	references := assetReference.FindAllString(indexHTML(t), -1)
 	if len(references) == 0 {
 		t.Fatal("built index.html references no assets, so the bundle is not what was embedded")
 	}
 	for _, reference := range references {
-		name := strings.TrimPrefix(reference, "/dashboard/")
+		name := strings.TrimPrefix(reference, "./")
 		if _, err := fs.Stat(FS(), name); err != nil {
 			t.Errorf("index.html references %s, which is not embedded: %v", reference, err)
 		}

@@ -20,8 +20,7 @@ version: 2
 project_name: momobase
 
 # Hooks are argv, not shell commands: no &&, no globs, one command per entry. The
-# dashboard bundle is not committed, so it is built here and embedded by the
-# dashboard build tag below.
+# dashboard bundle is not committed, so it is built here before Go embeds it.
 before:
   hooks:
     - go mod download
@@ -50,9 +49,6 @@ builds:
       - osusergo
       - netgo
       - sqlite_omit_load_extension
-      # Embeds the bundle the before-hook just built. Dropping it produces a binary
-      # that silently serves no dashboard however DASHBOARD_ENABLED is set.
-      - dashboard
     ldflags: &build_ldflags
       - -s -w
       - -extldflags "-static"

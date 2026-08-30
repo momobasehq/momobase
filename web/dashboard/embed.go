@@ -1,5 +1,3 @@
-//go:build dashboard
-
 package dashboard
 
 import (
@@ -13,9 +11,6 @@ import (
 //
 //go:embed all:dist
 var assets embed.FS
-
-// Available reports whether this binary carries the dashboard assets.
-func Available() bool { return true }
 
 // FS returns the embedded dashboard assets rooted at the build output directory,
 // so a path matches the URL the built index.html references.

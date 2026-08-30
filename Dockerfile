@@ -4,8 +4,7 @@
 # GoReleaser has already built; both produce the same runtime, and the build
 # below matches the release build so that what CI smoke tests is what ships:
 # same Go version as go.mod, same tags, and the same static link.
-# The dashboard bundle. Nothing under web/dashboard/dist is committed, so the image
-# builds it here and the Go stage compiles with -tags dashboard to embed it.
+# The dashboard bundle is built here and embedded by the Go stage.
 FROM node:22-bookworm-slim AS web
 WORKDIR /web
 RUN npm install --global pnpm@11
@@ -35,7 +34,7 @@ ARG COMMIT=none
 ARG DATE=unknown
 RUN CGO_ENABLED=1 GOOS=linux go build \
     -trimpath \
-    -tags "osusergo,netgo,sqlite_omit_load_extension,dashboard" \
+    -tags "osusergo,netgo,sqlite_omit_load_extension" \
     -ldflags="-s -w -extldflags \"-static\" -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
     -o /out/momobase ./cmd/momobase
 
