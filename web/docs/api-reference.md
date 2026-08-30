@@ -12,4 +12,4 @@ import { ApiReference } from '@scalar/api-reference'
 import '@scalar/api-reference/style.css'
 </script>
 
-<ApiReference :configuration="{ spec: { url: '/swagger.yaml' } }" />
+<ApiReference :configuration="{ url: '/swagger.yaml', favicon: '/logo.svg', telemetry: false, showDeveloperTools: 'never' }" />
