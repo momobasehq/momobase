@@ -81,5 +81,8 @@ docs:
 	# install swag if not already installed
 	# $ go install github.com/swaggo/swag/cmd/swag@latest
 
+mtn:
+	go build -tags dashboard -o ./bin/momo ./examples/mtn/main.go 
+
 # tell make that these targets are not files
-.PHONY: docs run build test tidy fmt fmt-check vet lint lint-fix lint-format quality release-check snapshot seed-admin smoke smoke-api web-install web-typecheck sdk-build dashboard build-dashboard docs
+.PHONY: docs run build test tidy fmt fmt-check vet lint lint-fix lint-format quality release-check snapshot seed-admin smoke smoke-api web-install web-typecheck sdk-build dashboard build-dashboard docs mtn
