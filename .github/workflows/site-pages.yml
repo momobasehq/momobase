@@ -1,4 +1,4 @@
-name: Deploy site to GitHub Pages
+name: Deploy docs to GitHub Pages
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - .github/workflows/site-pages.yml
-      - web/site/**
+      - web/docs/**
       - web/package.json
       - web/pnpm-lock.yaml
       - web/pnpm-workspace.yaml
@@ -18,27 +18,46 @@ permissions:
   id-token: write
 
 concurrency:
-  group: site-pages
+  group: docs-pages
   cancel-in-progress: false
 
 jobs:
   build:
-    name: Build site
+    name: Build docs
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Build and upload Pages artifact
-        uses: withastro/action@v6
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4.2.0
         with:
-          path: web/site
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v6.4.0
+        with:
           node-version: 24
-          package-manager: pnpm@11
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm -C web install --frozen-lockfile
+
+      - name: Build docs
+        run: pnpm -C web --filter @momobase/docs run build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: web/docs/.vitepress/dist
 
   deploy:
-    name: Deploy site
+    name: Deploy docs
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10

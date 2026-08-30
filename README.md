@@ -6,7 +6,7 @@ Momobase is a self-hosted payment orchestration service. It gives applications o
 API for collections and disbursements, then routes each payment through the provider
 adapters you register.
 
-[Documentation](docs/README.md) · [OpenAPI specification](docs/swagger.json) · [Custom provider example](examples/customprovider)
+[Documentation](https://momobase.dev/) · [API reference](https://momobase.dev/api-reference) · [Custom provider example](examples/customprovider)
 
 ## What it includes
 
@@ -56,7 +56,7 @@ cp .env.docker.example .env
 docker compose up --build
 ```
 
-See the [deployment guide](docs/README.md#docker-compose) for secret generation,
+See the [deployment guide](https://momobase.dev/guide/deployment) for secret generation,
 administrator setup, migrations, and production settings.
 
 ## Embed in Go
@@ -142,7 +142,7 @@ make web-typecheck    # SDK and dashboard types
 make build            # dashboard bundle and Go binary
 ```
 
-The long-form [documentation](docs/README.md) covers API workflows, authentication,
+The long-form [documentation](https://momobase.dev/) covers API workflows, authentication,
 configuration, migrations, operations, and deployment. The TypeScript client lives in
 [`web/sdk`](web/sdk).
 

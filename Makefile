@@ -69,9 +69,8 @@ sdk-build: web-install
 dashboard: web-install
 	$(PNPM) -C web --filter @momobase/dashboard run build
 
-docs: dashboard
-	swag init -g ./cmd/momobase/main.go --parseInternal --output docs --outputTypes json
-	# rm -f docs/docs.go
+docs:
+	swag init -g ./cmd/momobase/main.go --parseInternal --output web/docs/public --outputTypes json,yaml
 	# install swag if not already installed
 	# $ go install github.com/swaggo/swag/cmd/swag@latest
 

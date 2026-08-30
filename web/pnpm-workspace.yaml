@@ -1,6 +1,7 @@
 packages:
   - sdk
   - dashboard
-  - site
+  - docs
 allowBuilds:
   esbuild: false
+  vue-demi: true
