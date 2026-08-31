@@ -1,5 +1,5 @@
 {
-	"name": "@momobase/sdk",
+	"name": "momobase",
 	"version": "0.1.0",
 	"description": "TypeScript SDK for the Momobase payment service API.",
 	"license": "MIT",
