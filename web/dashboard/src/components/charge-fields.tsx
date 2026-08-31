@@ -1,4 +1,4 @@
-import type { ChargeRule, ChargeSchedule, ChargeType } from "@momobase/sdk";
+import type { ChargeRule, ChargeSchedule, ChargeType } from "momobase";
 
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";

@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router";
 import { toast } from "sonner";
-import { AdminPermissions, type App, type ChargeSchedule } from "@momobase/sdk";
+import { AdminPermissions, type App, type ChargeSchedule } from "momobase";
 
 import { DataTable, type Column } from "@/components/data-table";
 import { ChargeFields, zeroCharges } from "@/components/charge-fields";

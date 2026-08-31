@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AdminPermissions, type AnalyticsQuery } from "@momobase/sdk";
+import { AdminPermissions, type AnalyticsQuery } from "momobase";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

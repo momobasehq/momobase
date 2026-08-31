@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { AdminPermissions } from "@momobase/sdk";
+import { AdminPermissions } from "momobase";
 
 import {
 	ServiceMixChart,

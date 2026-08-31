@@ -7,7 +7,7 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
-import type { AnalyticsBucket, TransactionAnalytics } from "@momobase/sdk";
+import type { AnalyticsBucket, TransactionAnalytics } from "momobase";
 
 import {
 	Card,

@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { Navigate, Route, Routes } from "react-router";
-import { AdminPermissions, type PermissionCode } from "@momobase/sdk";
+import { AdminPermissions, type PermissionCode } from "momobase";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Skeleton } from "@/components/ui/skeleton";

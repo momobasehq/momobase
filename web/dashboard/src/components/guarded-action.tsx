@@ -6,7 +6,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { PermissionCode } from "@momobase/sdk";
+import type { PermissionCode } from "momobase";
 
 import { useAuth } from "@/hooks/use-auth";
 

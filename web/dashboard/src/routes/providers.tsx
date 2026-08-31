@@ -44,7 +44,7 @@ import {
 	AdminPermissions,
 	type ChargeSchedule,
 	type ProviderAccount,
-} from "@momobase/sdk";
+} from "momobase";
 
 import { useAuth } from "@/hooks/use-auth";
 import { usePagedQuery } from "@/hooks/use-paged-query";

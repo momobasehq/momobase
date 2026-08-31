@@ -7,7 +7,7 @@ import {
 	PermissionWildcard,
 	type Permission,
 	type Role,
-} from "@momobase/sdk";
+} from "momobase";
 
 import { DataTable, type Column } from "@/components/data-table";
 import { GuardedAction } from "@/components/guarded-action";

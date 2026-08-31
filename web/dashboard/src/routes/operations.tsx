@@ -13,7 +13,7 @@ import {
 	type ProviderHealthSnapshot,
 	type RuntimeProvider,
 	type WorkerState,
-} from "@momobase/sdk";
+} from "momobase";
 import { Link } from "react-router";
 
 import { useAuth } from "@/hooks/use-auth";

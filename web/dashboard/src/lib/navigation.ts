@@ -10,7 +10,7 @@ import {
 	TerminalSquare,
 	Users,
 } from "lucide-react";
-import { AdminPermissions, type PermissionCode } from "@momobase/sdk";
+import { AdminPermissions, type PermissionCode } from "momobase";
 
 /** NavItem is one sidebar entry and the permission required to reach it. */
 export interface NavItem {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AdminPermissions, type AdminUser } from "@momobase/sdk";
+import { AdminPermissions, type AdminUser } from "momobase";
 
 import { DataTable, type Column } from "@/components/data-table";
 import { GuardedAction } from "@/components/guarded-action";

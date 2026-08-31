@@ -27,7 +27,7 @@ import {
 	titleCase,
 } from "@/lib/format";
 import { keys } from "@/lib/query-keys";
-import type { AdminTransaction } from "@momobase/sdk";
+import type { AdminTransaction } from "momobase";
 
 const columns: Column<AdminTransaction>[] = [
 	{

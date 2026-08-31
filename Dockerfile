@@ -10,14 +10,10 @@ WORKDIR /web
 RUN npm install --global pnpm@11
 # Manifests first, so a source-only change reuses the installed dependency layer.
 COPY web/pnpm-workspace.yaml web/pnpm-lock.yaml web/package.json ./
-COPY web/sdk/package.json ./sdk/
 COPY web/dashboard/package.json ./dashboard/
-COPY web/docs/package.json ./docs/
 RUN pnpm install --frozen-lockfile
 COPY web ./
-# The trailing ellipsis includes workspace dependencies, so pnpm builds the SDK
-# before the dashboard without also building the documentation site.
-RUN pnpm --filter @momobase/dashboard... run build
+RUN pnpm --filter @momobase/dashboard run build
 
 FROM golang:1.26-bookworm AS build
 WORKDIR /src

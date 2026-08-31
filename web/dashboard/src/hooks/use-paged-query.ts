@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import type { PaginatedData } from "@momobase/sdk";
+import type { PaginatedData } from "momobase";
 
 import type { Page } from "@/lib/query-keys";
 

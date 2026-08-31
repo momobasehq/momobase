@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { HashRouter } from "react-router";
 import { ThemeProvider } from "next-themes";
-import { MomobaseAPIError } from "@momobase/sdk";
+import { MomobaseAPIError } from "momobase";
 import { toast } from "sonner";
 
 import { App } from "@/App";

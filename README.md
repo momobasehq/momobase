@@ -6,7 +6,7 @@
 
 [![Go tests](https://github.com/momobasehq/momobase/actions/workflows/tests.yml/badge.svg)](https://github.com/momobasehq/momobase/actions/workflows/tests.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/momobasehq/momobase.svg)](https://pkg.go.dev/github.com/momobasehq/momobase)
-[![Documentation](https://github.com/momobasehq/momobase/actions/workflows/site-pages.yml/badge.svg)](https://momobase.dev/)
+[![Documentation](https://github.com/momobasehq/momobasehq.github.io/actions/workflows/site-pages.yml/badge.svg)](https://momobase.dev/)
 [![Release](https://img.shields.io/github/v/release/momobasehq/momobase)](https://github.com/momobasehq/momobase/releases)
 [![License](https://img.shields.io/github/license/momobasehq/momobase)](LICENSE.txt)
 

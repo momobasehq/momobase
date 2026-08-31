@@ -1,4 +1,4 @@
-import type { ListOptions } from "@momobase/sdk";
+import type { ListOptions } from "momobase";
 
 /** Page is the pagination slice a list query is showing. */
 export type Page = Required<Pick<ListOptions, "page" | "perPage">>;

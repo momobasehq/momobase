@@ -5,7 +5,7 @@ import {
 	type AvailablePaymentMethod,
 	type PaymentMethod,
 	type ServiceType,
-} from "@momobase/sdk";
+} from "momobase";
 
 import { Button } from "@/components/ui/button";
 import {

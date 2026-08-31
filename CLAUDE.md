@@ -8,8 +8,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make run                 # go run ./cmd/momobase serve
 make build               # binary in bin/
 make quality             # fmt-check + vet + test + lint (run before pushing)
-make docs                # regenerate web/docs/public/swagger.{json,yaml} from swag annotations
-make sdk-build           # pnpm -C web build of @momobase/sdk (pnpm, not npm)
 make seed-admin          # requires ADMIN_PASSWORD in the environment
 make smoke-api           # scripts/smoke_api.sh against a running server
 make snapshot            # local GoReleaser build (needs gcc-aarch64-linux-gnu)
@@ -29,7 +27,7 @@ CI gates (`.github/workflows/tests.yml`): `gofmt -l`, `go mod tidy -diff`, `go m
 
 **cgo is required.** SQLite is linked through cgo; a `CGO_ENABLED=0` binary compiles and even prints `version`, then fails on its first query. Release and Docker builds use `CGO_ENABLED=1` with a static link.
 
-`web/docs/` is the long-form operational reference (workflows, env vars, curl examples, deployment notes) — read it rather than re-deriving that material.
+Long-form operational documentation lives at https://github.com/momobasehq/momobasehq.github.io.
 
 ## Architecture
 
@@ -114,7 +112,7 @@ These are load-bearing; breaking one is a silent correctness bug.
 
 **Exposing a new helper to third-party providers.** Put it in `providers/`; it may delegate pure value handling to `internal/utils`. `momobase_test.go` compiles a stub provider from the public contract so regressions fail at compile time.
 
-**Adding an HTTP endpoint.** Request payload in `internal/dto` with its `validate:` tags and `Normalize` → handler in the matching `internal/http/*` package with swag annotations, decoding through `bind[dto.X]` so the payload validates itself → register in `internal/http/router.go` with its guards (`RequirePermission`/`RequireAppScope`, `JSONOnly`, `NoCache`) → any new query goes on a repository, never in the handler → `make docs` → mirror in `web/sdk/src/client.ts` (+`types.ts`), which the dashboard consumes through the pnpm workspace. There is no second client to keep in step.
+**Adding an HTTP endpoint.** Request payload in `internal/dto` with its `validate:` tags and `Normalize` → handler in the matching `internal/http/*` package with swag annotations, decoding through `bind[dto.X]` so the payload validates itself → register in `internal/http/router.go` with its guards (`RequirePermission`/`RequireAppScope`, `JSONOnly`, `NoCache`) → any new query goes on a repository, never in the handler → update the API specification in `momobasehq.github.io` and mirror the client change in `momobasehq/sdk`.
 
 An admin handler dependency is added to `adminh.Deps`, never as another positional argument: its fields come from five packages and several share a shape, so a swapped pair would still compile.
 

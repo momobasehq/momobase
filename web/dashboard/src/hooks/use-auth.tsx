@@ -13,7 +13,7 @@ import {
 	permitted,
 	type AdminUser,
 	type PermissionCode,
-} from "@momobase/sdk";
+} from "momobase";
 
 import { clearSession, loadRefreshToken, persistToken } from "@/lib/session";
 

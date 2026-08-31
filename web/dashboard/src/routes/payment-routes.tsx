@@ -7,7 +7,7 @@ import {
 	type PaymentMethod,
 	type PaymentRoute,
 	type ServiceType,
-} from "@momobase/sdk";
+} from "momobase";
 
 import { DataTable, type Column } from "@/components/data-table";
 import { GuardedAction } from "@/components/guarded-action";

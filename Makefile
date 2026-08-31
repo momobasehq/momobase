@@ -62,20 +62,12 @@ web-install:
 web-typecheck: web-install
 	$(PNPM) -C web run typecheck
 
-sdk-build: web-install
-	$(PNPM) -C web --filter @momobase/sdk run build
-
 # Builds the dashboard bundle embedded by every Go binary.
 dashboard: web-install
 	$(PNPM) -C web --filter @momobase/dashboard run build
-
-docs:
-	swag init -g ./cmd/momobase/main.go --parseInternal --output web/docs/public --outputTypes json,yaml
-	# install swag if not already installed
-	# $ go install github.com/swaggo/swag/cmd/swag@latest
 
 mtn: dashboard
 	go build -o ./bin/momo ./examples/mtn/main.go
 
 # tell make that these targets are not files
-.PHONY: docs run build test tidy fmt fmt-check vet lint lint-fix lint-format quality release-check snapshot seed-admin smoke smoke-api web-install web-typecheck sdk-build dashboard docs mtn
+.PHONY: run build test tidy fmt fmt-check vet lint lint-fix lint-format quality release-check snapshot seed-admin smoke smoke-api web-install web-typecheck dashboard mtn

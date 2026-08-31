@@ -1,4 +1,4 @@
-import type { TokenSnapshot } from "@momobase/sdk";
+import type { TokenSnapshot } from "momobase";
 
 const storageKey = "momobase.dashboard.session";
 

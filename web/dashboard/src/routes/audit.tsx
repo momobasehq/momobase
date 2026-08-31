@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePagedQuery } from "@/hooks/use-paged-query";
 import { formatDateTime } from "@/lib/format";
 import { keys } from "@/lib/query-keys";
-import type { AuditLog } from "@momobase/sdk";
+import type { AuditLog } from "momobase";
 
 const columns: Column<AuditLog>[] = [
 	{

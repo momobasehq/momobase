@@ -2,7 +2,7 @@
   "name": "@momobase/web",
   "version": "0.0.0",
   "private": true,
-  "description": "Workspace root for everything Momobase ships to a browser.",
+  "description": "Workspace root for the embedded Momobase dashboard.",
   "scripts": {
     "build": "pnpm -r run build",
     "format": "biome format --write .",

@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router";
-import { AdminPermissions, type ChargeRule } from "@momobase/sdk";
+import { AdminPermissions, type ChargeRule } from "momobase";
 
 import {
 	ServiceMixChart,
