@@ -2,7 +2,10 @@ package momobase_test
 
 import (
 	"context"
+	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -64,8 +67,11 @@ func testConfig(t *testing.T) momobase.Config {
 }
 
 func TestNewBuildsInstanceWithCustomProvider(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	instance, err := momobase.New(
+		nil,
 		momobase.WithConfig(testConfig(t)),
+		momobase.WithLogger(logger),
 		momobase.WithProvider("stub_pay", newStubProvider),
 	)
 	if err != nil {
@@ -83,8 +89,8 @@ func TestNewBuildsInstanceWithCustomProvider(t *testing.T) {
 	if instance.DB() == nil {
 		t.Error("DB() = nil, want the opened database handle")
 	}
-	if instance.Logger() == nil {
-		t.Error("Logger() = nil, want the instance logger")
+	if instance.Logger() != logger {
+		t.Error("Logger() did not return the configured logger")
 	}
 	removePaymentHook := instance.OnPaymentRequest().Bind(func(context.Context, hooks.PaymentRequestEvent) error {
 		return nil
@@ -96,6 +102,33 @@ func TestNewBuildsInstanceWithCustomProvider(t *testing.T) {
 	removeTransactionHook()
 	if got := instance.Addr(); got != "127.0.0.1:0" {
 		t.Errorf("Addr() = %q, want the configured address", got)
+	}
+}
+
+func TestInstancePublicOperations(t *testing.T) {
+	instance, err := momobase.New(
+		momobase.WithConfig(testConfig(t)),
+		momobase.WithProvider("stub_pay", newStubProvider),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = instance.Close() }()
+
+	ctx := context.Background()
+	if err := instance.Migrate(ctx); err != nil {
+		t.Errorf("Migrate() error = %v", err)
+	}
+	if err := instance.SeedAdmin(ctx, "admin@example.com", "correct-horse-battery-staple", "Admin"); err != nil {
+		t.Errorf("SeedAdmin() error = %v", err)
+	}
+	response, err := instance.App().Test(httptest.NewRequest(http.MethodGet, "/ping", nil))
+	if err != nil {
+		t.Fatalf("App().Test() error = %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		t.Errorf("GET /ping status = %d, want %d", response.StatusCode, http.StatusOK)
 	}
 }
 
