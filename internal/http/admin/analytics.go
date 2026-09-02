@@ -10,7 +10,7 @@ import (
 	"github.com/momobasehq/momobase/internal/service/identity"
 )
 
-// TransactionAnalytics writes a bucketed transaction series for the dashboard charts.
+// TransactionAnalytics writes a bucketed transaction series for API consumers.
 //
 // @Summary Transaction analytics
 // @Tags Admin - Analytics

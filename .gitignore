@@ -41,18 +41,11 @@ go.work.sum
 main
 mb_data
 build
-node_modules
-dist
-!web/dashboard/dist/
-!web/dashboard/dist/**
-*.tsbuildinfo
 bin
 data/momobase*
+pages/swagger.json
+pages/swagger.yaml
 
 .agents
 skills-lock*
 .claude
-
-.vite
-.astro
-**/.vitepress/cache/

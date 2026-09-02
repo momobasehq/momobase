@@ -90,7 +90,7 @@ type SystemRoleDefinition struct {
 // Their sets reproduce the authorization the hardcoded role checks enforced: an
 // operations administrator could read every admin endpoint and query balances but
 // mutate nothing, and everything else was super_admin only. read_only is new — the
-// dashboard offered it while the API rejected it — and is operations without balances,
+// client offered it while the API rejected it — and is operations without balances,
 // which are the one read that reaches a provider's API rather than the database.
 var SystemRoles = []SystemRoleDefinition{
 	{
