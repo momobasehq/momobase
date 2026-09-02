@@ -20,7 +20,15 @@
 //
 // Momobase registers no providers on its own: a build carries exactly the
 // providers it asks for, and New reports an error when none are registered.
-// providers/dummy is a reference adapter that simulates payments in memory, and
-// providers/mtn is an optional MTN Mobile Money adapter. Applications register
-// either package explicitly, like any out-of-tree provider.
+// providers/dummy is the included reference adapter and moves no money.
+//
+// @title Momobase API
+// @version 1.0
+// @description Embeddable payment orchestration API for application payments and administrative operations.
+// @BasePath /
+// @schemes http https
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Enter a bearer token using the format: Bearer {token}
 package momobase

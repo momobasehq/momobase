@@ -35,8 +35,6 @@ func TestLoadConfigDefaultsAndOverrides(t *testing.T) {
 	t.Setenv("CORS_ALLOWED_ORIGINS", " https://one.example, ,https://two.example ")
 	t.Setenv("ADMIN_ACCESS_TTL_MINUTES", "7")
 	t.Setenv("HEALTH_CHECK_INTERVAL_SECONDS", "9")
-	t.Setenv("DASHBOARD_ENABLED", "true")
-	t.Setenv("DASHBOARD_PATH", "/operations")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -51,24 +49,8 @@ func TestLoadConfigDefaultsAndOverrides(t *testing.T) {
 	if cfg.Security.AdminAccessTTL != 7*time.Minute {
 		t.Fatalf("AdminAccessTTL = %v", cfg.Security.AdminAccessTTL)
 	}
-	if cfg.Workers.HealthInterval != 9*time.Second ||
-		!cfg.Features.DashboardEnabled ||
-		cfg.Features.DashboardPath != "/operations" {
+	if cfg.Workers.HealthInterval != 9*time.Second || !cfg.Features.AutoMigrate {
 		t.Fatalf("unexpected worker/features config: %+v %+v", cfg.Workers, cfg.Features)
-	}
-}
-
-func TestDashboardPathRejectsInvalidRoutes(t *testing.T) {
-	for _, value := range []string{"dashboard", "/", "/dashboard/", "/dashboard/:tenant"} {
-		t.Run(value, func(t *testing.T) {
-			setValidParsingEnvironment(t)
-			t.Setenv("DASHBOARD_PATH", value)
-
-			_, err := LoadConfig()
-			if err == nil || !strings.Contains(err.Error(), "DASHBOARD_PATH") {
-				t.Fatalf("LoadConfig() error = %v, want error naming DASHBOARD_PATH", err)
-			}
-		})
 	}
 }
 
@@ -183,8 +165,6 @@ func setValidParsingEnvironment(t *testing.T) {
 		"HEALTH_CHECK_INTERVAL_SECONDS":   "30",
 		"RECONCILIATION_INTERVAL_SECONDS": "60",
 		"CLEANUP_INTERVAL_SECONDS":        "300",
-		"DASHBOARD_ENABLED":               "false",
-		"DASHBOARD_PATH":                  "/dashboard",
 		"AUTO_MIGRATE":                    "true",
 	}
 	for key, value := range values {

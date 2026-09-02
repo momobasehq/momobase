@@ -30,29 +30,6 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4.2.0
-        with:
-          version: 11
-
-      - name: Set up Node
-        uses: actions/setup-node@v6.0.0
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-
-      - name: Build dashboard bundle
-        run: make dashboard
-
-      - name: Verify dashboard bundle is current
-        shell: bash
-        run: |
-          if [[ -n "$(git status --porcelain -- web/dashboard/dist)" ]]; then
-            git status --short -- web/dashboard/dist
-            exit 1
-          fi
-
       - name: Verify formatting
         shell: bash
         run: |
@@ -74,7 +51,7 @@ jobs:
 
       - name: Report coverage
         env:
-          MINIMUM_COVERAGE: "55.0"
+          MINIMUM_COVERAGE: "65.0"
         run: |
           go tool cover -func=coverage.out | tee coverage.txt
           total="$(awk '/^total:/ {gsub(/%/, "", $3); print $3}' coverage.txt)"

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -13,10 +12,15 @@ import (
 
 // AppConfig contains process-level application settings.
 type AppConfig struct {
-	Name               string
-	Env                string
-	Addr               string
-	PublicURL          string
+	// Name identifies the application in runtime metadata.
+	Name string
+	// Env selects development, staging, or production safety checks.
+	Env string
+	// Addr is the address passed to the Fiber listener.
+	Addr string
+	// PublicURL is the externally reachable base URL.
+	PublicURL string
+	// CORSAllowedOrigins lists browser origins allowed to call the API.
 	CORSAllowedOrigins []string
 	// TrustedProxyCIDRs names the proxies in front of this deployment, as addresses or
 	// CIDRs. Empty means no forwarded header is believed, so rate limiting keys on the
@@ -26,60 +30,89 @@ type AppConfig struct {
 
 // LogConfig contains structured logging settings.
 type LogConfig struct {
+	// Level is the minimum structured log level.
 	Level string
 }
 
 // DatabaseConfig contains settings shared by the supported database drivers.
 type DatabaseConfig struct {
-	Type     string
-	Path     string
-	Host     string
-	Port     string
-	User     string
+	// Type selects sqlite, postgres, or mysql.
+	Type string
+	// Path is the SQLite database path.
+	Path string
+	// Host is the PostgreSQL or MySQL host.
+	Host string
+	// Port is the PostgreSQL or MySQL port.
+	Port string
+	// User is the PostgreSQL or MySQL user.
+	User string
+	// Password is the PostgreSQL or MySQL password.
 	Password string
-	Name     string
-	SSLMode  string
+	// Name is the PostgreSQL or MySQL database name.
+	Name string
+	// SSLMode is the PostgreSQL TLS mode.
+	SSLMode string
 }
 
 // SecurityConfig contains encryption, token, and application credential settings.
 type SecurityConfig struct {
+	// EncryptionMasterKeyBase64 is a base64-encoded 32-byte AES key.
 	EncryptionMasterKeyBase64 string
-	AdminOAuthSecret          string
-	AppOAuthSecret            string
-	AdminAccessTTL            time.Duration
-	AdminRefreshTTL           time.Duration
-	AppAccessTTL              time.Duration
-	AppRefreshTTL             time.Duration
-	AppClientIDPrefix         string
-	AppClientSecretPrefix     string
+	// AdminOAuthSecret signs administrator tokens.
+	AdminOAuthSecret string
+	// AppOAuthSecret signs application tokens.
+	AppOAuthSecret string
+	// AdminAccessTTL controls administrator access-token lifetime.
+	AdminAccessTTL time.Duration
+	// AdminRefreshTTL controls administrator refresh-token lifetime.
+	AdminRefreshTTL time.Duration
+	// AppAccessTTL controls application access-token lifetime.
+	AppAccessTTL time.Duration
+	// AppRefreshTTL controls application refresh-token lifetime.
+	AppRefreshTTL time.Duration
+	// AppClientIDPrefix prefixes generated application client IDs.
+	AppClientIDPrefix string
+	// AppClientSecretPrefix prefixes generated application client secrets.
+	AppClientSecretPrefix string
 }
 
 // WorkersConfig controls background task activation and scheduling.
 type WorkersConfig struct {
-	Enabled                bool
-	HealthEnabled          bool
-	ReconciliationEnabled  bool
-	CleanupEnabled         bool
-	HealthInterval         time.Duration
+	// Enabled controls all background workers.
+	Enabled bool
+	// HealthEnabled controls provider health checks.
+	HealthEnabled bool
+	// ReconciliationEnabled controls transaction reconciliation.
+	ReconciliationEnabled bool
+	// CleanupEnabled controls expired-data cleanup.
+	CleanupEnabled bool
+	// HealthInterval is the provider health-check interval.
+	HealthInterval time.Duration
+	// ReconciliationInterval is the transaction reconciliation interval.
 	ReconciliationInterval time.Duration
-	CleanupInterval        time.Duration
+	// CleanupInterval is the expired-data cleanup interval.
+	CleanupInterval time.Duration
 }
 
-// FeaturesConfig controls optional application behavior.
+// FeaturesConfig controls optional package behavior.
 type FeaturesConfig struct {
-	// DashboardEnabled serves the embedded administration dashboard.
-	DashboardEnabled bool
-	DashboardPath    string
-	AutoMigrate      bool
+	// AutoMigrate applies pending schema changes while constructing an instance.
+	AutoMigrate bool
 }
 
 // Config contains all application configuration groups.
 type Config struct {
-	App      AppConfig
-	Log      LogConfig
-	DB       DatabaseConfig
+	// App contains process and HTTP settings.
+	App AppConfig
+	// Log contains structured logging settings.
+	Log LogConfig
+	// DB contains database connection settings.
+	DB DatabaseConfig
+	// Security contains encryption and token settings.
 	Security SecurityConfig
-	Workers  WorkersConfig
+	// Workers contains background task settings.
+	Workers WorkersConfig
+	// Features contains optional package behavior.
 	Features FeaturesConfig
 }
 
@@ -158,14 +191,6 @@ func LoadConfig() (Config, error) {
 		return Config{}, err
 	}
 	// features
-	c.Features.DashboardEnabled, err = boolean("DASHBOARD_ENABLED", false)
-	if err != nil {
-		return Config{}, err
-	}
-	c.Features.DashboardPath, err = routePath("DASHBOARD_PATH", "/dashboard")
-	if err != nil {
-		return Config{}, err
-	}
 	c.Features.AutoMigrate, err = boolean("AUTO_MIGRATE", true)
 	if err != nil {
 		return Config{}, err
@@ -214,17 +239,6 @@ func boolean(key string, fallback bool) (bool, error) {
 		return false, fmt.Errorf("%s must be a boolean, got %q: %w", key, v, err)
 	}
 	return b, nil
-}
-
-func routePath(key, fallback string) (string, error) {
-	value := env(key, fallback)
-	isAbsolute := strings.HasPrefix(value, "/")
-	isClean := value == path.Clean(value)
-	hasRouteParameters := strings.ContainsAny(value, ":*+?")
-	if !isAbsolute || value == "/" || !isClean || hasRouteParameters {
-		return "", fmt.Errorf("%s must be a clean absolute path without route parameters, got %q", key, value)
-	}
-	return value, nil
 }
 
 func duration(key string, fallback int, unit time.Duration) (time.Duration, error) {

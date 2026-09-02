@@ -1,7 +1,0 @@
-packages:
-  - dashboard
-allowBuilds:
-  esbuild: false
-  vue-demi: true
-minimumReleaseAgeExclude:
-  - momobase@1.0.0

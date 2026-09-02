@@ -20,14 +20,8 @@ import (
 )
 
 func testRouter() *fiber.App {
-	return testRouterWith(false, "/dashboard")
-}
-
-func testRouterWith(dashboard bool, dashboardPath string) *fiber.App {
 	return NewRouter(RouterDeps{
 		Logger:             slog.New(slog.NewTextHandler(io.Discard, nil)),
-		DashboardEnabled:   dashboard,
-		DashboardPath:      dashboardPath,
 		CORSAllowedOrigins: []string{"https://console.example.com"},
 		Public:             publich.NewHandler(nil, nil, nil),
 		Admin:              adminh.NewHandler(adminh.Deps{}),

@@ -42,12 +42,9 @@ const (
 // RouterDeps contains the services, handlers, and settings required to build
 // the application HTTP router.
 type RouterDeps struct {
-	Logger    *slog.Logger
-	AdminAuth *identity.AdminAuthService
-	AppAuth   *identity.AppAuthService
-	// DashboardEnabled serves the embedded administration dashboard.
-	DashboardEnabled   bool
-	DashboardPath      string
+	Logger             *slog.Logger
+	AdminAuth          *identity.AdminAuthService
+	AppAuth            *identity.AppAuthService
 	CORSAllowedOrigins []string
 	// TrustedProxyCIDRs names the proxies in front of this deployment. Fiber reads a
 	// forwarded address only from a peer in this list, so an empty list means the
@@ -58,8 +55,7 @@ type RouterDeps struct {
 	Webhooks          *webhookh.Handler
 }
 
-// NewRouter constructs the complete application, including public,
-// administrative, webhook, health, and optional dashboard routes.
+// NewRouter constructs the public, administrative, webhook, and health routes.
 func NewRouter(d RouterDeps) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName: "momobase",
@@ -101,7 +97,6 @@ func NewRouter(d RouterDeps) *fiber.App {
 	// answering even when every route behind them is failing.
 	app.Get("/ping", healthcheck.New())
 	app.Get("/healthz", publich.Health)
-	mountDashboard(app, d.DashboardEnabled, d.DashboardPath)
 	mountPublic(app, d)
 	mountAdmin(app, d)
 	app.Post(
@@ -149,7 +144,7 @@ func bodyLimit(limit int) fiber.Handler {
 	}
 }
 
-// corsConfig allows the dashboard's origin and nothing else by default. Every method
+// corsConfig allows the configured origins and nothing else. Every method
 // the router actually serves is listed: one missing fails preflight rather than the
 // request, which the browser reports as a CORS error with no status to trace.
 func corsConfig(origins []string) cors.Config {
