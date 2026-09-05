@@ -263,10 +263,15 @@ func (p *acmeProvider) headers() map[string]string {
 }
 
 func main() {
-	// Configuration is read from the environment; options override it.
+	// The development defaults, with the two values this example changes. Momobase
+	// reads no environment of its own, so a host that wants one reads it here.
+	cfg := momobase.DefaultConfig()
+	cfg.App.Addr = ":9090"
+	cfg.DB.Path = "./data/acme.db"
+
 	instance, err := momobase.New(
+		momobase.WithConfig(cfg),
 		momobase.WithProvider("acme_pay", newAcmeProvider),
-		momobase.WithAddr(":9090"),
 	)
 	if err != nil {
 		log.Fatal(err)

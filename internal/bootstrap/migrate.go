@@ -49,7 +49,7 @@ func warnPendingMigrations(ctx context.Context, db *gorm.DB, log *slog.Logger) {
 	}
 	if len(pending) > 0 {
 		log.Warn(
-			"schema migrations are pending and AUTO_MIGRATE is disabled; run `momobase migrate`",
+			"schema migrations are pending and Features.AutoMigrate is disabled; call Instance.Migrate",
 			slog.Any("pending", pending),
 		)
 	}
