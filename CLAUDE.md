@@ -52,7 +52,7 @@ Layers, outermost first:
 - `internal/utils` — dependency-free helpers shared across the module: identifier/account shape checks, ISO-3166 country normalization, raw-payload redaction, and the map, string, and error helpers an adapter reads its decrypted config with. Nothing here touches the database.
 - `internal/platform` — AES-256-GCM encryptor, HS256 JWT token manager, bcrypt, IDs, strict JSON request decoding, the `{success,data,error}` response envelope, pagination.
 - `internal/workers` — one `Manager` owning all background goroutines (`health`, `reconciliation`, `cleanup`), stopped by context cancellation.
-- `internal/bootstrap` — env config + validation, database open/migrate, dependency wiring in `NewApp`, and the serve/close lifecycle.
+- `internal/bootstrap` — `DefaultConfig` + validation, database open/migrate, dependency wiring in `NewApp`, and the serve/close lifecycle.
 
 ### Payment path
 
@@ -115,7 +115,7 @@ An admin handler dependency is added to `adminh.Deps`, never as another position
 
 **Adding a persisted entity.** Model in `internal/domain` → a repository in `internal/repository` with methods named for the question they answer, not for CRUD → a field on `repository.Set` → a migration in `internal/migrations`. Nothing outside the repository may name its table.
 
-**Adding a config value.** `internal/bootstrap/config.go` (`env`/`boolean`/`duration`/`list`), a rule in `Config.Validate` if it is unsafe by default in staging/production, then `.env.example`. Host applications supply any `.env` loading.
+**Adding a config value.** A field on the group struct in `internal/bootstrap/config.go` with its doc comment, its default in `DefaultConfig`, and a rule in `Config.Validate` if it is unsafe by default in staging/production. Then the configuration reference in `momobasehq.github.io`. **The package reads no environment variables and no files** — `DefaultConfig` returns plain values a host copies and edits, and where a value comes from is the host's decision. A `Validate` message names the Go field (`Security.AdminOAuthSecret`), never an environment variable.
 
 ## Conventions
 

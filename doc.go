@@ -13,6 +13,25 @@
 //	defer instance.Close()
 //	log.Fatal(instance.Run())
 //
+// Momobase reads no environment variables and no configuration files. New uses
+// [DefaultConfig] — a development baseline of plain values — unless a host supplies
+// its own through [WithConfig]. Copy the default, change what differs, and pass it:
+//
+//	cfg := momobase.DefaultConfig()
+//	cfg.App.Env = "production"
+//	cfg.App.PublicURL = "https://payments.example.com"
+//	cfg.DB = momobase.DatabaseConfig{Type: "postgres", Host: "db.internal", ...}
+//
+//	instance, err := momobase.New(
+//		momobase.WithConfig(cfg),
+//		momobase.WithProvider("acme_pay", acme.New),
+//	)
+//
+// A host that configures from the environment, a file, or a secret manager reads
+// it itself and assigns the fields, so the source of a value is the host's choice
+// rather than this package's. [Config.Validate] rejects the default credentials
+// and other unsafe settings when App.Env is staging or production.
+//
 // Provider contracts and helpers live in the providers package. Register a
 // providers.PaymentProvider factory under a provider code with [WithProvider].
 // Accounts for that code are then created, configured, and activated through
