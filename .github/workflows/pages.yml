@@ -30,7 +30,7 @@ jobs:
           cache: true
 
       - name: Build OpenAPI files
-        run: go run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g doc.go --parseInternal --output pages --outputTypes json,yaml
+        run: go run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g doc.go --parseInternal --output _public --outputTypes json,yaml
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -38,7 +38,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: pages
+          path: _public
 
   deploy:
     name: Deploy OpenAPI files
