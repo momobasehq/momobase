@@ -11,8 +11,8 @@
 # Test binary, built with `go test -c`
 *.test
 
-# `go build ./examples/...` drops its binary in the working directory, named for the
-# package. The Makefile targets build into bin/; nothing should land at the repo root.
+# `go build ./_examples/customprovider` drops its binary in the working directory, named
+# for the package. The Makefile targets build into bin/; nothing should land at the root.
 /customprovider
 
 # Code coverage profiles and other test artifacts
@@ -43,8 +43,8 @@ mb_data
 build
 bin
 data/momobase*
-pages/swagger.json
-pages/swagger.yaml
+_public/swagger.json
+_public/swagger.yaml
 
 .agents
 skills-lock*

@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```sh
 make quality             # fmt-check + vet + test + lint (run before pushing)
 make coverage            # shuffled tests with whole-module coverage
-make docs                # generate OpenAPI JSON and YAML into pages/
+make docs                # generate OpenAPI JSON and YAML into _public/
 ```
 
 Tests:
@@ -105,7 +105,7 @@ These are load-bearing; breaking one is a silent correctness bug.
 
 ## Making changes
 
-**Adding a provider.** Implement the two-method `providers.PaymentProvider` interface plus only the operation interfaces its capabilities require (`Collector`/`Disburser` and `TransactionQuerier`), then register a `func(*slog.Logger) providers.PaymentProvider` factory with `WithProvider(code, factory)`. Add `HealthChecker`, `BalanceQuerier`, `WebhookVerifier`, or `RequestValidator` only when supported. Use the constants and helpers in `providers` (`providers.ServiceCollection`, `providers.PaymentMethodMomo`, `providers.ConfigString`, …). `examples/customprovider/main.go` is a complete reference implementation. Config arrives as one flat `providers.ProviderConfig` map; Momobase injects the account's authoritative `environment` and requires `webhook_secret`.
+**Adding a provider.** Implement the two-method `providers.PaymentProvider` interface plus only the operation interfaces its capabilities require (`Collector`/`Disburser` and `TransactionQuerier`), then register a `func(*slog.Logger) providers.PaymentProvider` factory with `WithProvider(code, factory)`. Add `HealthChecker`, `BalanceQuerier`, `WebhookVerifier`, or `RequestValidator` only when supported. Use the constants and helpers in `providers` (`providers.ServiceCollection`, `providers.PaymentMethodMomo`, `providers.ConfigString`, …). `_examples/customprovider/main.go` is a complete reference implementation. Config arrives as one flat `providers.ProviderConfig` map; Momobase injects the account's authoritative `environment` and requires `webhook_secret`.
 
 **Exposing a new helper to third-party providers.** Put it in `providers/`; it may delegate pure value handling to `internal/utils`. `momobase_test.go` compiles a stub provider from the public contract so regressions fail at compile time.
 

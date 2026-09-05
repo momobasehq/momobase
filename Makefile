@@ -30,8 +30,8 @@ lint-format:
 	$(GOLANGCI_LINT) fmt ./...
 
 docs:
-	mkdir -p pages
-	$(SWAG) init -g doc.go --parseInternal --output pages --outputTypes json,yaml
+	mkdir -p _public
+	$(SWAG) init -g doc.go --parseInternal --output _public --outputTypes json,yaml
 
 quality: fmt-check vet test lint
 
