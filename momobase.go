@@ -36,12 +36,35 @@ type (
 	FeaturesConfig = bootstrap.FeaturesConfig
 )
 
-// LoadConfig reads configuration from the environment and rejects invalid
-// explicitly configured boolean and duration values. New calls it when no
-// configuration is supplied through WithConfig.
-func LoadConfig() (Config, error) {
-	return bootstrap.LoadConfig()
+// DefaultConfig returns Momobase's own configuration: a development baseline of
+// plain values that a host copies and edits. New uses it when no configuration is
+// supplied through WithConfig.
+//
+// Momobase reads no environment variables. A host that configures from the
+// environment, a file, or a secret manager reads it itself and assigns the fields:
+//
+//	cfg := momobase.DefaultConfig()
+//	cfg.App.Env = "production"
+//	cfg.App.Addr = os.Getenv("PORT")
+//	cfg.Security.AdminOAuthSecret = os.Getenv("ADMIN_OAUTH_SECRET")
+//
+// The placeholder credentials in the returned configuration are rejected by
+// Config.Validate when App.Env is staging or production.
+func DefaultConfig() Config {
+	return bootstrap.DefaultConfig()
 }
+
+// The placeholder credentials DefaultConfig carries, exported so that a host can
+// assert it replaced them. Config.Validate rejects all three when App.Env is
+// staging or production.
+const (
+	// DefaultEncryptionMasterKeyBase64 is the all-zero development AES key.
+	DefaultEncryptionMasterKeyBase64 = bootstrap.DefaultEncryptionMasterKeyBase64
+	// DefaultAdminOAuthSecret is the development administrator token secret.
+	DefaultAdminOAuthSecret = bootstrap.DefaultAdminOAuthSecret
+	// DefaultAppOAuthSecret is the development application token secret.
+	DefaultAppOAuthSecret = bootstrap.DefaultAppOAuthSecret
+)
 
 // Option customizes the instance constructed by New.
 type Option func(*options)
@@ -53,7 +76,7 @@ type options struct {
 	factories map[string]providers.Factory
 }
 
-// WithConfig uses cfg instead of reading configuration from the environment.
+// WithConfig uses cfg instead of DefaultConfig.
 func WithConfig(cfg Config) Option {
 	return func(o *options) { o.config = &cfg }
 }
@@ -127,7 +150,7 @@ type Instance struct {
 
 // New builds an instance from the supplied options, opening the database and
 // preparing the HTTP server, providers, and background workers. Configuration is
-// read from the environment unless WithConfig is supplied.
+// DefaultConfig unless WithConfig is supplied.
 // The caller owns the returned instance and must Close it to release its connections.
 func New(opts ...Option) (*Instance, error) {
 	o := &options{}
@@ -136,14 +159,9 @@ func New(opts ...Option) (*Instance, error) {
 			opt(o)
 		}
 	}
-	var cfg Config
+	cfg := DefaultConfig()
 	if o.config != nil {
 		cfg = *o.config
-	} else {
-		var err error
-		if cfg, err = LoadConfig(); err != nil {
-			return nil, err
-		}
 	}
 	for _, mutate := range o.mutators {
 		mutate(&cfg)

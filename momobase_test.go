@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -241,5 +242,26 @@ func TestServeReturnsNilWhenContextIsCancelled(t *testing.T) {
 	cancel()
 	if err := instance.Serve(ctx); err != nil {
 		t.Errorf("Serve() error = %v, want nil after cancellation", err)
+	}
+}
+
+// TestNewWithoutConfigUsesDefaults proves the package needs nothing from the
+// environment: with no configuration supplied it builds against DefaultConfig
+// alone. It runs in a temporary working directory because the default database
+// path is relative.
+func TestNewWithoutConfigUsesDefaults(t *testing.T) {
+	t.Chdir(t.TempDir())
+	instance, err := momobase.New(
+		momobase.WithProvider("stub_pay", newStubProvider),
+		momobase.WithAddr("127.0.0.1:0"),
+		momobase.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = instance.Close() }()
+
+	if _, err := os.Stat(filepath.FromSlash(momobase.DefaultConfig().DB.Path)); err != nil {
+		t.Errorf("default database was not created: %v", err)
 	}
 }

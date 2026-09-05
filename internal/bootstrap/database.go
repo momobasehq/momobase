@@ -45,6 +45,6 @@ func openDatabase(cfg Config) (*gorm.DB, error) {
 		)
 		return gorm.Open(mysql.Open(dsn), conf)
 	default:
-		return nil, fmt.Errorf("unsupported DB_TYPE %q", cfg.DB.Type)
+		return nil, fmt.Errorf("unsupported DB.Type %q", cfg.DB.Type)
 	}
 }
