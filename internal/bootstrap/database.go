@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/libtnb/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -22,7 +22,10 @@ func openDatabase(cfg Config) (*gorm.DB, error) {
 		if err := os.MkdirAll(filepath.Dir(cfg.DB.Path), 0755); err != nil {
 			return nil, err
 		}
-		return gorm.Open(sqlite.Open(cfg.DB.Path), conf)
+		// WAL keeps reads running while a write is in flight. The driver already
+		// defaults busy_timeout to 5s, which is the other half of living with
+		// SQLite's single-writer limit.
+		return gorm.Open(sqlite.Open(cfg.DB.Path+"?_pragma=journal_mode(WAL)"), conf)
 	case "postgres":
 		dsn := fmt.Sprintf(
 			"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=UTC",
