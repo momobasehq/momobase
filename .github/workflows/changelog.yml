@@ -1,0 +1,51 @@
+name: Publish Changelog
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: changelog
+  cancel-in-progress: false
+
+jobs:
+  changelog:
+    name: Generate changelog
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # A tag push checks out a detached HEAD, which has no branch to commit onto, so
+      # this targets the default branch instead. fetch-depth 0 brings the whole history
+      # and the tags with it, both of which auto-changelog reads to build the entries.
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/setup@v2
+        with:
+          version: ^11.24.0
+          runtime: node@24
+
+      - name: Generate changelog
+        run: pnpm dlx auto-changelog
+
+      # Re-running a tag regenerates an identical file, and committing nothing fails the
+      # step, so an unchanged changelog ends the job rather than the workflow run.
+      - name: Commit changelog
+        run: |
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "Changelog already current for ${{ github.ref_name }}."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "chore(release): momobase ${{ github.ref_name }}"
+          git push
