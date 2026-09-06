@@ -63,6 +63,12 @@ func TestTransactionAnalytics(t *testing.T) {
 		if first.Total != 2 || first.Succeeded != 1 || first.Failed != 1 {
 			t.Errorf("first bucket = %+v, want 2 total, 1 succeeded, 1 failed", first)
 		}
+		// Pinned because the label is produced twice — once in Go to seed the series,
+		// once in SQL to group the rows — and the two silently stop matching if either
+		// side's format drifts.
+		if want := from.Format(time.RFC3339); first.Period != want {
+			t.Errorf("first period = %q, want %q", first.Period, want)
+		}
 	})
 
 	// Summing amounts across currencies would produce a number that means nothing, so
@@ -101,6 +107,9 @@ func TestTransactionAnalytics(t *testing.T) {
 		result := testsupport.Must(s.Analytics.Transactions(ctx, identity.AnalyticsFilter{From: to.Add(-6 * time.Hour), To: to, Interval: "hour"}))
 		if len(result.Buckets) != 6 {
 			t.Errorf("hour buckets = %d, want 6", len(result.Buckets))
+		}
+		if want := to.Add(-6 * time.Hour).Format(time.RFC3339); result.Buckets[0].Period != want {
+			t.Errorf("first hour period = %q, want %q", result.Buckets[0].Period, want)
 		}
 	})
 

@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"gorm.io/driver/sqlite"
+	"github.com/libtnb/sqlite"
 	"gorm.io/gorm"
 )
 

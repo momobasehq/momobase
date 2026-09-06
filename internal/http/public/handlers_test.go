@@ -12,7 +12,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"gorm.io/driver/sqlite"
+	"github.com/libtnb/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 

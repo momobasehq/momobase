@@ -39,7 +39,7 @@ type ServiceCounts struct {
 
 // AnalyticsBucket is one point on a time series.
 type AnalyticsBucket struct {
-	// Period is the bucket's start, formatted to the interval's precision.
+	// Period is the bucket's start as an RFC3339 UTC timestamp.
 	Period string `json:"period"`
 	// Total is every transaction in the bucket, whatever its service or status.
 	Total int64 `json:"total"`
@@ -205,7 +205,7 @@ func periods(f AnalyticsFilter) []string {
 	}
 	var out []string
 	for at := f.From; at.Before(f.To); at = at.Add(step) {
-		out = append(out, formatPeriod(at, f.Interval))
+		out = append(out, formatPeriod(at))
 		if len(out) > maxAnalyticsBuckets {
 			return out
 		}
@@ -214,11 +214,13 @@ func periods(f AnalyticsFilter) []string {
 }
 
 // formatPeriod renders a bucket label identically to the SQL expressions below.
-func formatPeriod(at time.Time, interval string) string {
-	if interval == "hour" {
-		return at.UTC().Format("2006-01-02 15:00")
-	}
-	return at.UTC().Format("2006-01-02")
+//
+// RFC3339 rather than a bare date because modernc reinterprets a date-shaped string
+// as a timestamp and hands it back in this form; emitting it from every dialect keeps
+// the label the same regardless of driver. No interval argument is needed: normalize
+// truncates From to the interval, so the step alignment already carries the precision.
+func formatPeriod(at time.Time) string {
+	return at.UTC().Format(time.RFC3339)
 }
 
 // bucketExpression returns the driver's date-truncation expression.
@@ -231,19 +233,19 @@ func bucketExpression(dialect, interval string) (string, error) {
 	switch dialect {
 	case "sqlite":
 		if day {
-			return "strftime('%Y-%m-%d', created_at)", nil
+			return "strftime('%Y-%m-%dT00:00:00Z', created_at)", nil
 		}
-		return "strftime('%Y-%m-%d %H:00', created_at)", nil
+		return "strftime('%Y-%m-%dT%H:00:00Z', created_at)", nil
 	case "postgres":
 		if day {
-			return "to_char(created_at, 'YYYY-MM-DD')", nil
+			return `to_char(created_at, 'YYYY-MM-DD"T"00:00:00"Z"')`, nil
 		}
-		return "to_char(created_at, 'YYYY-MM-DD HH24:00')", nil
+		return `to_char(created_at, 'YYYY-MM-DD"T"HH24:00:00"Z"')`, nil
 	case "mysql":
 		if day {
-			return "DATE_FORMAT(created_at, '%Y-%m-%d')", nil
+			return "DATE_FORMAT(created_at, '%Y-%m-%dT00:00:00Z')", nil
 		}
-		return "DATE_FORMAT(created_at, '%Y-%m-%d %H:00')", nil
+		return "DATE_FORMAT(created_at, '%Y-%m-%dT%H:00:00Z')", nil
 	default:
 		return "", fmt.Errorf("analytics is not supported on the %q driver", dialect)
 	}
