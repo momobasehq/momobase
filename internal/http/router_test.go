@@ -76,9 +76,8 @@ func TestRouterHealthEndpointsAndCORS(t *testing.T) {
 	if !strings.Contains(res.Header.Get("Access-Control-Allow-Headers"), "Idempotency-Key") {
 		t.Fatalf("CORS allow headers = %q", res.Header.Get("Access-Control-Allow-Headers"))
 	}
-	// Every method the router serves must be advertised. One missing fails preflight
-	// rather than the request, which the browser reports as an opaque CORS error with
-	// no status to trace — how DELETE went unnoticed after roles gained it.
+	// Every method the router serves must be advertised: one missing fails preflight rather
+	// than the request, which the browser reports with no status to trace.
 	methods := res.Header.Get("Access-Control-Allow-Methods")
 	for _, method := range []string{
 		http.MethodGet,
@@ -189,9 +188,8 @@ func TestErrorHandlerUsesTheResponseEnvelope(t *testing.T) {
 	}
 }
 
-// TestRouterAnswers405ForAMethodMismatch pins behaviour the router already provides,
-// so nobody adds a handler for it: a path registered for another method is a 405 with
-// an Allow header, and an unknown path is still a 404, so the two stay distinguishable.
+// TestRouterAnswers405ForAMethodMismatch pins behaviour the router already provides, so
+// nobody adds a handler for it: 405 with an Allow header, 404 for an unknown path.
 func TestRouterAnswers405ForAMethodMismatch(t *testing.T) {
 	app := testRouter()
 
@@ -210,14 +208,8 @@ func TestRouterAnswers405ForAMethodMismatch(t *testing.T) {
 	}
 }
 
-// TestRequestValuesSurviveTheRequestTheyCameFrom pins Immutable, and the reason for it.
-//
-// fasthttp pools the buffer a request is parsed into, so by default every string a
-// handler reads from the path, the query or a header is a view into memory the next
-// request overwrites. Anything that outlives the handler — a provider account id used
-// as a key in the runtime map, an id carried into a retry — is then silently rewritten
-// into a splice of two unrelated requests. Nothing fails at the point of the mistake:
-// the write succeeds, the map has an entry, and routing simply stops matching.
+// TestRequestValuesSurviveTheRequestTheyCameFrom pins Immutable: fasthttp pools the
+// parse buffer, so without it a value outliving the handler is spliced into a later one.
 func TestRequestValuesSurviveTheRequestTheyCameFrom(t *testing.T) {
 	app := NewRouter(RouterDeps{
 		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -246,9 +238,8 @@ func TestRequestValuesSurviveTheRequestTheyCameFrom(t *testing.T) {
 	}
 }
 
-// TestPublicDirectoryTakesOnlyTheRoutesNothingElseAnswers pins the fall-through:
-// "/*" is registered before a host mounts anything on the returned app, so a miss
-// under the directory has to continue to the later route rather than 404 itself.
+// TestPublicDirectoryTakesOnlyTheRoutesNothingElseAnswers pins the fall-through: a miss
+// under the directory continues to a route the host mounted after "/*".
 func TestPublicDirectoryTakesOnlyTheRoutesNothingElseAnswers(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("home"), 0o600); err != nil {

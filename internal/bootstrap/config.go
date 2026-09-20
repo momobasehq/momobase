@@ -20,9 +20,8 @@ type AppConfig struct {
 	PublicURL string
 	// CORSAllowedOrigins lists browser origins allowed to call the API.
 	CORSAllowedOrigins []string
-	// TrustedProxyCIDRs names the proxies in front of this deployment, as addresses or
-	// CIDRs. Empty means no forwarded header is believed, so rate limiting keys on the
-	// immediate peer; behind a proxy that would put every client in one bucket.
+	// TrustedProxyCIDRs names the proxies in front of this deployment. Empty believes no
+	// forwarded header, which behind a proxy puts every client in one rate-limit bucket.
 	TrustedProxyCIDRs []string
 	// PublicDir is a directory of static files served at /. An empty value, or a
 	// directory that is not there, leaves / unrouted.

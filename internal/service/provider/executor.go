@@ -48,9 +48,8 @@ func (e *Executor) ValidateRequest(ctx context.Context, id string, req *provider
 	return guardValidatedRequest(before, req)
 }
 
-// guardValidatedRequest rejects a provider that rewrote a field it does not own.
-// Only the account and its scheme are the provider's to normalize; the rest is
-// already hashed for idempotency and about to be persisted as the caller sent it.
+// guardValidatedRequest rejects a provider that rewrote a field it does not own: only the
+// account and scheme are its to normalize, the rest is hashed and about to be persisted.
 func guardValidatedRequest(before providers.PaymentRequest, after *providers.PaymentRequest) error {
 	if before.TransactionID != after.TransactionID ||
 		before.PaymentMethod != after.PaymentMethod ||

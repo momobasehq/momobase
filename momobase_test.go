@@ -245,10 +245,8 @@ func TestServeReturnsNilWhenContextIsCancelled(t *testing.T) {
 	}
 }
 
-// TestNewWithoutConfigUsesDefaults proves the package needs nothing from the
-// environment: with no configuration supplied it builds against DefaultConfig
-// alone. It runs in a temporary working directory because the default database
-// path is relative.
+// TestNewWithoutConfigUsesDefaults proves the package needs nothing from the environment.
+// It runs in a temporary working directory because the default database path is relative.
 func TestNewWithoutConfigUsesDefaults(t *testing.T) {
 	t.Chdir(t.TempDir())
 	instance, err := momobase.New(
@@ -266,9 +264,8 @@ func TestNewWithoutConfigUsesDefaults(t *testing.T) {
 	}
 }
 
-// TestInstanceServesThePublicDirectory pins the path from configuration to route: a
-// real directory is served at /, one that is not there leaves / unrouted and reads
-// back empty, which is how a host decides whether to answer the root itself.
+// TestInstanceServesThePublicDirectory pins configuration through to route: a real
+// directory is served at /, one that is not there leaves / unrouted and reads back empty.
 func TestInstanceServesThePublicDirectory(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.App.PublicDir = t.TempDir()

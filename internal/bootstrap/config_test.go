@@ -6,10 +6,8 @@ import (
 	"time"
 )
 
-// TestDefaultConfigRunsUnchanged pins the development baseline: a host that supplies
-// no configuration still gets one that starts. The token secrets are the trap — the
-// manager rejects anything shorter than 32 characters, so a shortened placeholder
-// would fail every instance built without WithConfig.
+// TestDefaultConfigRunsUnchanged pins the development baseline. The token secrets are the
+// trap: the manager rejects anything shorter than 32 characters.
 func TestDefaultConfigRunsUnchanged(t *testing.T) {
 	cfg := DefaultConfig()
 	if err := cfg.Validate(); err != nil {

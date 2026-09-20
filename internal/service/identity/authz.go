@@ -72,9 +72,8 @@ func (s *AuthzService) seedRole(ctx context.Context, definition domain.SystemRol
 		if err := r.Roles.Upsert(ctx, &role); err != nil {
 			return err
 		}
-		// Re-read rather than trusting the upsert's in-memory row: on a conflict the
-		// stored role keeps the id it was first seeded with, and the association has
-		// to attach to that one.
+		// Re-read rather than trusting the upsert's in-memory row: on a conflict the stored role
+		// keeps the id it was first seeded with, and the association has to attach to that one.
 		stored, err := r.Roles.ByName(ctx, definition.Name)
 		if err != nil {
 			return err

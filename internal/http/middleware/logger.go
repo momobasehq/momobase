@@ -33,9 +33,8 @@ func RequestLogger(log *slog.Logger) fiber.Handler {
 	}
 }
 
-// responseStatus reports the status the caller will see. A handler that returned an
-// error has not been through the error handler yet, so the recorded status is still
-// whatever was set before it failed rather than what is about to be sent.
+// responseStatus reports the status the caller will see: a handler that returned an error
+// has not reached the error handler, so the recorded status is still the pre-failure one.
 func responseStatus(c fiber.Ctx, err error) int {
 	if err == nil {
 		return c.Response().StatusCode()

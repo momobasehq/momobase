@@ -375,9 +375,8 @@ func TestLatencyRespectsCancellation(t *testing.T) {
 	}
 }
 
-// TestErrorsSurviveRedaction guards every provider-authored error against
-// providers.Redact, which blanks any message containing a credential-like word.
-// A redacted message would reach operators as "[redacted provider error]".
+// TestErrorsSurviveRedaction guards every provider-authored error against providers.Redact,
+// which blanks any message containing a credential-like word.
 func TestErrorsSurviveRedaction(t *testing.T) {
 	ctx := context.Background()
 	uninitialized := &Provider{log: testLogger(), records: map[string]*record{}}

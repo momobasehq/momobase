@@ -256,11 +256,7 @@ func TestProviderRequestValidation(t *testing.T) {
 }
 
 // TestIdempotencyIsDecidedAfterNormalizationAndBeforeTheProvider pins the ordering the
-// whole create path depends on. The request hash is taken over the normalized payload
-// and before the selected provider's RequestValidator runs, which decides two things
-// that would otherwise be silent: two spellings of one request are the same request,
-// and a provider rewriting the account afterwards cannot change the identity of a
-// request that was already made.
+// create path rests on: normalize, then hash, then the provider's RequestValidator.
 func TestIdempotencyIsDecidedAfterNormalizationAndBeforeTheProvider(t *testing.T) {
 	t.Run("a differently spelled body replays rather than erroring", func(t *testing.T) {
 		s := testsupport.New(t)

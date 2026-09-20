@@ -137,9 +137,8 @@ func (s *AdminAuthService) activeUser(ctx context.Context, id string) (*domain.A
 	if err != nil {
 		return nil, errors.New("admin inactive")
 	}
-	// Resolved per request rather than carried in the token, so revoking a permission
-	// takes effect immediately instead of when the access token next refreshes. The
-	// admin row is already loaded, so this is one indexed join, not a round trip.
+	// Resolved per request rather than carried in the token, so revoking a permission takes
+	// effect immediately. The admin row is already loaded, so this is one indexed join.
 	if s.authz != nil {
 		permissions, err := s.authz.EffectivePermissions(ctx, user.Role)
 		if err != nil {

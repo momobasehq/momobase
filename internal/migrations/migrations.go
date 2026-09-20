@@ -29,9 +29,8 @@ func (m Migration) ID() string {
 	return m.Version + "_" + m.Name
 }
 
-// schemaMigration is one row of the applied-migration ledger. It is deliberately
-// private to this package: it records the migration history rather than any part
-// of the business domain.
+// schemaMigration is one row of the applied-migration ledger, private to this package:
+// it records migration history rather than any part of the business domain.
 type schemaMigration struct {
 	ID         string    `gorm:"primaryKey;size:96"`
 	AppliedAt  time.Time `gorm:"not null"`
@@ -53,10 +52,8 @@ func All() []Migration {
 	}
 }
 
-// upBaseline records that this ledger governs the database. There is nothing to
-// apply: the tables themselves are converged from the domain models by
-// bootstrap.AutoMigrate, so a database created by an earlier release and a
-// freshly created one are both already correct at this version.
+// upBaseline records that this ledger governs the database. There is nothing to apply:
+// bootstrap.AutoMigrate converges the tables, so old and new databases are both correct.
 func upBaseline(*gorm.DB) error {
 	return nil
 }

@@ -66,9 +66,8 @@ func (p *acmeProvider) HealthCheck(ctx context.Context) error {
 	return providers.DoJSON(ctx, p.client, http.MethodGet, p.baseURL+"/v1/ping", p.headers(), nil, nil)
 }
 
-// acmeDiallingCodes maps the countries Acme Pay settles in to their E.164 calling
-// code. The engine holds no dialling rules of its own — an account is opaque to it —
-// so a provider that needs mobile numbers carries the table it validates against.
+// acmeDiallingCodes maps Acme Pay's countries to their E.164 calling code. An account
+// is opaque to the engine, so a provider that needs numbers brings its own table.
 var acmeDiallingCodes = map[string]string{"UG": "256", "KE": "254", "TZ": "255"}
 
 // acmeSubscriberDigits is the national number length shared by Acme Pay's markets.

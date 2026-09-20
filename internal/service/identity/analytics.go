@@ -76,11 +76,8 @@ type TransactionAnalytics struct {
 	Total int64 `json:"total"`
 	// ByService splits Total across the two identity.
 	ByService ServiceCounts `json:"by_service"`
-	// Volume is the amount moved, per currency.
-	//
-	// Deliberately never summed into one figure: amounts are in each currency's minor
-	// unit, so adding UGX to USD would produce a number that means nothing. A caller
-	// that wants one line picks a currency.
+	// Volume is the amount moved, per currency. Never summed into one figure: amounts are
+	// in each currency's minor unit, so adding UGX to USD would mean nothing.
 	Volume []CurrencyVolume `json:"volume"`
 }
 
@@ -122,9 +119,8 @@ func (s *AnalyticsService) Transactions(ctx context.Context, filter AnalyticsFil
 	}
 
 	out := &TransactionAnalytics{From: filter.From, To: filter.To, Interval: filter.Interval}
-	// Pre-seeding every period keeps a quiet day as a zero rather than a missing point,
-	// which is the difference between a chart showing no traffic and one implying the
-	// line simply jumped.
+	// Pre-seeding every period keeps a quiet day a zero rather than a missing point, which
+	// is the difference between a chart showing no traffic and one implying a jump.
 	index := map[string]int{}
 	for _, period := range periods(filter) {
 		index[period] = len(out.Buckets)
@@ -134,9 +130,8 @@ func (s *AnalyticsService) Transactions(ctx context.Context, filter AnalyticsFil
 	for _, r := range rows {
 		position, ok := index[r.Period]
 		if !ok {
-			// A row outside the seeded periods means the driver formatted the bucket
-			// differently than expected; skipping it silently would understate the
-			// chart, so it is a bug worth surfacing rather than swallowing.
+			// A row outside the seeded periods means the driver formatted the bucket differently;
+			// skipping it silently would understate the chart.
 			return nil, fmt.Errorf("analytics: bucket %q is outside the requested range", r.Period)
 		}
 		bucket := &out.Buckets[position]
@@ -213,21 +208,14 @@ func periods(f AnalyticsFilter) []string {
 	return out
 }
 
-// formatPeriod renders a bucket label identically to the SQL expressions below.
-//
-// RFC3339 rather than a bare date because modernc reinterprets a date-shaped string
-// as a timestamp and hands it back in this form; emitting it from every dialect keeps
-// the label the same regardless of driver. No interval argument is needed: normalize
-// truncates From to the interval, so the step alignment already carries the precision.
+// formatPeriod renders a bucket label identically to the SQL expressions below. RFC3339
+// because modernc hands a date-shaped string back in this form, whatever the dialect.
 func formatPeriod(at time.Time) string {
 	return at.UTC().Format(time.RFC3339)
 }
 
-// bucketExpression returns the driver's date-truncation expression.
-//
-// This is the only per-dialect SQL in the codebase. Bucketing in Go instead would be
-// portable but would have to load every matching row, so a busy range would either be
-// slow or silently capped; a wrong chart is worse than a dialect switch.
+// bucketExpression returns the driver's date-truncation expression, the only per-dialect
+// SQL here: bucketing in Go would have to load every matching row.
 func bucketExpression(dialect, interval string) (string, error) {
 	day := interval == "day"
 	switch dialect {

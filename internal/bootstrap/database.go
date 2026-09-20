@@ -22,9 +22,8 @@ func openDatabase(cfg Config) (*gorm.DB, error) {
 		if err := os.MkdirAll(filepath.Dir(cfg.DB.Path), 0755); err != nil {
 			return nil, err
 		}
-		// WAL keeps reads running while a write is in flight. The driver already
-		// defaults busy_timeout to 5s, which is the other half of living with
-		// SQLite's single-writer limit.
+		// WAL keeps reads running while a write is in flight; the driver's 5s busy_timeout is
+		// the other half of living with SQLite's single writer.
 		return gorm.Open(sqlite.Open(cfg.DB.Path+"?_pragma=journal_mode(WAL)"), conf)
 	case "postgres":
 		dsn := fmt.Sprintf(

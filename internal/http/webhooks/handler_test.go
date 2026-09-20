@@ -158,10 +158,8 @@ func TestProviderWebhookRejectsInvalidSecret(t *testing.T) {
 	}
 }
 
-// TestProviderWebhookRejectsAnUnknownAccount covers the path a body read error used to.
-// fasthttp buffers the request before a handler runs, so a body that fails mid-read is
-// no longer a failure the handler can observe; an account the runtime has never loaded
-// is, and it reaches the same branch.
+// TestProviderWebhookRejectsAnUnknownAccount covers the path a body read error used to:
+// fasthttp buffers the request, so an account the runtime never loaded reaches it instead.
 func TestProviderWebhookRejectsAnUnknownAccount(t *testing.T) {
 	h, _, _ := webhookHandler(t)
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/absent", strings.NewReader(`{}`))

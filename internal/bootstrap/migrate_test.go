@@ -67,9 +67,8 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestMigrateAdoptsADatabaseCreatedBeforeTheLedgerExisted is the upgrade path:
-// releases before versioned migrations created their schema with AutoMigrate
-// alone, so those databases arrive with tables and data but no ledger.
+// TestMigrateAdoptsADatabaseCreatedBeforeTheLedgerExisted is the upgrade path: releases
+// before versioned migrations created their schema with AutoMigrate, so no ledger exists.
 func TestMigrateAdoptsADatabaseCreatedBeforeTheLedgerExisted(t *testing.T) {
 	db := migrateTestDatabase(t)
 	if err := AutoMigrate(db); err != nil {

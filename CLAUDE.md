@@ -120,6 +120,7 @@ An admin handler dependency is added to `adminh.Deps`, never as another position
 ## Conventions
 
 - Every exported symbol has a doc comment, including struct fields on API payload types. Match that density.
+- **A comment is at most two lines.** Only a package description (`doc.go`) runs longer. Anything needing more belongs in this file or in `momobasehq.github.io`.
 - Line limit is 160 (`golines` via golangci `formatters`); long call signatures are broken one argument per line.
 - Small constructors and predicates are written tightly, often without a blank line between them. Follow the surrounding file.
 - Tests use in-memory or temp-dir SQLite (`internal/testsupport` `New(t)` is the shared fixture), no mocking framework, and `t.Fatalf("Method() error = %v", err)`-style messages.

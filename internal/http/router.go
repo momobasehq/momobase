@@ -48,8 +48,7 @@ type RouterDeps struct {
 	AppAuth            *identity.AppAuthService
 	CORSAllowedOrigins []string
 	// TrustedProxyCIDRs names the proxies in front of this deployment. Fiber reads a
-	// forwarded address only from a peer in this list, so an empty list means the
-	// immediate peer is the client, which is the only safe default.
+	// forwarded address only from a peer in this list, which is the only safe default.
 	TrustedProxyCIDRs []string
 	Public            *publich.Handler
 	Admin             *adminh.Handler
@@ -62,13 +61,8 @@ type RouterDeps struct {
 func NewRouter(d RouterDeps) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName: "momobase",
-		// Values read from a request are copies rather than views into fasthttp's
-		// pooled buffer. Without this a string taken from Params, Query or a header
-		// stays valid only until the handler returns, and anything that outlives the
-		// request — a provider account id used as a runtime map key, an id carried
-		// into a background retry — is silently rewritten when the buffer is reused
-		// by a later request. The failure is invisible in tests and looks like a
-		// routing outage in production, which is not a trade worth an allocation.
+		// Values read from a request are copies, not views into fasthttp's pooled buffer:
+		// without this, anything outliving the handler is rewritten by a later request.
 		Immutable:        true,
 		BodyLimit:        maxRequestBytes,
 		ReadTimeout:      65 * time.Second,
@@ -86,9 +80,8 @@ func NewRouter(d RouterDeps) *fiber.App {
 		middlewarex.RequestContext,
 		middlewarex.BoundRequestID,
 		requestid.New(requestid.Config{Generator: func() string { return platform.NewID("req") }}),
-		// Ahead of Recover rather than behind it: a panic unwinds through the logger on
-		// its way out, so recording the request from inside would report the status
-		// nobody sent instead of the 500 the error handler answers with.
+		// Ahead of Recover: a panic unwinds through the logger, so logging from inside would
+		// report the status nobody sent instead of the 500 the error handler answers with.
 		middlewarex.RequestLogger(d.Logger),
 		recover.New(),
 		helmet.New(),
@@ -152,9 +145,8 @@ func bodyLimit(limit int) fiber.Handler {
 	}
 }
 
-// corsConfig allows the configured origins and nothing else. Every method
-// the router actually serves is listed: one missing fails preflight rather than the
-// request, which the browser reports as a CORS error with no status to trace.
+// corsConfig allows the configured origins and nothing else. Every method the router
+// serves is listed: one missing fails preflight, which a browser reports with no status.
 func corsConfig(origins []string) cors.Config {
 	if len(origins) == 0 {
 		origins = []string{"http://localhost:9090"}
@@ -189,10 +181,8 @@ func mountPublic(app *fiber.App, d RouterDeps) {
 	route(api, fiber.MethodPost, "/token", tokens, publich.ClientToken(d.AppAuth))
 	route(api, fiber.MethodPost, "/token/refresh", tokens, publich.AppRefreshToken(d.AppAuth))
 
-	// Guards are attached per route rather than to a group. A Fiber group registers its
-	// middleware for the whole prefix and runs it before the method is matched, so an
-	// authenticated group sharing this prefix would also guard the token endpoints, and
-	// only their registration order would keep them reachable.
+	// Guards are per route, not per group: a Fiber group runs its middleware before the
+	// method is matched, so guarding this prefix would also guard the token endpoints.
 	authed := func(extra ...fiber.Handler) []fiber.Handler {
 		return append([]fiber.Handler{limit, bearer}, extra...)
 	}
@@ -226,13 +216,11 @@ func mountAdmin(app *fiber.App, d RouterDeps) {
 	route(admin, fiber.MethodPost, "/login", tokens, h.Token)
 	route(admin, fiber.MethodPost, "/token/refresh", tokens, h.RefreshToken)
 
-	// Attached per route for the same reason as the public group: a Fiber group runs
-	// its middleware ahead of method matching, so guarding the prefix would also guard
-	// the three token endpoints above.
+	// Per route for the same reason as the public group: a group's middleware runs ahead
+	// of method matching, so guarding the prefix would also guard the token endpoints.
 	base := []fiber.Handler{limitBy(adminRateLimit), middlewarex.WithAdminBearer(d.AdminAuth), middlewarex.NoCache}
-	// Every administrative route names exactly one permission. Logout and identity are
-	// the two exceptions: they act on the caller's own session, so gating them on a
-	// permission would let a role lock someone out of signing out.
+	// Every administrative route names exactly one permission. Logout and identity are the
+	// exceptions: they act on the caller's own session, so a permission could lock it out.
 	chain := func(permission string, extra []fiber.Handler, handler fiber.Handler) []fiber.Handler {
 		out := append(append([]fiber.Handler{}, base...), extra...)
 		if permission != "" {

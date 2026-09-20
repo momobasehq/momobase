@@ -42,9 +42,8 @@ func App(c fiber.Ctx) *identity.AppIdentity {
 	return value
 }
 
-// authenticate verifies a bearer token's signature and then resolves the identity
-// behind it. The two steps are separate so the response can distinguish a token the
-// caller can fix by refreshing from a session that has been revoked.
+// authenticate verifies a bearer token's signature, then resolves the identity behind
+// it. Two steps, so a token the caller can refresh reads differently from a revoked one.
 func authenticate[T any](
 	k key,
 	verify func(string) (*platform.TokenClaims, error),
@@ -108,9 +107,8 @@ func RequireAppScope(scope string) fiber.Handler {
 	}
 }
 
-// granted reports whether held satisfies required, honouring the wildcard. Admin roles
-// and app credentials share it so the two authorization paths cannot drift on what a
-// wildcard means.
+// granted reports whether held satisfies required, honouring the wildcard. Shared by
+// both authorization paths so they cannot drift on what a wildcard means.
 func granted(held []string, required string) bool {
 	for _, permission := range held {
 		if permission == required || permission == domain.PermissionWildcard {

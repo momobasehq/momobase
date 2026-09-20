@@ -63,9 +63,8 @@ func (s *AppAuthService) issue(ctx context.Context, id *AppIdentity, session *do
 		RefreshTokenHash: platform.SHA256Hex(rc.TokenID),
 		ExpiresAt:        now.Add(s.refreshTTL),
 	}
-	// Issuing the session and stamping the credential are one transaction: a session
-	// that exists without its credential having been marked used would misreport when
-	// the credential was last exercised.
+	// Issuing the session and stamping the credential are one transaction: a session without
+	// its credential marked used would misreport when the credential was last exercised.
 	err = s.repos.Within(ctx, func(r *repository.Set) error {
 		if session == nil {
 			if err := r.AppSessions.Create(ctx, &values); err != nil {

@@ -32,12 +32,8 @@ func Migrate(ctx context.Context, db *gorm.DB, log *slog.Logger) error {
 	return AutoMigrate(db)
 }
 
-// warnPendingMigrations logs the migrations a database still needs when this
-// process is configured not to apply them.
-//
-// It never blocks start-up. Running migrations as a separate pre-deploy step is
-// the recommended practice for more than one replica, and refusing to serve would
-// turn that deliberate choice into an outage.
+// warnPendingMigrations logs the migrations a database still needs when this process is
+// not applying them. It never blocks start-up: that would make a pre-deploy step an outage.
 func warnPendingMigrations(ctx context.Context, db *gorm.DB, log *slog.Logger) {
 	if log == nil {
 		return

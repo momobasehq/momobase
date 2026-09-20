@@ -61,12 +61,8 @@ func run(ctx context.Context, db *gorm.DB, log *slog.Logger, migrations []Migrat
 	return done, nil
 }
 
-// apply records the migration as dirty, runs it, then clears the flag.
-//
-// The change deliberately does not run inside a transaction. MySQL commits DDL
-// implicitly, so a transactional runner would give one driver different recovery
-// semantics from the others. Marking first means an interrupted migration blocks
-// the next start rather than being retried against a half-changed schema.
+// apply records the migration as dirty, runs it, then clears the flag. No transaction:
+// MySQL commits DDL implicitly, and marking first blocks a retry against a half-changed schema.
 func apply(db *gorm.DB, log *slog.Logger, migration Migration) error {
 	started := time.Now()
 	row := schemaMigration{ID: migration.ID(), AppliedAt: started.UTC(), Dirty: true}
