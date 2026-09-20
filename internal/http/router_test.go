@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -241,5 +243,52 @@ func TestRequestValuesSurviveTheRequestTheyCameFrom(t *testing.T) {
 
 	if retained[0] != want {
 		t.Fatalf("retained path value = %q, want %q — request values are aliasing the pooled buffer", retained[0], want)
+	}
+}
+
+// TestPublicDirectoryTakesOnlyTheRoutesNothingElseAnswers is the whole public
+// directory: a host's static site answers / without taking a path the API, the
+// webhook endpoint, or the host itself already serves.
+//
+// The fall-through is the load-bearing half. "/*" is registered before a host mounts
+// anything on the returned app — a dashboard, its own pages — so a miss under the
+// directory has to continue to the later route rather than answer 404 itself.
+func TestPublicDirectoryTakesOnlyTheRoutesNothingElseAnswers(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("home"), 0o600); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+	app := NewRouter(RouterDeps{
+		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Public:    publich.NewHandler(nil, nil, nil),
+		Admin:     adminh.NewHandler(adminh.Deps{}),
+		Webhooks:  webhookh.NewHandler(nil),
+		PublicDir: dir,
+	})
+	// What a host mounts afterwards, the dashboard being the case this exists for.
+	app.Get("/_/*", func(c fiber.Ctx) error { return c.SendString("dashboard") })
+
+	for _, tc := range []struct {
+		path string
+		code int
+		body string
+	}{
+		{"/", http.StatusOK, "home"},
+		{"/healthz", http.StatusOK, `"ok":true`},
+		{"/_/", http.StatusOK, "dashboard"},
+		// No file, and nothing else routed: the 404 it would have had anyway.
+		{"/missing.html", http.StatusNotFound, ""},
+		// Traversal is the one way a static root turns into a file disclosure.
+		{"/../go.mod", http.StatusNotFound, ""},
+	} {
+		res := send(t, app, httptest.NewRequest(http.MethodGet, tc.path, nil))
+		if res.Code != tc.code || (tc.body != "" && !strings.Contains(res.Body, tc.body)) {
+			t.Errorf("GET %s = %d %q, want %d containing %q", tc.path, res.Code, res.Body, tc.code, tc.body)
+		}
+	}
+
+	// Without a directory the root is unrouted, which is what lets a host answer it.
+	if res := send(t, testRouter(), httptest.NewRequest(http.MethodGet, "/", nil)); res.Code != http.StatusNotFound {
+		t.Errorf("GET / without a public directory = %d, want %d", res.Code, http.StatusNotFound)
 	}
 }

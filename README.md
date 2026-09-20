@@ -69,6 +69,8 @@ instance, err := momobase.New(
 
 Where a value comes from is your application's decision: read the environment, a file, or a secret manager and assign the fields. The defaults carry placeholder credentials that startup rejects once `App.Env` is `staging` or `production`.
 
+The API answers on `/api/v1`, `/api/admin`, and `/webhooks`, so `/` is yours. `App.PublicDir` — `mb_public` by default — is a directory of static files served there; a missing one leaves `/` unrouted, and `instance.PublicDir()` reports which directory, if any, is being served.
+
 Mint the three real ones with `openssl rand`:
 
 ```sh

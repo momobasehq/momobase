@@ -24,6 +24,12 @@ type AppConfig struct {
 	// CIDRs. Empty means no forwarded header is believed, so rate limiting keys on the
 	// immediate peer; behind a proxy that would put every client in one bucket.
 	TrustedProxyCIDRs []string
+	// PublicDir is a directory of static files served at /. It holds the host's own
+	// site — a landing page, documentation, a checkout — and nothing Momobase ships,
+	// so an empty value or a directory that is not there simply leaves / unrouted.
+	// A request matching no file under it falls through to whatever would have
+	// answered it, including a route the host mounts on the instance afterwards.
+	PublicDir string
 }
 
 // LogConfig contains structured logging settings.
@@ -130,6 +136,7 @@ func DefaultConfig() Config {
 			Addr:               ":9090",
 			PublicURL:          "http://localhost:9090",
 			CORSAllowedOrigins: []string{"http://localhost:9090"},
+			PublicDir:          "mb_public",
 		},
 		Log: LogConfig{Level: "info"},
 		DB: DatabaseConfig{

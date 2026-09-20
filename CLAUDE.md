@@ -36,7 +36,7 @@ The root package (`momobase.go`, `doc.go`) is the embedding facade: it re-export
 
 Layers, outermost first:
 
-- `internal/http` — `NewRouter` builds a `*fiber.App`. A global `Use` stack (request context, request ID, structured logging, recovery, helmet, CORS, compression) sits in front of `/api/v1`, `/api/admin`, and `/webhooks`. Fiber's own middleware is used rather than reimplemented; `internal/http/middleware` holds only what Fiber has no equivalent for.
+- `internal/http` — `NewRouter` builds a `*fiber.App`. A global `Use` stack (request context, request ID, structured logging, recovery, helmet, CORS, compression) sits in front of `/api/v1`, `/api/admin`, and `/webhooks`. `RouterDeps.PublicDir`, when set, mounts a static directory on `/*` **last**, so it claims only what no earlier route answered and a miss falls through to a route the host mounts afterwards; `bootstrap` resolves the directory, so the router is handed one that exists or nothing at all. Fiber's own middleware is used rather than reimplemented; `internal/http/middleware` holds only what Fiber has no equivalent for.
 - `internal/dto` — every request body the API accepts, with its rules as `validate:` tags and its `Normalize`. A payload validates itself; nothing below the HTTP layer re-checks a field's shape.
 - `internal/repository` — the **only** package that reaches the database. One repository per persisted entity, a `Set` holding all fourteen, and `UnitOfWork.Within` as the single transaction boundary.
 - `internal/service/identity` — identity and tenancy only: admin auth/users, app auth, apps and credentials, authorization, analytics. It imports none of the payment packages.

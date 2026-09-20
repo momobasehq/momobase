@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -69,5 +71,26 @@ func TestAppCloseStopsWorkersAndClosesDatabase(t *testing.T) {
 	}
 	if err := app.Serve(context.Background()); err == nil {
 		t.Fatal("Serve() succeeded after Close()")
+	}
+}
+
+// TestResolvePublicDirServesOnlyARealDirectory pins the rule the router is spared:
+// what reaches it either exists or is nothing, so an instance never mounts a static
+// root that is a missing path or a file someone pointed at by mistake.
+func TestResolvePublicDirServesOnlyARealDirectory(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "index.html")
+	if err := os.WriteFile(file, []byte("home"), 0o600); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+	for name, tc := range map[string]struct{ in, want string }{
+		"a directory":  {dir, dir},
+		"a file":       {file, ""},
+		"missing":      {filepath.Join(dir, "absent"), ""},
+		"not resolved": {"", ""},
+	} {
+		if got := resolvePublicDir(tc.in); got != tc.want {
+			t.Errorf("%s: resolvePublicDir(%q) = %q, want %q", name, tc.in, got, tc.want)
+		}
 	}
 }
