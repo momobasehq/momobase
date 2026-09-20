@@ -13,6 +13,7 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 	"github.com/gofiber/fiber/v3/middleware/recover"
 	"github.com/gofiber/fiber/v3/middleware/requestid"
+	"github.com/gofiber/fiber/v3/middleware/static"
 
 	adminh "github.com/momobasehq/momobase/internal/http/admin"
 	middlewarex "github.com/momobasehq/momobase/internal/http/middleware"
@@ -53,6 +54,9 @@ type RouterDeps struct {
 	Public            *publich.Handler
 	Admin             *adminh.Handler
 	Webhooks          *webhookh.Handler
+	// PublicDir is a directory of static files to serve at /, already resolved: it
+	// exists, or it is empty and nothing is served there.
+	PublicDir string
 }
 
 // NewRouter constructs the public, administrative, webhook, and health routes.
@@ -105,6 +109,14 @@ func NewRouter(d RouterDeps) *fiber.App {
 		bodyLimit(maxWebhookBytes),
 		d.Webhooks.ProviderWebhook,
 	)
+	// Last, because "/*" matches every path: Fiber answers with the first route
+	// registered for one, so everything above keeps its own. A request matching no
+	// file falls through to the route that would have answered it — including one a
+	// host mounts on the returned app afterwards — so a static site can shadow
+	// neither the API nor the host's own pages.
+	if d.PublicDir != "" {
+		app.Get("/*", static.New(d.PublicDir))
+	}
 	return app
 }
 

@@ -265,3 +265,62 @@ func TestNewWithoutConfigUsesDefaults(t *testing.T) {
 		t.Errorf("default database was not created: %v", err)
 	}
 }
+
+// TestInstanceServesThePublicDirectory pins the whole path from configuration to
+// route: a host that points App.PublicDir at a real directory gets it at /, and one
+// pointing at a directory that is not there gets an unrouted / and an honest answer
+// from PublicDir — which is how a host decides whether to serve the root itself.
+func TestInstanceServesThePublicDirectory(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.App.PublicDir = t.TempDir()
+	if err := os.WriteFile(filepath.Join(cfg.App.PublicDir, "index.html"), []byte("home"), 0o600); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+	instance, err := momobase.New(
+		momobase.WithConfig(cfg),
+		momobase.WithProvider("stub_pay", newStubProvider),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = instance.Close() }()
+
+	if got := instance.PublicDir(); got != cfg.App.PublicDir {
+		t.Errorf("PublicDir() = %q, want %q", got, cfg.App.PublicDir)
+	}
+	response, err := instance.App().Test(httptest.NewRequest(http.MethodGet, "/", nil))
+	if err != nil {
+		t.Fatalf("App().Test() error = %v", err)
+	}
+	body, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if response.StatusCode != http.StatusOK || string(body) != "home" {
+		t.Errorf("GET / = %d %q, want 200 %q", response.StatusCode, body, "home")
+	}
+
+	absent := testConfig(t)
+	absent.App.PublicDir = filepath.Join(t.TempDir(), "mb_public")
+	bare, err := momobase.New(
+		momobase.WithConfig(absent),
+		momobase.WithProvider("stub_pay", newStubProvider),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = bare.Close() }()
+
+	if got := bare.PublicDir(); got != "" {
+		t.Errorf("PublicDir() = %q, want none for a directory that does not exist", got)
+	}
+	response, err = bare.App().Test(httptest.NewRequest(http.MethodGet, "/", nil))
+	if err != nil {
+		t.Fatalf("App().Test() error = %v", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Errorf("GET / = %d, want %d so a host can answer the root itself", response.StatusCode, http.StatusNotFound)
+	}
+}

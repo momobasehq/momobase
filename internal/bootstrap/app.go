@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +43,8 @@ type App struct {
 	Hooks      *hooks.Registry
 	Addr       string
 	AdminUsers *identity.AdminUserService
+	// PublicDir is the static directory being served at /, empty when there is none.
+	PublicDir string
 
 	lifecycleMu sync.Mutex
 	serveCancel context.CancelFunc
@@ -173,6 +176,11 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 		Analytics: identity.NewAnalyticsService(repos),
 		System:    info,
 	})
+	// Resolved here rather than in the router because the filesystem is a start-up
+	// concern: the router is handed a directory that exists or nothing at all, and a
+	// host can read back which from App.PublicDir.
+	publicDir := resolvePublicDir(cfg.App.PublicDir)
+
 	// Parsed here rather than in the router so a malformed CIDR fails at start-up with
 	// a clear error instead of silently disabling forwarded-header trust.
 	router := httpx.NewRouter(httpx.RouterDeps{
@@ -184,6 +192,7 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 		Public:             publicHandler,
 		Admin:              adminHandler,
 		Webhooks:           webhookh.NewHandler(webhooks),
+		PublicDir:          publicDir,
 	})
 
 	app := &App{
@@ -195,9 +204,25 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 		Hooks:      extensionHooks,
 		Addr:       cfg.App.Addr,
 		AdminUsers: adminUsers,
+		PublicDir:  publicDir,
 	}
 	databaseOwned = false
 	return app, nil
+}
+
+// resolvePublicDir returns dir when it names an existing directory, and an empty
+// string otherwise. A missing one is the ordinary case rather than an error: most
+// hosts serve no static site at all, and the default name is only a convention for
+// the ones that do.
+func resolvePublicDir(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return ""
+	}
+	return dir
 }
 
 func workerTasks(
