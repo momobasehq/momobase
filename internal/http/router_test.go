@@ -246,13 +246,9 @@ func TestRequestValuesSurviveTheRequestTheyCameFrom(t *testing.T) {
 	}
 }
 
-// TestPublicDirectoryTakesOnlyTheRoutesNothingElseAnswers is the whole public
-// directory: a host's static site answers / without taking a path the API, the
-// webhook endpoint, or the host itself already serves.
-//
-// The fall-through is the load-bearing half. "/*" is registered before a host mounts
-// anything on the returned app — a dashboard, its own pages — so a miss under the
-// directory has to continue to the later route rather than answer 404 itself.
+// TestPublicDirectoryTakesOnlyTheRoutesNothingElseAnswers pins the fall-through:
+// "/*" is registered before a host mounts anything on the returned app, so a miss
+// under the directory has to continue to the later route rather than 404 itself.
 func TestPublicDirectoryTakesOnlyTheRoutesNothingElseAnswers(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("home"), 0o600); err != nil {
@@ -265,7 +261,7 @@ func TestPublicDirectoryTakesOnlyTheRoutesNothingElseAnswers(t *testing.T) {
 		Webhooks:  webhookh.NewHandler(nil),
 		PublicDir: dir,
 	})
-	// What a host mounts afterwards, the dashboard being the case this exists for.
+	// What a host mounts afterwards, the server's dashboard being the real case.
 	app.Get("/_/*", func(c fiber.Ctx) error { return c.SendString("dashboard") })
 
 	for _, tc := range []struct {
@@ -276,7 +272,6 @@ func TestPublicDirectoryTakesOnlyTheRoutesNothingElseAnswers(t *testing.T) {
 		{"/", http.StatusOK, "home"},
 		{"/healthz", http.StatusOK, `"ok":true`},
 		{"/_/", http.StatusOK, "dashboard"},
-		// No file, and nothing else routed: the 404 it would have had anyway.
 		{"/missing.html", http.StatusNotFound, ""},
 		// Traversal is the one way a static root turns into a file disclosure.
 		{"/../go.mod", http.StatusNotFound, ""},

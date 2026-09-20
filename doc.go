@@ -32,10 +32,9 @@
 // rather than this package's. [Config.Validate] rejects the default credentials
 // and other unsafe settings when App.Env is staging or production.
 //
-// The API is served from /api/v1, /api/admin, and /webhooks, which leaves / to the
-// host. App.PublicDir names a directory of static files to serve there — a landing
-// page, documentation, a checkout — and defaults to mb_public; a directory that is
-// not there is not an error, it just leaves / unrouted for the host to answer.
+// The API is served from /api/v1, /api/admin, and /webhooks, so / is the host's.
+// App.PublicDir, mb_public by default, is a directory of static files served there;
+// a directory that is not there leaves / unrouted.
 //
 // Provider contracts and helpers live in the providers package. Register a
 // providers.PaymentProvider factory under a provider code with [WithProvider].

@@ -43,7 +43,7 @@ type App struct {
 	Hooks      *hooks.Registry
 	Addr       string
 	AdminUsers *identity.AdminUserService
-	// PublicDir is the static directory being served at /, empty when there is none.
+	// PublicDir is the static directory served at /, empty when there is none.
 	PublicDir string
 
 	lifecycleMu sync.Mutex
@@ -176,9 +176,7 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 		Analytics: identity.NewAnalyticsService(repos),
 		System:    info,
 	})
-	// Resolved here rather than in the router because the filesystem is a start-up
-	// concern: the router is handed a directory that exists or nothing at all, and a
-	// host can read back which from App.PublicDir.
+	// Resolved before the router, so it is handed a directory that exists or nothing.
 	publicDir := resolvePublicDir(cfg.App.PublicDir)
 
 	// Parsed here rather than in the router so a malformed CIDR fails at start-up with
@@ -210,10 +208,9 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 	return app, nil
 }
 
-// resolvePublicDir returns dir when it names an existing directory, and an empty
-// string otherwise. A missing one is the ordinary case rather than an error: most
-// hosts serve no static site at all, and the default name is only a convention for
-// the ones that do.
+// resolvePublicDir returns dir when it names an existing directory, and "" otherwise.
+// A missing one is the ordinary case rather than an error: most hosts serve no static
+// site at all.
 func resolvePublicDir(dir string) string {
 	if dir == "" {
 		return ""

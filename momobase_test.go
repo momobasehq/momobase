@@ -266,10 +266,9 @@ func TestNewWithoutConfigUsesDefaults(t *testing.T) {
 	}
 }
 
-// TestInstanceServesThePublicDirectory pins the whole path from configuration to
-// route: a host that points App.PublicDir at a real directory gets it at /, and one
-// pointing at a directory that is not there gets an unrouted / and an honest answer
-// from PublicDir — which is how a host decides whether to serve the root itself.
+// TestInstanceServesThePublicDirectory pins the path from configuration to route: a
+// real directory is served at /, one that is not there leaves / unrouted and reads
+// back empty, which is how a host decides whether to answer the root itself.
 func TestInstanceServesThePublicDirectory(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.App.PublicDir = t.TempDir()

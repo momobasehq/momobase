@@ -54,8 +54,7 @@ type RouterDeps struct {
 	Public            *publich.Handler
 	Admin             *adminh.Handler
 	Webhooks          *webhookh.Handler
-	// PublicDir is a directory of static files to serve at /, already resolved: it
-	// exists, or it is empty and nothing is served there.
+	// PublicDir is a resolved static directory to serve at /, empty for none.
 	PublicDir string
 }
 
@@ -109,11 +108,8 @@ func NewRouter(d RouterDeps) *fiber.App {
 		bodyLimit(maxWebhookBytes),
 		d.Webhooks.ProviderWebhook,
 	)
-	// Last, because "/*" matches every path: Fiber answers with the first route
-	// registered for one, so everything above keeps its own. A request matching no
-	// file falls through to the route that would have answered it — including one a
-	// host mounts on the returned app afterwards — so a static site can shadow
-	// neither the API nor the host's own pages.
+	// Last: "/*" matches every path, and a miss falls through, so a static site takes
+	// only what no earlier route — or one the host mounts afterwards — answers.
 	if d.PublicDir != "" {
 		app.Get("/*", static.New(d.PublicDir))
 	}
