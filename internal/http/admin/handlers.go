@@ -96,9 +96,8 @@ func NewHandler(deps Deps) *Handler {
 	}
 }
 
-// bind decodes a request body and lets the payload validate itself, which is the only
-// validation an administrative handler does: everything past this point is a question
-// about the database or the caller, and belongs to a service.
+// bind decodes a request body and lets the payload validate itself: everything past
+// this point is a question about the database or the caller, and belongs to a service.
 func bind[T any, P interface {
 	*T
 	dto.Payload
@@ -811,9 +810,8 @@ func page[T any](c fiber.Ctx, read func(context.Context, int, int) (repository.P
 	})
 }
 
-// providerPage enriches provider-owned rows without changing the repositories used by
-// routing and health workers. Names are presentation data, resolved in one query for
-// the current page.
+// providerPage enriches provider-owned rows without changing the repositories routing
+// and health use. Names are presentation data, resolved in one query per page.
 func providerPage[T any](
 	c fiber.Ctx,
 	accounts repository.ProviderAccountRepo,

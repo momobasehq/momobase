@@ -40,19 +40,14 @@ type CreatePayment struct {
 	Reference string `json:"reference" validate:"required,max=128"`
 	// Description is optional payment context shown to downstream systems.
 	Description string `json:"description" validate:"max=255"`
-	// Account is the provider-specific account the payment is collected from or
-	// disbursed to: a mobile number, bank account, card token, or wallet address.
-	// Momobase checks its shape only and leaves its meaning to the selected provider,
-	// through providers.RequestValidator.
+	// Account is the provider-specific account paid from or to: a mobile number, bank
+	// account, card token, or wallet address. Momobase checks its shape only.
 	Account string `json:"account" validate:"required,account"`
-	// Scheme optionally names the account's provider-specific scheme, such as a
-	// mobile network, bank, or card brand. Like PaymentMethod it is free-form; the
-	// selected provider interprets it and Momobase never matches on it.
+	// Scheme optionally names the account's scheme — network, bank, card brand. Free-form:
+	// the selected provider interprets it and Momobase never matches on it.
 	Scheme string `json:"scheme,omitempty" validate:"identifier"`
-	// Metadata optionally carries provider-specific payment details, such as a bank
-	// branch code. It reaches the selected provider and is never persisted, so it
-	// cannot become a free-form store of identifiers Momobase would then have to
-	// protect. It is part of the idempotency hash.
+	// Metadata optionally carries provider-specific details, such as a bank branch code. It
+	// reaches the provider, is never persisted, and is part of the idempotency hash.
 	Metadata map[string]any `json:"metadata,omitempty"`
 	// Customer optionally identifies the collection customer.
 	Customer *Party `json:"customer,omitempty"`

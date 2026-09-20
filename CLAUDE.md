@@ -36,7 +36,7 @@ The root package (`momobase.go`, `doc.go`) is the embedding facade: it re-export
 
 Layers, outermost first:
 
-- `internal/http` — `NewRouter` builds a `*fiber.App`. A global `Use` stack (request context, request ID, structured logging, recovery, helmet, CORS, compression) sits in front of `/api/v1`, `/api/admin`, and `/webhooks`. `RouterDeps.PublicDir`, when set, mounts a static directory on `/*` **last**, so it claims only what no earlier route answered and a miss falls through to a route the host mounts afterwards; `bootstrap` resolves the directory, so the router is handed one that exists or nothing at all. Fiber's own middleware is used rather than reimplemented; `internal/http/middleware` holds only what Fiber has no equivalent for.
+- `internal/http` — `NewRouter` builds a `*fiber.App`. A global `Use` stack (request context, request ID, structured logging, recovery, helmet, CORS, compression) sits in front of `/api/v1`, `/api/admin`, and `/webhooks`. `RouterDeps.PublicDir` mounts a static directory on `/*` **last**, and a miss falls through, so it claims only what nothing else answers; `bootstrap` resolves the path, so the router gets a directory that exists or nothing. Fiber's own middleware is used rather than reimplemented; `internal/http/middleware` holds only what Fiber has no equivalent for.
 - `internal/dto` — every request body the API accepts, with its rules as `validate:` tags and its `Normalize`. A payload validates itself; nothing below the HTTP layer re-checks a field's shape.
 - `internal/repository` — the **only** package that reaches the database. One repository per persisted entity, a `Set` holding all fourteen, and `UnitOfWork.Within` as the single transaction boundary.
 - `internal/service/identity` — identity and tenancy only: admin auth/users, app auth, apps and credentials, authorization, analytics. It imports none of the payment packages.
@@ -120,6 +120,7 @@ An admin handler dependency is added to `adminh.Deps`, never as another position
 ## Conventions
 
 - Every exported symbol has a doc comment, including struct fields on API payload types. Match that density.
+- **A comment is at most two lines.** Only a package description (`doc.go`) runs longer. Anything needing more belongs in this file or in `momobasehq.github.io`.
 - Line limit is 160 (`golines` via golangci `formatters`); long call signatures are broken one argument per line.
 - Small constructors and predicates are written tightly, often without a blank line between them. Follow the surrounding file.
 - Tests use in-memory or temp-dir SQLite (`internal/testsupport` `New(t)` is the shared fixture), no mocking framework, and `t.Fatalf("Method() error = %v", err)`-style messages.

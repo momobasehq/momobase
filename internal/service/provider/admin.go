@@ -253,9 +253,8 @@ func (s *AdminService) Activate(ctx context.Context, actor *domain.AdminUser, id
 		return err
 	}
 	if err := s.runtime.Reload(ctx, id); err != nil {
-		// The row is committed before the adapter is built, so a reload that fails has
-		// to put it back: an account marked active with no runtime would route to
-		// nothing.
+		// The row is committed before the adapter is built, so a reload that fails has to put it
+		// back: an account marked active with no runtime would route to nothing.
 		_ = s.repos.ProviderAccounts.Restore(ctx, id, map[string]any{"active": false})
 		return err
 	}

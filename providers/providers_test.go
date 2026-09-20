@@ -86,10 +86,8 @@ func TestConfigHelpers(t *testing.T) {
 	}
 }
 
-// TestPaymentStatusIsIdempotent guards the property the provider contract relies
-// on: adapters report normalized statuses, and the reconciliation and webhook
-// paths normalize again. A status that did not map to itself would be silently
-// rewritten, which is how a settled payment can end up reported as unknown.
+// TestPaymentStatusIsIdempotent guards the property the contract relies on: adapters report
+// normalized statuses and both paths normalize again, so a status must map to itself.
 func TestPaymentStatusIsIdempotent(t *testing.T) {
 	for _, status := range []string{"succeeded", "failed", "processing", "unknown", "cancelled", "expired"} {
 		if got := PaymentStatus(status); got != status {

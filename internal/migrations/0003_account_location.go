@@ -26,9 +26,8 @@ type appCurrency struct {
 
 func (appCurrency) TableName() string { return "apps" }
 
-// upAccountLocation replaces provider country lists with one country and pins every
-// existing provider and app to UGX. Charge and transaction fee columns are additive,
-// so AutoMigrate creates them after this data migration has completed.
+// upAccountLocation replaces provider country lists with one country and pins existing
+// providers and apps to UGX. The fee columns are additive, so AutoMigrate adds them after.
 func upAccountLocation(db *gorm.DB) error {
 	migrator := db.Migrator()
 	if !migrator.HasTable("provider_accounts") {

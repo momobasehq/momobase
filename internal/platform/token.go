@@ -93,9 +93,8 @@ func (m *TokenManager) Verify(token string) (*TokenClaims, error) {
 	return claimsFrom(verified), nil
 }
 
-// claimsFrom projects a verified JWT back onto TokenClaims. A claim the token does not
-// carry is left at its zero value: presence is the caller's business, and every field
-// that authorizes anything is re-read from the database anyway.
+// claimsFrom projects a verified JWT back onto TokenClaims. A missing claim is left zero:
+// every field that authorizes anything is re-read from the database anyway.
 func claimsFrom(token jwt.Token) *TokenClaims {
 	claims := TokenClaims{}
 	claims.SubjectID, _ = token.Subject()

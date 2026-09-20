@@ -43,7 +43,7 @@ type App struct {
 	Hooks      *hooks.Registry
 	Addr       string
 	AdminUsers *identity.AdminUserService
-	// PublicDir is the static directory being served at /, empty when there is none.
+	// PublicDir is the static directory served at /, empty when there is none.
 	PublicDir string
 
 	lifecycleMu sync.Mutex
@@ -110,9 +110,8 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 
 	audit := audit.New(repos, log)
 
-	// Seeded before anything can authenticate: the catalogue and the system roles are
-	// what every authorization check resolves against, so a boot that skipped this
-	// would authorize nothing.
+	// Seeded before anything can authenticate: every authorization check resolves against
+	// the catalogue and the system roles, so a boot that skipped it would grant nothing.
 	authz := identity.NewAuthzService(repos, audit)
 	if err = authz.Seed(context.Background()); err != nil {
 		return nil, err
@@ -176,9 +175,7 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 		Analytics: identity.NewAnalyticsService(repos),
 		System:    info,
 	})
-	// Resolved here rather than in the router because the filesystem is a start-up
-	// concern: the router is handed a directory that exists or nothing at all, and a
-	// host can read back which from App.PublicDir.
+	// Resolved before the router, so it is handed a directory that exists or nothing.
 	publicDir := resolvePublicDir(cfg.App.PublicDir)
 
 	// Parsed here rather than in the router so a malformed CIDR fails at start-up with
@@ -210,10 +207,8 @@ func NewApp(cfg Config, log *slog.Logger, registry providerapi.Registry) (*App, 
 	return app, nil
 }
 
-// resolvePublicDir returns dir when it names an existing directory, and an empty
-// string otherwise. A missing one is the ordinary case rather than an error: most
-// hosts serve no static site at all, and the default name is only a convention for
-// the ones that do.
+// resolvePublicDir returns dir when it names an existing directory, and "" otherwise.
+// A missing one is the ordinary case rather than an error.
 func resolvePublicDir(dir string) string {
 	if dir == "" {
 		return ""
@@ -327,9 +322,8 @@ func (a *App) Serve(ctx context.Context) error {
 	}
 }
 
-// recordListenAddr stores the address the listener actually bound. A configured port
-// of 0 asks the kernel to choose one, and an embedding application has no other way to
-// learn which.
+// recordListenAddr stores the address the listener actually bound: a configured port
+// of 0 asks the kernel to choose one, and a host has no other way to learn which.
 func (a *App) recordListenAddr(addr net.Addr) {
 	a.lifecycleMu.Lock()
 	defer a.lifecycleMu.Unlock()

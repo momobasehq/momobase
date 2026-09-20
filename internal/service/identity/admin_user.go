@@ -32,9 +32,8 @@ func (s *AdminUserService) Create(ctx context.Context, actor *domain.AdminUser, 
 	if role == "" {
 		role = domain.RoleOperations
 	}
-	// Any seeded or operator-created role is assignable. Checking the roles table
-	// rather than a literal list is the point: a custom role was unusable before,
-	// because the two valid names were compiled in here.
+	// Any seeded or operator-created role is assignable: checking the roles table rather
+	// than a compiled-in list is the point, since a custom role was unusable before.
 	if s.authz != nil {
 		exists, err := s.authz.RoleExists(ctx, role)
 		if err != nil {
@@ -79,9 +78,8 @@ func (s *AdminUserService) Create(ctx context.Context, actor *domain.AdminUser, 
 
 // ChangePassword replaces an administrator's password and revokes all of that user's active sessions.
 func (s *AdminUserService) ChangePassword(ctx context.Context, actor *domain.AdminUser, id, password string) error {
-	// Self-service is deliberately not a permission: changing your own password is
-	// allowed without users:update, and changing someone else's needs it, which the
-	// route's middleware has already enforced by the time this runs.
+	// Self-service is deliberately not a permission: your own password needs none, someone
+	// else's needs users:update, which the route's middleware has already enforced.
 	if actor == nil {
 		return errors.New("not allowed")
 	}
@@ -90,9 +88,8 @@ func (s *AdminUserService) ChangePassword(ctx context.Context, actor *domain.Adm
 		return err
 	}
 	now := time.Now().UTC()
-	// The password change and the session revocation are one transaction: an
-	// administrator whose password changed must not be left with live sessions
-	// authenticated by the old one.
+	// The password change and the session revocation are one transaction: an administrator
+	// whose password changed must not be left with sessions authenticated by the old one.
 	err = s.repos.Within(ctx, func(r *repository.Set) error {
 		if err := r.AdminUsers.SetPassword(ctx, id, hash, now); err != nil {
 			return err

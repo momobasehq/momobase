@@ -230,9 +230,8 @@ func (i *Instance) Addr() string {
 	return i.app.ListenAddr()
 }
 
-// PublicDir returns the directory of static files being served at /, or an empty
-// string when none is. A configured directory that does not exist reads back empty,
-// so this is what the instance serves rather than what it was asked to serve.
+// PublicDir returns the directory of static files served at /, or an empty string
+// when none is: a configured directory that does not exist reads back empty.
 func (i *Instance) PublicDir() string {
 	return i.app.PublicDir
 }

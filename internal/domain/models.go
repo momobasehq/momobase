@@ -22,10 +22,8 @@ type AdminUser struct {
 	FailedLoginAttempts int        `gorm:"not null;default:0" json:"failed_login_attempts"`
 	LockedUntil         *time.Time `json:"locked_until"`
 	CreatedBy           string     `gorm:"size:40" json:"created_by"`
-	// Permissions is the role's effective permission codes, resolved when the request
-	// is authenticated rather than stored. It is not a column: keeping it out of the
-	// token and out of the row is what makes a role change take effect on the very
-	// next request instead of the next refresh.
+	// Permissions is the role's effective permission codes, resolved per request rather than
+	// stored, so a role change takes effect on the next request instead of the next refresh.
 	Permissions []string `gorm:"-" json:"permissions,omitempty"`
 }
 

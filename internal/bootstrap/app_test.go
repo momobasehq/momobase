@@ -74,9 +74,8 @@ func TestAppCloseStopsWorkersAndClosesDatabase(t *testing.T) {
 	}
 }
 
-// TestResolvePublicDirServesOnlyARealDirectory pins the rule the router is spared:
-// what reaches it either exists or is nothing, so an instance never mounts a static
-// root that is a missing path or a file someone pointed at by mistake.
+// TestResolvePublicDirServesOnlyARealDirectory pins what the router is spared: a
+// missing path, or a file pointed at by mistake, never becomes a static root.
 func TestResolvePublicDirServesOnlyARealDirectory(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "index.html")

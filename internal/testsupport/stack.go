@@ -84,9 +84,8 @@ func NoError(err error) {
 // registry, so tests never observe one another.
 func New(t *testing.T) *Stack {
 	t.Helper()
-	// Silent, because a not-found read is an ordinary outcome here — an idempotency
-	// miss, a provider that has never been probed — and GORM logs each one at error
-	// level, which buries a real failure in the noise.
+	// Silent, because a not-found read is an ordinary outcome here and GORM logs each one at
+	// error level, which buries a real failure in the noise.
 	db := Must(gorm.Open(
 		sqlite.Open("file:"+platform.NewID("test")+"?mode=memory&cache=shared"),
 		&gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)},

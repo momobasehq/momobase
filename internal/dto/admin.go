@@ -7,13 +7,8 @@ import (
 	"github.com/momobasehq/momobase/providers"
 )
 
-// The administrative request payloads.
-//
-// Each carries the rules that can be judged from the request alone: presence, length,
-// shape, and a closed set of allowed values. What cannot be judged here stays in the
-// service that can — whether a role exists, whether a scope is in the catalogue,
-// whether a provider account is real, whether the caller may change this row — because
-// those need the database or the caller's identity, and neither is part of the body.
+// The administrative request payloads. Each carries the rules judgable from the request
+// alone — presence, length, shape, allowed values; the rest stays in the service.
 
 // CreateAdminRequest creates an administrator.
 type CreateAdminRequest struct {
@@ -22,8 +17,7 @@ type CreateAdminRequest struct {
 	Email    string `json:"email" format:"email" validate:"required,email" example:"ops@example.com"`
 	Password string `json:"password" format:"password" validate:"required,min=8" example:"change-me-now"`
 	// Role names a seeded or operator-created role; list them with GET /api/admin/roles.
-	// It is checked against the roles table, which is why an empty value is allowed
-	// here and defaulted there.
+	// It is checked against the roles table, which is why an empty value is defaulted there.
 	Role string `json:"role" validate:"max=64" example:"operations"`
 }
 

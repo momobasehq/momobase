@@ -31,8 +31,7 @@ type Page[T any] struct {
 }
 
 // base carries the handle a repository queries through. Embedding it is what makes a
-// repository transaction-aware: the Set built inside Within hands every repository the
-// transaction instead of the pool, so nothing has to be re-bound by hand.
+// repository transaction-aware: Within hands every repository the transaction.
 type base[T any] struct{ db *gorm.DB }
 
 func (b base[T]) session(ctx context.Context) *gorm.DB { return b.db.WithContext(ctx) }

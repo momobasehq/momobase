@@ -208,9 +208,8 @@ func TestChangeRole(t *testing.T) {
 		}
 	})
 
-	// Both a lockout risk — the last super_admin demoting itself leaves nobody able to
-	// undo it — and a privilege escalation, since users:update would otherwise be enough
-	// to promote yourself.
+	// Both a lockout risk — the last super_admin demoting itself leaves nobody to undo it —
+	// and a privilege escalation, since users:update would otherwise promote yourself.
 	t.Run("refuses a self change", func(t *testing.T) {
 		if err := users.ChangeRole(ctx, s.Actor, s.Actor.ID, domain.RoleReadOnly); err == nil {
 			t.Error("ChangeRole() let an administrator change their own role")

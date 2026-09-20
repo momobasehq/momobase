@@ -36,9 +36,8 @@ func seedTransaction(t *testing.T, s *testsupport.Stack, at time.Time, service, 
 func TestTransactionAnalytics(t *testing.T) {
 	s := testsupport.New(t)
 	ctx := context.Background()
-	// Midnight-aligned bounds: day buckets are truncated to a day boundary, so an
-	// arbitrary start time would widen the range by a partial day and make the expected
-	// bucket count depend on the hour the test runs.
+	// Midnight-aligned bounds: day buckets are truncated to a day boundary, so an arbitrary
+	// start would widen the range and make the bucket count depend on the hour.
 	to := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, 1)
 	from := to.AddDate(0, 0, -3)
 	day := func(offset int) time.Time { return from.Add(time.Duration(offset)*24*time.Hour + 2*time.Hour) }
@@ -63,9 +62,8 @@ func TestTransactionAnalytics(t *testing.T) {
 		if first.Total != 2 || first.Succeeded != 1 || first.Failed != 1 {
 			t.Errorf("first bucket = %+v, want 2 total, 1 succeeded, 1 failed", first)
 		}
-		// Pinned because the label is produced twice — once in Go to seed the series,
-		// once in SQL to group the rows — and the two silently stop matching if either
-		// side's format drifts.
+		// Pinned because the label is produced twice — in Go to seed the series, in SQL to group
+		// the rows — and the two silently stop matching if either format drifts.
 		if want := from.Format(time.RFC3339); first.Period != want {
 			t.Errorf("first period = %q, want %q", first.Period, want)
 		}

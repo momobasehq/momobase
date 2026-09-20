@@ -56,9 +56,8 @@ func TestRequestPolicyMiddleware(t *testing.T) {
 	}
 }
 
-// TestBoundRequestIDDropsAnOversizedHeader pins the half of the request-id contract
-// Fiber's middleware does not cover. It refuses anything but visible ASCII; it does
-// not bound the length, and an unbounded value from a caller reaches every log line.
+// TestBoundRequestIDDropsAnOversizedHeader pins the half Fiber's middleware misses: it
+// refuses anything but visible ASCII, but an unbounded value reaches every log line.
 func TestBoundRequestIDDropsAnOversizedHeader(t *testing.T) {
 	echo := func(c fiber.Ctx) error { return c.SendString(requestid.FromContext(c)) }
 
@@ -141,9 +140,8 @@ func TestAuthenticationContextAndAuthorization(t *testing.T) {
 	}
 }
 
-// TestRequirePermissionHonorsTheWildcard pins the mechanism that keeps super_admin
-// correct as permissions are added: the role holds "*", not an enumerated set, so a
-// permission introduced by a later release needs no migration to reach it.
+// TestRequirePermissionHonorsTheWildcard pins what keeps super_admin correct as
+// permissions are added: the role holds "*", so a later one needs no migration.
 func TestRequirePermissionHonorsTheWildcard(t *testing.T) {
 	admin := &domain.AdminUser{Role: "super_admin", Permissions: []string{domain.PermissionWildcard}}
 	for _, permission := range []string{"transactions:read", "roles:delete", "something:invented:later"} {
@@ -201,9 +199,8 @@ func TestRequestLoggerRecordsRequest(t *testing.T) {
 	}
 }
 
-// TestRequestLoggerReportsTheStatusAnErrorWillProduce covers the case the recorded
-// status cannot answer: a handler that returned an error has not reached the error
-// handler yet, so the response still carries whatever was set before it failed.
+// TestRequestLoggerReportsTheStatusAnErrorWillProduce covers what the recorded status
+// cannot answer: a handler that returned an error has not reached the error handler.
 func TestRequestLoggerReportsTheStatusAnErrorWillProduce(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))

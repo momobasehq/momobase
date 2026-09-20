@@ -159,10 +159,8 @@ type ProviderWebhookEvent struct {
 	Currency string `json:"currency,omitempty"`
 	// Country is the country code associated with the transaction when supplied.
 	Country string `json:"country,omitempty"`
-	// Account identifies the account associated with the transaction when supplied.
-	// Momobase compares it against the account recorded for the transaction, so a
-	// provider that normalizes accounts must report the same form it normalized to.
-	// Leave it empty to skip that check.
+	// Account identifies the transaction's account when supplied, and is compared against the
+	// recorded one, so a provider that normalizes must report the same form. Empty skips it.
 	Account string `json:"account,omitempty"`
 	// Raw contains the decoded provider webhook payload.
 	Raw map[string]any `json:"raw,omitempty"`

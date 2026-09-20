@@ -133,10 +133,8 @@ func (o *Orchestrator) Create(
 	if err != nil {
 		return nil, err
 	}
-	// The provider request is assembled before the transaction row so that the
-	// selected provider can validate and normalize the account first: a rejection
-	// must leave no transaction behind, and the account it normalizes to is what
-	// gets persisted and what webhook matching later compares against.
+	// The provider request is assembled before the transaction row so the provider can
+	// validate and normalize the account first: a rejection must leave no transaction behind.
 	call := providers.PaymentRequest{
 		TransactionID: platform.NewID("txn"),
 		PaymentMethod: req.PaymentMethod,

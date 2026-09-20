@@ -43,13 +43,11 @@ const (
 // Config contains the settings recognized in a dummy provider account's
 // configuration. Every option is optional except webhook_secret.
 type Config struct {
-	// Outcome selects the result payments reach: OutcomeSucceed, OutcomeFail,
-	// OutcomePending, OutcomeUnknown, or OutcomeError. It defaults to
-	// OutcomeSucceed and is read from "outcome".
+	// Outcome selects the result payments reach: OutcomeSucceed, OutcomeFail, OutcomePending,
+	// OutcomeUnknown, or OutcomeError. It defaults to OutcomeSucceed and is read from "outcome".
 	Outcome string
-	// SettleAfter is the number of status queries after which a payment reaches
-	// Outcome. Zero settles a payment immediately, one settles it on the first
-	// query, and so on. It is read from "settle_after".
+	// SettleAfter is the number of status queries after which a payment reaches Outcome. Zero
+	// settles immediately, one on the first query, and so on. It is read from "settle_after".
 	SettleAfter int
 	// LatencyMs delays every operation so that timeout and cancellation handling
 	// can be exercised. It is read from "latency_ms".
@@ -59,9 +57,8 @@ type Config struct {
 	// FailHealth makes HealthCheck fail, simulating an unreachable upstream. It is
 	// read from "fail_health".
 	FailHealth bool
-	// Services lists the service types reported as capabilities, as a
-	// comma-separated list of collection and disbursement. It defaults to both and
-	// is read from "services".
+	// Services lists the service types reported as capabilities, as a comma-separated list of
+	// collection and disbursement. It defaults to both and is read from "services".
 	Services []string
 	// Currency is the currency reported by balance queries. It defaults to UGX and
 	// is read from "currency".
@@ -288,10 +285,8 @@ func (p *Provider) VerifyWebhook(_ context.Context, payload []byte, headers map[
 		return nil, errors.New("dummy: webhook payload has an unreadable amount")
 	}
 	p.settleFromWebhook(body.Reference, status)
-	// The account is passed through as the payload spells it. The dummy provider
-	// normalizes nothing, so an account it reports matches the transaction only when
-	// the caller sends the same value it paid with, which is what makes the engine's
-	// match check testable from a webhook body.
+	// The account is passed through as the payload spells it: the dummy normalizes nothing,
+	// which is what makes the engine's match check testable from a webhook body.
 	return &providers.ProviderWebhookEvent{
 		ProviderReference: body.Reference,
 		Status:            status,

@@ -29,11 +29,8 @@ var (
 	validate *validator.Validate
 )
 
-// validator returns the shared validator, with Momobase's own rules registered.
-//
-// The rules are the ones the engine already had: they wrap internal/utils rather than
-// restating its definitions as struct tags, so the shape a payload must have and the
-// shape the engine enforces cannot drift apart.
+// instance returns the shared validator, with Momobase's own rules registered. They
+// wrap internal/utils rather than restating it, so payload and engine cannot drift.
 func instance() *validator.Validate {
 	once.Do(func() {
 		validate = validator.New(validator.WithRequiredStructEnabled())
@@ -86,9 +83,8 @@ func Validate(payload any) error {
 	return errors.New(describe(invalid[0]))
 }
 
-// describe renders one failed rule as a sentence a caller can act on. The generic
-// "failed on the 'max' tag" the library produces names the rule rather than the
-// requirement, which tells an integrator nothing they can fix.
+// describe renders one failed rule as a sentence a caller can act on: the library's own
+// "failed on the 'max' tag" names the rule rather than the requirement.
 func describe(failure validator.FieldError) string {
 	field := jsonName(failure)
 	switch failure.Tag() {

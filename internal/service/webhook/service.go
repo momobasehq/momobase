@@ -207,8 +207,7 @@ func (s *Service) ReprocessPending(ctx context.Context, limit int) error {
 }
 
 // findWebhookTarget resolves the transaction an inbound event belongs to, through the
-// most recent attempt carrying the provider's reference, and locks it for the caller.
-// Without the lock two deliveries of the same outcome could both apply.
+// most recent attempt carrying the provider's reference, and locks it against a double apply.
 func findWebhookTarget(
 	ctx context.Context,
 	r *repository.Set,
@@ -245,9 +244,8 @@ func canonicalWebhookHash(event *verifiedWebhook) string {
 	}, "|"))
 }
 func validateWebhook(event *verifiedWebhook, tx *domain.Transaction) error {
-	// The account is compared exactly: the provider reports the form it normalized
-	// the request to, which is the form the transaction recorded. An event that
-	// carries no account skips the check.
+	// The account is compared exactly: the provider reports the form it normalized to, which
+	// is the form the transaction recorded. An event carrying no account skips the check.
 	if event.Amount != nil && *event.Amount != tx.Amount ||
 		event.Currency != "" && !strings.EqualFold(event.Currency, tx.Currency) ||
 		event.Country != "" && !strings.EqualFold(event.Country, tx.Country) ||
