@@ -20,7 +20,7 @@ go test -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
 
 CI gates (`.github/workflows/tests.yml`): `gofmt -l`, `go mod tidy -diff`, `go mod verify`, tests with **≥55% total coverage** (measured with `-coverpkg=./...`, so a test credits every package it exercises, not just its own), the race detector, and golangci-lint (including vet and Staticcheck, version pinned in `.golangci-lint-version`). Govulncheck runs in `.github/workflows/security.yml`.
 
-**The toolchain is pinned.** `go.mod` carries `toolchain go1.26.6` alongside `go 1.25.0`. The `go` line stays at the compatibility floor for applications embedding momobase as a library; the `toolchain` line is what this repository tests and publishes with. Every workflow resolves its Go through `go-version-file: go.mod`.
+**The toolchain is pinned.** `go.mod` carries `toolchain go1.26.11` alongside `go 1.26.0`. The `go` line stays at the compatibility floor for applications embedding momobase as a library; the `toolchain` line is what this repository tests and publishes with. Every workflow resolves its Go through `go-version-file: go.mod`.
 
 **cgo is required when using SQLite.** The SQLite driver links through cgo; host applications choosing PostgreSQL or MySQL control their own build settings.
 
