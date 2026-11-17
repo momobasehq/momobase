@@ -79,9 +79,7 @@ func (s *AppService) CreateApp(
 		return nil, err
 	}
 	charges := domain.ChargeSchedule{}
-	if input.Charges == nil {
-		charges.Normalize()
-	} else {
+	if input.Charges != nil {
 		charges = *input.Charges
 	}
 	if err := charges.Validate(); err != nil {
@@ -167,10 +165,10 @@ func (s *AppService) ChangeAppStatus(ctx context.Context, actor *domain.AdminUse
 }
 
 func addChargeUpdates(updates map[string]any, charges domain.ChargeSchedule) {
-	updates["collection_charge_type"] = charges.Collection.Type
-	updates["collection_charge_value"] = charges.Collection.Value
-	updates["disbursement_charge_type"] = charges.Disbursement.Type
-	updates["disbursement_charge_value"] = charges.Disbursement.Value
+	updates["collection_charge_flat"] = charges.Collection.Flat
+	updates["collection_charge_percentage"] = charges.Collection.Percentage
+	updates["disbursement_charge_flat"] = charges.Disbursement.Flat
+	updates["disbursement_charge_percentage"] = charges.Disbursement.Percentage
 }
 
 func (s *AppService) newSecret() (string, string, error) {

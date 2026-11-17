@@ -3,37 +3,24 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"math"
 )
 
-const (
-	// ChargeFlat interprets a rule's value as a currency minor-unit amount.
-	ChargeFlat = "flat"
-	// ChargePercentage interprets a rule's value as basis points.
-	ChargePercentage = "percentage"
+const basisPointScale int64 = 10_000
 
-	basisPointScale int64 = 10_000
-)
-
-// ChargeRule defines one fee charged for a payment service.
+// ChargeRule defines one fee charged for a payment service. Providers commonly bill
+// a fixed amount plus a share of the transaction, so a rule carries both parts.
 type ChargeRule struct {
-	Type  string `gorm:"size:16;not null;default:flat" json:"type"`
-	Value int64  `gorm:"not null;default:0" json:"value"`
+	// Flat is a fixed fee in currency minor units, charged on every transaction.
+	Flat int64 `gorm:"not null;default:0" json:"flat"`
+	// Percentage is a proportional fee in basis points (100 = 1%).
+	Percentage int64 `gorm:"not null;default:0" json:"percentage"`
 }
 
 // ChargeSchedule defines independent collection and disbursement fees.
 type ChargeSchedule struct {
 	Collection   ChargeRule `gorm:"embedded;embeddedPrefix:collection_charge_" json:"collection"`
 	Disbursement ChargeRule `gorm:"embedded;embeddedPrefix:disbursement_charge_" json:"disbursement"`
-}
-
-// Normalize fills the zero-value representation with the persisted defaults.
-func (s *ChargeSchedule) Normalize() {
-	if s.Collection.Type == "" {
-		s.Collection.Type = ChargeFlat
-	}
-	if s.Disbursement.Type == "" {
-		s.Disbursement.Type = ChargeFlat
-	}
 }
 
 // Validate rejects a schedule that cannot be calculated safely.
@@ -55,25 +42,21 @@ func (s ChargeSchedule) Rule(service string) ChargeRule {
 	return s.Collection
 }
 
-// Validate rejects an unknown, negative, or excessive rule.
+// Validate rejects a negative or excessive rule.
 func (r ChargeRule) Validate() error {
-	if r.Value < 0 {
-		return errors.New("value must not be negative")
+	if r.Flat < 0 {
+		return errors.New("flat must not be negative")
 	}
-	switch r.Type {
-	case ChargeFlat:
-		return nil
-	case ChargePercentage:
-		if r.Value > basisPointScale {
-			return errors.New("percentage must not exceed 10000 basis points")
-		}
-		return nil
-	default:
-		return errors.New("type must be flat or percentage")
+	if r.Percentage < 0 {
+		return errors.New("percentage must not be negative")
 	}
+	if r.Percentage > basisPointScale {
+		return errors.New("percentage must not exceed 10000 basis points")
+	}
+	return nil
 }
 
-// Calculate returns the fee for amount, rounded half-up for percentage rules.
+// Calculate returns the flat fee plus the percentage of amount, the latter rounded half-up.
 func (r ChargeRule) Calculate(amount int64) (int64, error) {
 	if amount < 0 {
 		return 0, errors.New("amount must not be negative")
@@ -81,12 +64,13 @@ func (r ChargeRule) Calculate(amount int64) (int64, error) {
 	if err := r.Validate(); err != nil {
 		return 0, err
 	}
-	if r.Type == ChargeFlat {
-		return r.Value, nil
-	}
 
 	// Splitting the quotient and remainder avoids overflowing amount * basis points.
 	whole := amount / basisPointScale
 	remainder := amount % basisPointScale
-	return whole*r.Value + (remainder*r.Value+basisPointScale/2)/basisPointScale, nil
+	proportional := whole*r.Percentage + (remainder*r.Percentage+basisPointScale/2)/basisPointScale
+	if proportional > math.MaxInt64-r.Flat {
+		return 0, errors.New("charge exceeds the largest representable amount")
+	}
+	return r.Flat + proportional, nil
 }
