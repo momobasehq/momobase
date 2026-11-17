@@ -83,6 +83,31 @@ func (h *Handler) GetApp(c fiber.Ctx) error {
 	return platform.JSON(c, 200, app)
 }
 
+// GetTransaction writes one transaction from any application, which is what lets an
+// administrator open a transaction from a link rather than only from a listing.
+//
+// @Summary Get a transaction
+// @Tags Admin - Transactions
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Transaction ID"
+// @Success 200 {object} apidoc.DocResponse
+// @Failure 401 {object} apidoc.ErrorResponse
+// @Failure 404 {object} apidoc.ErrorResponse
+// @Failure 429 {object} apidoc.ErrorResponse
+// @Failure 500 {object} apidoc.ErrorResponse
+// @Router /api/admin/transactions/{id} [get]
+func (h *Handler) GetTransaction(c fiber.Ctx) error {
+	tx, err := h.repos.Transactions.ByID(c.Context(), id(c))
+	if repository.IsNotFound(err) {
+		return platform.Error(c, 404, "NOT_FOUND", "transaction not found")
+	}
+	if err != nil {
+		return platform.Error(c, 500, "SERVER_ERROR", err.Error())
+	}
+	return platform.JSON(c, 200, tx)
+}
+
 // GetProviderAccount writes the provider account identified by the request path.
 // Encrypted configuration is excluded by the domain model and is never returned.
 //

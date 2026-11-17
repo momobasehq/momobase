@@ -248,6 +248,7 @@ func mountAdmin(app *fiber.App, d RouterDeps) {
 	route(admin, fiber.MethodDelete, "/roles/:name", chain("roles:delete", nil, h.DeleteRole)...)
 
 	get("/transactions", "transactions:read", h.ListTransactions)
+	get("/transactions/:id", "transactions:read", h.GetTransaction)
 	// Aggregates of the same rows transactions:read already exposes, so it needs no
 	// permission of its own; a role that can read transactions can chart them.
 	get("/analytics/transactions", "transactions:read", h.TransactionAnalytics)

@@ -4,8 +4,9 @@ import "time"
 
 // BaseModel contains the identifier and timestamps shared by persistent models.
 type BaseModel struct {
-	ID        string    `gorm:"primaryKey;size:40" json:"id"`
-	CreatedAt time.Time `json:"created_at"`
+	ID string `gorm:"primaryKey;size:40" json:"id"`
+	// Indexed because every admin listing orders and date-filters by it.
+	CreatedAt time.Time `gorm:"index" json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 

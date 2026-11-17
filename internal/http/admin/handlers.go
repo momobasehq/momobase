@@ -3,6 +3,8 @@ package admin
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -150,7 +152,20 @@ func (h *Handler) Logout(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Param page query int false "Page number" minimum(1)
 // @Param per_page query int false "Items per page" minimum(1) maximum(100)
+// @Param q query string false "Case-insensitive search by reference, customer account, provider reference or ID"
+// @Param sort query string false "Sort field: created_at, amount, status, updated_at"
+// @Param order query string false "Sort direction" Enums(asc, desc)
+// @Param from query string false "Created at or after (RFC 3339)"
+// @Param to query string false "Created before (RFC 3339)"
+// @Param status query string false "Filter by status; comma-separate values to match any"
+// @Param service_type query string false "Filter by service type; comma-separate values to match any"
+// @Param payment_method query string false "Filter by payment method; comma-separate values to match any"
+// @Param country query string false "Filter by country; comma-separate values to match any"
+// @Param currency query string false "Filter by currency; comma-separate values to match any"
+// @Param app_id query string false "Filter by app id; comma-separate values to match any"
+// @Param selected_provider_account_id query string false "Filter by selected provider account id; comma-separate values to match any"
 // @Success 200 {object} apidoc.DocResponse
+// @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Failure 500 {object} apidoc.ErrorResponse
@@ -167,7 +182,18 @@ func (h *Handler) ListTransactions(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Param page query int false "Page number" minimum(1)
 // @Param per_page query int false "Items per page" minimum(1) maximum(100)
+// @Param q query string false "Case-insensitive search by action, entity ID, actor ID or IP address"
+// @Param sort query string false "Sort field: created_at, action"
+// @Param order query string false "Sort direction" Enums(asc, desc)
+// @Param from query string false "Created at or after (RFC 3339)"
+// @Param to query string false "Created before (RFC 3339)"
+// @Param action query string false "Filter by action; comma-separate values to match any"
+// @Param actor_type query string false "Filter by actor type; comma-separate values to match any"
+// @Param actor_id query string false "Filter by actor id; comma-separate values to match any"
+// @Param entity_type query string false "Filter by entity type; comma-separate values to match any"
+// @Param entity_id query string false "Filter by entity id; comma-separate values to match any"
 // @Success 200 {object} apidoc.DocResponse
+// @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Failure 500 {object} apidoc.ErrorResponse
@@ -184,7 +210,16 @@ func (h *Handler) ListAuditLogs(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Param page query int false "Page number" minimum(1)
 // @Param per_page query int false "Items per page" minimum(1) maximum(100)
+// @Param q query string false "Case-insensitive search by provider account ID or last error"
+// @Param sort query string false "Sort field: latency_ms, consecutive_failures, updated_at"
+// @Param order query string false "Sort direction" Enums(asc, desc)
+// @Param from query string false "Created at or after (RFC 3339)"
+// @Param to query string false "Created before (RFC 3339)"
+// @Param status query string false "Filter by status; comma-separate values to match any"
+// @Param circuit_state query string false "Filter by circuit state; comma-separate values to match any"
+// @Param provider_account_id query string false "Filter by provider account id; comma-separate values to match any"
 // @Success 200 {object} apidoc.DocResponse
+// @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Failure 500 {object} apidoc.ErrorResponse
@@ -207,7 +242,15 @@ func (h *Handler) ListProviderHealth(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Param page query int false "Page number" minimum(1)
 // @Param per_page query int false "Items per page" minimum(1) maximum(100)
+// @Param q query string false "Case-insensitive search by name or email"
+// @Param sort query string false "Sort field: name, email, created_at"
+// @Param order query string false "Sort direction" Enums(asc, desc)
+// @Param from query string false "Created at or after (RFC 3339)"
+// @Param to query string false "Created before (RFC 3339)"
+// @Param role query string false "Filter by role; comma-separate values to match any"
+// @Param status query string false "Filter by status; comma-separate values to match any"
 // @Success 200 {object} apidoc.DocResponse
+// @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Failure 500 {object} apidoc.ErrorResponse
@@ -326,7 +369,16 @@ func (h *Handler) ChangeAdminRole(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Param page query int false "Page number" minimum(1)
 // @Param per_page query int false "Items per page" minimum(1) maximum(100)
+// @Param q query string false "Case-insensitive search by name, description or ID"
+// @Param sort query string false "Sort field: name, status, created_at"
+// @Param order query string false "Sort direction" Enums(asc, desc)
+// @Param from query string false "Created at or after (RFC 3339)"
+// @Param to query string false "Created before (RFC 3339)"
+// @Param status query string false "Filter by status; comma-separate values to match any"
+// @Param environment query string false "Filter by environment; comma-separate values to match any"
+// @Param currency query string false "Filter by currency; comma-separate values to match any"
 // @Success 200 {object} apidoc.DocResponse
+// @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Failure 500 {object} apidoc.ErrorResponse
@@ -433,15 +485,22 @@ func (h *Handler) ChangeAppStatus(c fiber.Ctx) error {
 // @Param id path string true "Application ID"
 // @Param page query int false "Page number" minimum(1)
 // @Param per_page query int false "Items per page" minimum(1) maximum(100)
+// @Param q query string false "Case-insensitive search by name or client ID"
+// @Param sort query string false "Sort field: name, status, last_used_at, created_at"
+// @Param order query string false "Sort direction" Enums(asc, desc)
+// @Param from query string false "Created at or after (RFC 3339)"
+// @Param to query string false "Created before (RFC 3339)"
+// @Param status query string false "Filter by status; comma-separate values to match any"
 // @Success 200 {object} apidoc.DocResponse
+// @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Failure 500 {object} apidoc.ErrorResponse
 // @Router /api/admin/apps/{id}/credentials [get]
 func (h *Handler) ListCredentials(c fiber.Ctx) error {
 	appID := id(c)
-	return page(c, func(ctx context.Context, number, size int) (repository.Page[domain.AppCredential], error) {
-		return h.repos.AppCredentials.PageForApp(ctx, appID, number, size)
+	return page(c, func(ctx context.Context, q repository.ListQuery) (repository.Page[domain.AppCredential], error) {
+		return h.repos.AppCredentials.PageForApp(ctx, appID, q)
 	})
 }
 
@@ -525,7 +584,17 @@ func (h *Handler) RotateCredential(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Param page query int false "Page number" minimum(1)
 // @Param per_page query int false "Items per page" minimum(1) maximum(100)
+// @Param q query string false "Case-insensitive search by name, provider code or ID"
+// @Param sort query string false "Sort field: name, provider_code, updated_at, created_at"
+// @Param order query string false "Sort direction" Enums(asc, desc)
+// @Param from query string false "Created at or after (RFC 3339)"
+// @Param to query string false "Created before (RFC 3339)"
+// @Param provider_code query string false "Filter by provider code; comma-separate values to match any"
+// @Param environment query string false "Filter by environment; comma-separate values to match any"
+// @Param currency query string false "Filter by currency; comma-separate values to match any"
+// @Param active query bool false "Filter by active; comma-separate values to match any"
 // @Success 200 {object} apidoc.DocResponse
+// @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Failure 500 {object} apidoc.ErrorResponse
@@ -717,7 +786,17 @@ func (h *Handler) TestProvider(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Param page query int false "Page number" minimum(1)
 // @Param per_page query int false "Items per page" minimum(1) maximum(100)
+// @Param q query string false "Case-insensitive search by payment method or provider account ID"
+// @Param sort query string false "Sort field: priority, created_at"
+// @Param order query string false "Sort direction" Enums(asc, desc)
+// @Param from query string false "Created at or after (RFC 3339)"
+// @Param to query string false "Created before (RFC 3339)"
+// @Param service_type query string false "Filter by service type; comma-separate values to match any"
+// @Param payment_method query string false "Filter by payment method; comma-separate values to match any"
+// @Param provider_account_id query string false "Filter by provider account id; comma-separate values to match any"
+// @Param active query bool false "Filter by active; comma-separate values to match any"
 // @Success 200 {object} apidoc.DocResponse
+// @Failure 400 {object} apidoc.ErrorResponse
 // @Failure 401 {object} apidoc.ErrorResponse
 // @Failure 429 {object} apidoc.ErrorResponse
 // @Failure 500 {object} apidoc.ErrorResponse
@@ -796,18 +875,68 @@ func parseExpiry(raw string) (*time.Time, error) {
 
 // page answers a listing from a repository's own paged reader. The bounds come from
 // the query string; the query itself stays inside the repository.
-func page[T any](c fiber.Ctx, read func(context.Context, int, int) (repository.Page[T], error)) error {
-	number, size := platform.Pagination(c)
-	result, err := read(c.Context(), number, size)
+func page[T any](c fiber.Ctx, read func(context.Context, repository.ListQuery) (repository.Page[T], error)) error {
+	q, err := listQuery(c)
 	if err != nil {
-		return platform.Error(c, 500, "SERVER_ERROR", err.Error())
+		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
+	}
+	result, err := read(c.Context(), q)
+	if err != nil {
+		return listError(c, err)
 	}
 	return platform.JSON(c, 200, platform.PageData[T]{
-		Page:  number,
+		Page:  q.Page,
 		Total: int(result.Total),
 		Items: result.Items,
 		Count: len(result.Items),
 	})
+}
+
+// listParams are the query parameters every listing reads itself. Any other parameter
+// is a filter, which the repository accepts only if that listing declares it.
+var listParams = map[string]bool{"page": true, "per_page": true, "q": true, "sort": true, "order": true, "from": true, "to": true}
+
+// listQuery reads paging, search, sorting, a created_at range and filters from the
+// request. Field names are checked by the repository, which knows its columns.
+func listQuery(c fiber.Ctx) (repository.ListQuery, error) {
+	number, size := platform.Pagination(c)
+	q := repository.ListQuery{
+		Page:    number,
+		Size:    size,
+		Search:  c.Query("q"),
+		Sort:    strings.TrimSpace(c.Query("sort")),
+		Filters: map[string]string{},
+	}
+	switch order := strings.ToLower(strings.TrimSpace(c.Query("order"))); order {
+	case "", "asc":
+	case "desc":
+		q.Desc = true
+	default:
+		return q, fmt.Errorf("order must be asc or desc, not %q", order)
+	}
+	for name, bound := range map[string]**time.Time{"from": &q.From, "to": &q.To} {
+		at, err := optionalTime(c.Query(name))
+		if err != nil {
+			return q, fmt.Errorf("%s must be an RFC 3339 time", name)
+		}
+		if !at.IsZero() {
+			*bound = &at
+		}
+	}
+	for name, value := range c.Queries() {
+		if !listParams[name] {
+			q.Filters[name] = value
+		}
+	}
+	return q, nil
+}
+
+// listError answers a filter or sort the listing does not accept with 400, not 500.
+func listError(c fiber.Ctx, err error) error {
+	if errors.Is(err, repository.ErrInvalidListQuery) {
+		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
+	}
+	return platform.Error(c, 500, "SERVER_ERROR", err.Error())
 }
 
 // providerPage enriches provider-owned rows without changing the repositories routing
@@ -815,14 +944,17 @@ func page[T any](c fiber.Ctx, read func(context.Context, int, int) (repository.P
 func providerPage[T any](
 	c fiber.Ctx,
 	accounts repository.ProviderAccountRepo,
-	read func(context.Context, int, int) (repository.Page[T], error),
+	read func(context.Context, repository.ListQuery) (repository.Page[T], error),
 	accountID func(*T) string,
 	setName func(*T, string),
 ) error {
-	number, size := platform.Pagination(c)
-	result, err := read(c.Context(), number, size)
+	q, err := listQuery(c)
 	if err != nil {
-		return platform.Error(c, 500, "SERVER_ERROR", err.Error())
+		return platform.Error(c, 400, "VALIDATION_ERROR", err.Error())
+	}
+	result, err := read(c.Context(), q)
+	if err != nil {
+		return listError(c, err)
 	}
 	ids := make([]string, 0, len(result.Items))
 	for index := range result.Items {
@@ -836,7 +968,7 @@ func providerPage[T any](
 		setName(&result.Items[index], names[accountID(&result.Items[index])])
 	}
 	return platform.JSON(c, 200, platform.PageData[T]{
-		Page:  number,
+		Page:  q.Page,
 		Total: int(result.Total),
 		Items: result.Items,
 		Count: len(result.Items),
