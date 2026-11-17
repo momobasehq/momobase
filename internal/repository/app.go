@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/momobasehq/momobase/internal/domain"
 )
 
@@ -24,9 +26,20 @@ func (r AppRepo) ActiveByID(ctx context.Context, id string) (*domain.App, error)
 	return r.first(ctx, "id = ? AND status = ?", id, "active")
 }
 
-// Page returns one page of applications, newest first.
-func (r AppRepo) Page(ctx context.Context, number, size int) (Page[domain.App], error) {
-	return r.page(ctx, "created_at desc", number, size)
+var appList = listSpec{
+	filters: map[string]filterSpec{
+		"status":      {column: "status"},
+		"environment": {column: "environment"},
+		"currency":    {column: "currency"},
+	},
+	search: []string{"name", "description", "id"},
+	sorts:  map[string]string{"name": "name", "status": "status", "created_at": "created_at"},
+	order:  "created_at desc, id desc",
+}
+
+// Page returns one page of applications, newest first unless q sorts otherwise.
+func (r AppRepo) Page(ctx context.Context, q ListQuery) (Page[domain.App], error) {
+	return r.list(ctx, appList, q)
 }
 
 // Update applies the supplied changes to one application.
@@ -64,20 +77,19 @@ func (r AppCredentialRepo) InApp(ctx context.Context, appID, id string) (*domain
 	return r.first(ctx, "id = ? AND app_id = ?", id, appID)
 }
 
-// PageForApp returns one page of an application's credentials, newest first.
-func (r AppCredentialRepo) PageForApp(
-	ctx context.Context,
-	appID string,
-	number, size int,
-) (Page[domain.AppCredential], error) {
-	total, err := r.count(ctx, "app_id = ?", appID)
-	if err != nil {
-		return Page[domain.AppCredential]{}, err
-	}
-	items := []domain.AppCredential{}
-	err = r.session(ctx).Where("app_id = ?", appID).Order("created_at desc").
-		Limit(size).Offset((number - 1) * size).Find(&items).Error
-	return Page[domain.AppCredential]{Items: items, Total: total}, err
+var credentialList = listSpec{
+	filters: map[string]filterSpec{"status": {column: "status"}},
+	search:  []string{"name", "client_id"},
+	sorts:   map[string]string{"name": "name", "status": "status", "last_used_at": "last_used_at", "created_at": "created_at"},
+	order:   "created_at desc, id desc",
+}
+
+// PageForApp returns one page of an application's credentials, newest first unless q
+// sorts otherwise. The app scope is applied before q, so no filter can widen it.
+func (r AppCredentialRepo) PageForApp(ctx context.Context, appID string, q ListQuery) (Page[domain.AppCredential], error) {
+	return r.list(ctx, credentialList, q, func(db *gorm.DB) *gorm.DB {
+		return db.Where("app_id = ?", appID)
+	})
 }
 
 // Revoke marks a credential revoked within its application.

@@ -29,9 +29,16 @@ func (r AdminUserRepo) ActiveByID(ctx context.Context, id string) (*domain.Admin
 	return r.first(ctx, "id = ? AND status = ?", id, "active")
 }
 
-// Page returns one page of administrators, newest first.
-func (r AdminUserRepo) Page(ctx context.Context, number, size int) (Page[domain.AdminUser], error) {
-	return r.page(ctx, "created_at desc", number, size)
+var adminUserList = listSpec{
+	filters: map[string]filterSpec{"role": {column: "role"}, "status": {column: "status"}},
+	search:  []string{"name", "email"},
+	sorts:   map[string]string{"name": "name", "email": "email", "created_at": "created_at"},
+	order:   "created_at desc, id desc",
+}
+
+// Page returns one page of administrators, newest first unless q sorts otherwise.
+func (r AdminUserRepo) Page(ctx context.Context, q ListQuery) (Page[domain.AdminUser], error) {
+	return r.list(ctx, adminUserList, q)
 }
 
 // CountWithRole reports how many administrators hold a role, which is what makes
@@ -164,9 +171,22 @@ func (r AuditLogRepo) Create(ctx context.Context, entry *domain.AuditLog) error 
 	return r.create(ctx, entry)
 }
 
-// Page returns one page of audit entries, newest first.
-func (r AuditLogRepo) Page(ctx context.Context, number, size int) (Page[domain.AuditLog], error) {
-	return r.page(ctx, "created_at desc", number, size)
+var auditLogList = listSpec{
+	filters: map[string]filterSpec{
+		"action":      {column: "action"},
+		"actor_type":  {column: "actor_type"},
+		"actor_id":    {column: "actor_id"},
+		"entity_type": {column: "entity_type"},
+		"entity_id":   {column: "entity_id"},
+	},
+	search: []string{"action", "entity_id", "actor_id", "ip_address"},
+	sorts:  map[string]string{"created_at": "created_at", "action": "action"},
+	order:  "created_at desc, id desc",
+}
+
+// Page returns one page of audit entries, newest first unless q sorts otherwise.
+func (r AuditLogRepo) Page(ctx context.Context, q ListQuery) (Page[domain.AuditLog], error) {
+	return r.list(ctx, auditLogList, q)
 }
 
 // DeleteBefore removes entries older than cutoff, for the cleanup worker.

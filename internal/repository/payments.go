@@ -46,9 +46,21 @@ func (r ProviderAccountRepo) CountActive(ctx context.Context) (int64, error) {
 	return r.count(ctx, "active = ?", true)
 }
 
-// Page returns one page of provider accounts, newest first.
-func (r ProviderAccountRepo) Page(ctx context.Context, number, size int) (Page[domain.ProviderAccount], error) {
-	return r.page(ctx, "created_at desc", number, size)
+var providerAccountList = listSpec{
+	filters: map[string]filterSpec{
+		"provider_code": {column: "provider_code"},
+		"environment":   {column: "environment"},
+		"currency":      {column: "currency"},
+		"active":        {column: "active", kind: boolFilter},
+	},
+	search: []string{"name", "provider_code", "id"},
+	sorts:  map[string]string{"name": "name", "provider_code": "provider_code", "updated_at": "updated_at", "created_at": "created_at"},
+	order:  "created_at desc, id desc",
+}
+
+// Page returns one page of provider accounts, newest first unless q sorts otherwise.
+func (r ProviderAccountRepo) Page(ctx context.Context, q ListQuery) (Page[domain.ProviderAccount], error) {
+	return r.list(ctx, providerAccountList, q)
 }
 
 // NamesByIDs returns provider account display names keyed by ID. List endpoints use
@@ -122,12 +134,20 @@ func (r ProviderHealthRepo) Save(ctx context.Context, snap *domain.ProviderHealt
 	return r.db.WithContext(ctx).Save(snap).Error
 }
 
-// Page returns one page of snapshots, most recently updated first.
-func (r ProviderHealthRepo) Page(
-	ctx context.Context,
-	number, size int,
-) (Page[domain.ProviderHealthSnapshot], error) {
-	return r.page(ctx, "updated_at desc", number, size)
+var providerHealthList = listSpec{
+	filters: map[string]filterSpec{
+		"status":              {column: "status"},
+		"circuit_state":       {column: "circuit_state"},
+		"provider_account_id": {column: "provider_account_id"},
+	},
+	search: []string{"provider_account_id", "last_error_message"},
+	sorts:  map[string]string{"latency_ms": "latency_ms", "consecutive_failures": "consecutive_failures", "updated_at": "updated_at"},
+	order:  "updated_at desc, provider_account_id desc",
+}
+
+// Page returns one page of snapshots, most recently updated first unless q sorts otherwise.
+func (r ProviderHealthRepo) Page(ctx context.Context, q ListQuery) (Page[domain.ProviderHealthSnapshot], error) {
+	return r.list(ctx, providerHealthList, q)
 }
 
 // PaymentRouteRepo reads and writes the routing table.
@@ -178,9 +198,21 @@ func (r PaymentRouteRepo) For(
 		"active = ? AND service_type = ? AND payment_method = ?", true, service, method)
 }
 
-// Page returns one page of routes in selection order.
-func (r PaymentRouteRepo) Page(ctx context.Context, number, size int) (Page[domain.PaymentRoute], error) {
-	return r.page(ctx, "service_type asc, payment_method asc, priority asc", number, size)
+var paymentRouteList = listSpec{
+	filters: map[string]filterSpec{
+		"service_type":        {column: "service_type"},
+		"payment_method":      {column: "payment_method"},
+		"provider_account_id": {column: "provider_account_id"},
+		"active":              {column: "active", kind: boolFilter},
+	},
+	search: []string{"payment_method", "provider_account_id"},
+	sorts:  map[string]string{"priority": "priority", "created_at": "created_at"},
+	order:  "service_type asc, payment_method asc, priority asc, id asc",
+}
+
+// Page returns one page of routes in selection order unless q sorts otherwise.
+func (r PaymentRouteRepo) Page(ctx context.Context, q ListQuery) (Page[domain.PaymentRoute], error) {
+	return r.list(ctx, paymentRouteList, q)
 }
 
 // Update applies the supplied changes to one route.
@@ -247,9 +279,35 @@ func (r TransactionRepo) DueForReconciliation(
 	).Order("created_at asc").Limit(limit).Find(&rows).Error
 }
 
-// Page returns one page of transactions, newest first.
-func (r TransactionRepo) Page(ctx context.Context, number, size int) (Page[domain.Transaction], error) {
-	return r.page(ctx, "created_at desc", number, size)
+// ByID returns one transaction across every application, for administrators. App
+// callers go through ForApp, which keeps a lookup inside the caller's own tenant.
+func (r TransactionRepo) ByID(ctx context.Context, id string) (*domain.Transaction, error) {
+	return r.first(ctx, "id = ?", id)
+}
+
+// Page returns one page of transactions, newest first unless q sorts otherwise.
+func (r TransactionRepo) Page(ctx context.Context, q ListQuery) (Page[domain.Transaction], error) {
+	return r.list(ctx, transactionList, q)
+}
+
+var transactionList = listSpec{
+	filters: map[string]filterSpec{
+		"status":                       {column: "status"},
+		"service_type":                 {column: "service_type"},
+		"payment_method":               {column: "payment_method"},
+		"country":                      {column: "country"},
+		"currency":                     {column: "currency"},
+		"app_id":                       {column: "app_id"},
+		"selected_provider_account_id": {column: "selected_provider_account_id"},
+	},
+	search: []string{"reference", "customer_account", "provider_reference", "id"},
+	sorts: map[string]string{
+		"created_at": "created_at",
+		"amount":     "amount",
+		"status":     "status",
+		"updated_at": "updated_at",
+	},
+	order: "created_at desc, id desc",
 }
 
 // Update applies the supplied changes to one transaction.

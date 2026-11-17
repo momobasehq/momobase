@@ -93,18 +93,6 @@ func (b base[T]) count(ctx context.Context, query string, args ...any) (int64, e
 	return total, session.Count(&total).Error
 }
 
-// page returns one bounded page and the unpaged total, in that order, so a listing
-// reports how much it is a page of.
-func (b base[T]) page(ctx context.Context, order string, number, size int) (Page[T], error) {
-	total, err := b.count(ctx, "")
-	if err != nil {
-		return Page[T]{}, err
-	}
-	items := []T{}
-	err = b.session(ctx).Order(order).Limit(size).Offset((number - 1) * size).Find(&items).Error
-	return Page[T]{Items: items, Total: total}, err
-}
-
 // affected turns a successful write that matched no row into ErrNotFound.
 func affected(result *gorm.DB) error {
 	if result.Error != nil {
