@@ -86,12 +86,10 @@ func TestCreateSnapshotsFeesOnce(t *testing.T) {
 	app, _, _ := s.App(t)
 
 	appCharges := domain.ChargeSchedule{
-		Collection:   domain.ChargeRule{Type: domain.ChargePercentage, Value: 1_000},
-		Disbursement: domain.ChargeRule{Type: domain.ChargeFlat},
+		Collection: domain.ChargeRule{Percentage: 1_000},
 	}
 	providerCharges := domain.ChargeSchedule{
-		Collection:   domain.ChargeRule{Type: domain.ChargeFlat, Value: 75},
-		Disbursement: domain.ChargeRule{Type: domain.ChargeFlat},
+		Collection: domain.ChargeRule{Flat: 75, Percentage: 100},
 	}
 	_, err := s.Apps.UpdateApp(context.Background(), s.Actor, app.ID, identity.UpdateAppInput{
 		Description: app.Description,
@@ -118,12 +116,11 @@ func TestCreateSnapshotsFeesOnce(t *testing.T) {
 	}
 	var tx domain.Transaction
 	testsupport.NoError(s.DB.First(&tx, "id = ?", created.TransactionID).Error)
-	if tx.Amount != 1_500 || tx.ProviderFee != 75 || tx.PlatformFee != 150 {
-		t.Fatalf("transaction amount/fees = %d/%d/%d, want 1500/75/150", tx.Amount, tx.ProviderFee, tx.PlatformFee)
+	if tx.Amount != 1_500 || tx.ProviderFee != 90 || tx.PlatformFee != 150 {
+		t.Fatalf("transaction amount/fees = %d/%d/%d, want 1500/90/150", tx.Amount, tx.ProviderFee, tx.PlatformFee)
 	}
 
 	zero := domain.ChargeSchedule{}
-	zero.Normalize()
 	_, err = s.Apps.UpdateApp(context.Background(), s.Actor, app.ID, identity.UpdateAppInput{
 		Description: app.Description,
 		Charges:     &zero,
@@ -146,8 +143,8 @@ func TestCreateSnapshotsFeesOnce(t *testing.T) {
 		t.Errorf("replay PlatformFee = %d, want original 150", replayed.PlatformFee)
 	}
 	testsupport.NoError(s.DB.First(&tx, "id = ?", created.TransactionID).Error)
-	if tx.ProviderFee != 75 || tx.PlatformFee != 150 {
-		t.Errorf("stored replay fees = %d/%d, want 75/150", tx.ProviderFee, tx.PlatformFee)
+	if tx.ProviderFee != 90 || tx.PlatformFee != 150 {
+		t.Errorf("stored replay fees = %d/%d, want 90/150", tx.ProviderFee, tx.PlatformFee)
 	}
 }
 

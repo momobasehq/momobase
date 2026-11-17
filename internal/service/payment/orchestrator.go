@@ -289,7 +289,6 @@ func (o *Orchestrator) persist(
 }
 
 func calculateCharge(charges domain.ChargeSchedule, service string, amount int64) (int64, error) {
-	charges.Normalize()
 	return charges.Rule(service).Calculate(amount)
 }
 

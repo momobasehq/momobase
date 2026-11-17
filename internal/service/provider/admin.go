@@ -84,9 +84,7 @@ func (s *AdminService) CreateAccount(
 		return nil, err
 	}
 	charges := domain.ChargeSchedule{}
-	if input.Charges == nil {
-		charges.Normalize()
-	} else {
+	if input.Charges != nil {
 		charges = *input.Charges
 	}
 	if err = charges.Validate(); err != nil {
@@ -196,12 +194,12 @@ func (s *AdminService) UpdateSettings(
 
 func settingsUpdates(country, currency string, charges domain.ChargeSchedule) map[string]any {
 	return map[string]any{
-		"country":                   country,
-		"currency":                  currency,
-		"collection_charge_type":    charges.Collection.Type,
-		"collection_charge_value":   charges.Collection.Value,
-		"disbursement_charge_type":  charges.Disbursement.Type,
-		"disbursement_charge_value": charges.Disbursement.Value,
+		"country":                        country,
+		"currency":                       currency,
+		"collection_charge_flat":         charges.Collection.Flat,
+		"collection_charge_percentage":   charges.Collection.Percentage,
+		"disbursement_charge_flat":       charges.Disbursement.Flat,
+		"disbursement_charge_percentage": charges.Disbursement.Percentage,
 	}
 }
 

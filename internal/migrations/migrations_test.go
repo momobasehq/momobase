@@ -350,3 +350,71 @@ func TestUpAccountLocationRejectsProviderWithoutCountry(t *testing.T) {
 		t.Fatalf("upAccountLocation() error = %v, want account guidance", err)
 	}
 }
+
+// legacyChargedApp models an app with the single-kind charge columns of 0.5 and earlier.
+type legacyChargedApp struct {
+	ID                      string `gorm:"primaryKey"`
+	CollectionChargeType    string `gorm:"size:16;not null;default:flat"`
+	CollectionChargeValue   int64  `gorm:"not null;default:0"`
+	DisbursementChargeType  string `gorm:"size:16;not null;default:flat"`
+	DisbursementChargeValue int64  `gorm:"not null;default:0"`
+}
+
+func (legacyChargedApp) TableName() string { return "apps" }
+
+type chargeComponents struct {
+	ID                           string
+	CollectionChargeFlat         int64
+	CollectionChargePercentage   int64
+	DisbursementChargeFlat       int64
+	DisbursementChargePercentage int64
+}
+
+func TestUpChargeComponentsSplitsEachRuleIntoItsHalf(t *testing.T) {
+	db := testDatabase(t)
+	if err := db.AutoMigrate(&legacyChargedApp{}); err != nil {
+		t.Fatalf("create legacy apps: %v", err)
+	}
+	seed := legacyChargedApp{
+		ID:                      "app_1",
+		CollectionChargeType:    "percentage",
+		CollectionChargeValue:   300,
+		DisbursementChargeType:  "flat",
+		DisbursementChargeValue: 500,
+	}
+	if err := db.Create(&seed).Error; err != nil {
+		t.Fatalf("seed legacy app: %v", err)
+	}
+
+	if err := upChargeComponents(db); err != nil {
+		t.Fatalf("upChargeComponents() error = %v", err)
+	}
+	// Running again must be a no-op: the legacy columns are gone.
+	if err := upChargeComponents(db); err != nil {
+		t.Fatalf("second upChargeComponents() error = %v", err)
+	}
+
+	migrator := db.Migrator()
+	for _, column := range []string{
+		"collection_charge_type", "collection_charge_value",
+		"disbursement_charge_type", "disbursement_charge_value",
+	} {
+		if migrator.HasColumn("apps", column) {
+			t.Errorf("%s still exists after the split", column)
+		}
+	}
+	var got chargeComponents
+	if err := db.Table("apps").Where("id = ?", "app_1").Take(&got).Error; err != nil {
+		t.Fatalf("read migrated app: %v", err)
+	}
+	want := chargeComponents{ID: "app_1", CollectionChargePercentage: 300, DisbursementChargeFlat: 500}
+	if got != want {
+		t.Fatalf("migrated charges = %+v, want %+v", got, want)
+	}
+}
+
+func TestUpChargeComponentsSkipsMissingTables(t *testing.T) {
+	if err := upChargeComponents(testDatabase(t)); err != nil {
+		t.Fatalf("upChargeComponents() error = %v", err)
+	}
+}

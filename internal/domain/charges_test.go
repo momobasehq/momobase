@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestChargeRuleCalculate(t *testing.T) {
 	tests := []struct {
@@ -9,16 +12,18 @@ func TestChargeRuleCalculate(t *testing.T) {
 		amount int64
 		want   int64
 	}{
-		{name: "zero flat", rule: ChargeRule{Type: ChargeFlat}, amount: 10, want: 0},
-		{name: "flat", rule: ChargeRule{Type: ChargeFlat, Value: 250}, amount: 10, want: 250},
-		{name: "percentage exact", rule: ChargeRule{Type: ChargePercentage, Value: 1_000}, amount: 1_000, want: 100},
-		{name: "percentage rounds down", rule: ChargeRule{Type: ChargePercentage, Value: 1_000}, amount: 14, want: 1},
-		{name: "percentage rounds half up", rule: ChargeRule{Type: ChargePercentage, Value: 1_000}, amount: 15, want: 2},
+		{name: "zero", rule: ChargeRule{}, amount: 10, want: 0},
+		{name: "flat", rule: ChargeRule{Flat: 250}, amount: 10, want: 250},
+		{name: "percentage exact", rule: ChargeRule{Percentage: 1_000}, amount: 1_000, want: 100},
+		{name: "percentage rounds down", rule: ChargeRule{Percentage: 1_000}, amount: 14, want: 1},
+		{name: "percentage rounds half up", rule: ChargeRule{Percentage: 1_000}, amount: 15, want: 2},
+		{name: "flat plus percentage", rule: ChargeRule{Flat: 500, Percentage: 300}, amount: 10_000, want: 800},
+		{name: "flat plus percentage on zero amount", rule: ChargeRule{Flat: 500, Percentage: 300}, amount: 0, want: 500},
 		{
 			name:   "maximum amount does not overflow",
-			rule:   ChargeRule{Type: ChargePercentage, Value: 10_000},
-			amount: int64(^uint64(0) >> 1),
-			want:   int64(^uint64(0) >> 1),
+			rule:   ChargeRule{Percentage: 10_000},
+			amount: math.MaxInt64,
+			want:   math.MaxInt64,
 		},
 	}
 	for _, test := range tests {
@@ -36,12 +41,19 @@ func TestChargeRuleCalculate(t *testing.T) {
 
 func TestChargeRuleRejectsInvalidValues(t *testing.T) {
 	for _, rule := range []ChargeRule{
-		{Type: "tiered", Value: 1},
-		{Type: ChargeFlat, Value: -1},
-		{Type: ChargePercentage, Value: 10_001},
+		{Flat: -1},
+		{Percentage: -1},
+		{Percentage: 10_001},
 	} {
 		if _, err := rule.Calculate(100); err == nil {
 			t.Errorf("Calculate(%+v) succeeded", rule)
 		}
+	}
+}
+
+func TestChargeRuleRejectsAnOverflowingSum(t *testing.T) {
+	rule := ChargeRule{Flat: 1, Percentage: 10_000}
+	if _, err := rule.Calculate(math.MaxInt64); err == nil {
+		t.Error("Calculate() succeeded, want an overflow error")
 	}
 }
